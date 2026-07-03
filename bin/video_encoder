@@ -3,10 +3,4 @@
 
 require_relative '../lib/video_encoder'
 
-case ARGV.first
-when 'version'
-  puts VideoEncoder::VERSION
-else
-  puts 'Usage: video_encoder version'
-  exit 1
-end
+VideoEncoder::CLI.new(ARGV).run
