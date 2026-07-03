@@ -11,3 +11,4 @@ require_relative 'video_encoder/domain/status'
 require_relative 'video_encoder/domain/job'
 
 require_relative 'video_encoder/repository/memory_repo'
+require_relative 'video_encoder/worker'
