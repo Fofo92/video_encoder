@@ -1,0 +1,12 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require_relative '../lib/video_encoder'
+
+case ARGV.first
+when 'version'
+  puts VideoEncoder::VERSION
+else
+  puts 'Usage: video_encoder version'
+  exit 1
+end
