@@ -1,0 +1,9 @@
+encoder: ffmpeg
+
+database: video_encoder.db
+
+output_directory: encoded
+
+ffmpeg:
+  preset: medium
+  crf: 22

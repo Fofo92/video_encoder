@@ -3,8 +3,24 @@
 
 require_relative '../lib/video_encoder'
 
-repo = VideoEncoder::MemoryRepo.new
-worker = VideoEncoder::Worker.new(repo: repo)
+repo_config = VideoEncoder::Configuration.load
+
+repo = VideoEncoder::Persistence::JobRepository.new(
+  VideoEncoder::Persistence::Database.connect(repo_config.database)
+)
+
+encoder =
+  case repo_config.encoder
+  when 'ffmpeg'
+    VideoEncoder::Encoder::FFmpegEncoder.new
+  else
+    VideoEncoder::Encoder::FakeEncoder.new
+  end
+puts "Using #{encoder.class}"
+worker = VideoEncoder::Worker.new(
+  repo: repo,
+  encoder: encoder
+)
 
 command = ARGV.shift
 
@@ -29,11 +45,59 @@ when 'run'
     worker.run_forever(interval: 1)
   end
 
+when 'list'
+  jobs = repo.all
+
+  puts 'ID | SOURCE | STATUS'
+  puts '-' * 50
+
+  jobs.each do |j|
+    puts "#{j[:job_id]} | #{j[:source]} | #{j[:status]} | attempts=#{j[:attempts]}"
+  end
+
+when 'status'
+  id = ARGV.shift or abort('Usage: status <job_id>')
+
+  job = repo.all.find { |j| j[:job_id] == id }
+
+  if job
+    puts "ID: #{job[:job_id]}"
+    puts "Source: #{job[:source]}"
+    puts "Status: #{job[:status]}"
+    puts "Created: #{job[:created_at]}"
+    puts "Started: #{job[:started_at]}"
+    puts "Finished: #{job[:finished_at]}"
+    puts "Error: #{job[:error]}"
+  else
+    puts 'Job not found'
+  end
+
+when 'failed'
+  jobs = repo.all.select do |j|
+    j[:status] == VideoEncoder::Status::FAILED
+  end
+
+  puts 'FAILED JOBS'
+  puts '-' * 40
+
+  jobs.each do |j|
+    puts "#{j[:job_id]} | #{j[:source]} | attempts=#{j[:attempts]} | error=#{j[:error]}"
+  end
+
+when 'retry'
+  id = ARGV.shift or abort('Usage: retry <job_id>')
+
+  repo.retry(id)
+
+  puts "Requeued: #{id}"
+
 else
   puts <<~TEXT
     Usage:
       video_encoder enqueue <file>
       video_encoder run [--once|--daemon]
+      video_encoder list
+      video_encoder status <id>
   TEXT
   exit 1
 end

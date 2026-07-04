@@ -1,14 +1,21 @@
 # frozen_string_literal: true
 
-require 'securerandom'
 require 'pathname'
+require 'securerandom'
 require 'time'
 
 require_relative 'video_encoder/version'
-require_relative 'video_encoder/cli'
+require_relative 'video_encoder/configuration'
 
 require_relative 'video_encoder/domain/status'
 require_relative 'video_encoder/domain/job'
 
-require_relative 'video_encoder/repository/memory_repo'
+require_relative 'video_encoder/persistence/database'
+require_relative 'video_encoder/persistence/job_repository'
+
+require_relative 'video_encoder/encoder/base'
+require_relative 'video_encoder/encoder/fake_encoder'
+require_relative 'video_encoder/encoder/ffmpeg_encoder'
+
 require_relative 'video_encoder/worker'
+require_relative 'video_encoder/cli'

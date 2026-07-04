@@ -1,45 +1,56 @@
 # frozen_string_literal: true
 
 module VideoEncoder
-  # Worker that processes video encoding jobs from a repository.
+  # Worker processes encoding jobs from a repository.
   class Worker
-    def initialize(repo:, logger: STDOUT)
+    def initialize(repo:, encoder:, logger: $stdout)
       @repo = repo
+      @encoder = encoder
       @logger = logger
     end
 
     def run_once
-      job = @repo.next
-      return unless job
+      processed = 0
 
-      log "Start job #{job.id} (#{job.source})"
+      loop do
+        job = @repo.next
+        break unless job
 
-      job.start!
-      simulate_encoding(job)
-
-      job.finish!
-
-      log "Done job #{job.id}"
-    rescue StandardError => e
-      job&.fail!(e.message)
-      log "Failed job #{job&.id}: #{e.message}"
+        processed += 1
+        log_start(job)
+        process_job(job)
+      end
+      log('No queued jobs') if processed.zero?
     end
 
-    def run_forever(interval: 2)
+    def run
+      log 'Worker started'
+
       loop do
         run_once
-        sleep interval
+        sleep 1
       end
+    rescue Interrupt
+      log 'Stopping worker...'
     end
 
     private
 
-    def simulate_encoding(job)
-      # simulation simple (plus tard ffmpeg ici)
-      3.times do |i|
-        log "Encoding #{job.id}: step #{i + 1}/3"
-        sleep 1
-      end
+    def log_start(job)
+      log "Start job #{job.id}"
+    end
+
+    def process_job(job)
+      @repo.mark_running(job)
+
+      @encoder.encode(job)
+
+      @repo.mark_done(job)
+
+      log "Done job #{job.id}"
+    rescue StandardError => e
+      @repo.mark_failed(job, e.message)
+      log "Failed job #{job.id}: #{e.message}"
     end
 
     def log(msg)
