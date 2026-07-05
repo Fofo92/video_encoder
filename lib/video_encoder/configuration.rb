@@ -15,10 +15,13 @@ module VideoEncoder
       }
     }.freeze
 
-    attr_reader :data
+    attr_reader :data, :database, :encoder, :logger
 
     def initialize(data = {})
       @data = DEFAULTS.merge(data)
+      @logger = Logger.new($stdout)
+      @logger.level = Logger::INFO
+      @logger.progname = 'video_encoder'
     end
 
     def encoder

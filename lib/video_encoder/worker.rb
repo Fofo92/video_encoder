@@ -3,7 +3,7 @@
 module VideoEncoder
   # Worker processes encoding jobs from a repository.
   class Worker
-    def initialize(repo:, encoder:, logger: $stdout)
+    def initialize(repo:, encoder:, logger:)
       @repo = repo
       @encoder = encoder
       @logger = logger
@@ -54,7 +54,7 @@ module VideoEncoder
     end
 
     def log(msg)
-      @logger.puts("[Worker] #{msg}")
+      @logger.info("[Worker] #{msg}")
     end
   end
 end

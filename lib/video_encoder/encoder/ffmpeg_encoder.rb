@@ -6,10 +6,6 @@ module VideoEncoder
   module Encoder
     # FFmpegEncoder encodes video files using ffmpeg.
     class FFmpegEncoder < Base
-      def initialize(logger: $stdout)
-        @logger = logger
-      end
-
       def encode(job)
         source = job.source.to_s
         output = source.sub(/\.[^.]+$/, '.mp4')
@@ -25,19 +21,18 @@ module VideoEncoder
           output
         ]
 
-        @logger.puts(cmd.join(' '))
-
+        @logger.info(cmd.join(' '))
         stdout, stderr, status = Open3.capture3(*cmd)
 
-        @logger.puts(stdout) unless stdout.empty?
+        @logger.info(stdout) unless stdout.empty?
+        @logger.error(stderr) unless stderr.empty?
 
-        unless status.success?
-          raise <<~ERROR
-            ffmpeg failed (exit #{status.exitstatus})
+        return if status.success?
 
-            #{stderr}
-          ERROR
-        end
+        message = stderr.lines.reject(&:empty?).last&.strip
+        message ||= "ffmpeg failed (exit #{status.exitstatus})"
+
+        raise "#{message} (exit #{status.exitstatus})"
       end
     end
   end

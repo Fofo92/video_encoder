@@ -19,3 +19,6 @@ require_relative 'video_encoder/encoder/ffmpeg_encoder'
 
 require_relative 'video_encoder/worker'
 require_relative 'video_encoder/cli'
+require_relative "video_encoder/loggable"
+
+require 'logger'

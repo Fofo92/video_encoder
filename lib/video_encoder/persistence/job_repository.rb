@@ -63,7 +63,16 @@ module VideoEncoder
       end
 
       def all
-        @jobs.all
+        @jobs.all.map do |row|
+          build_job(row)
+        end
+      end
+
+      def find(job_id)
+        row = @jobs.where(job_id: job_id).first
+        return nil unless row
+
+        build_job(row)
       end
 
       def increment_attempts(job)
