@@ -1,0 +1,15 @@
+database: video_encoder.db
+
+encoder: ffmpeg
+
+directories:
+  incoming: to_be_encoded
+  queue: queue
+  encoded: encoded
+  archive: archive
+
+ffmpeg:
+  video_codec: libx264
+  audio_codec: aac
+  preset: medium
+  crf: 22
