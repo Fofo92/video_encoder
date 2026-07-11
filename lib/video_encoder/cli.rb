@@ -138,6 +138,14 @@ module VideoEncoder
       end
     end
 
+    def verifier
+      @verifier ||= VideoEncoder::Verifier.new(logger: logger)
+    end
+    
+    def cleaner
+      @cleaner ||= VideoEncoder::Cleaner.new(logger: logger)
+    end
+
     def run_worker
       mode = @argv.shift
 
@@ -155,8 +163,9 @@ module VideoEncoder
       @worker ||= VideoEncoder::Worker.new(
         repo: repo,
         encoder: encoder,
-        logger: logger,
-        config: config
+        verifier: verifier,
+        cleaner: cleaner,
+        logger: logger
       )
     end
 

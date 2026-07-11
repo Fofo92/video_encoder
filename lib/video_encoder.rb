@@ -22,5 +22,7 @@ require_relative 'video_encoder/config'
 require_relative 'video_encoder/directories'
 require_relative 'video_encoder/ffmpeg_config'
 require_relative 'video_encoder/watcher'
+require_relative 'video_encoder/verifier'
+require_relative 'video_encoder/cleaner'
 
 require 'logger'

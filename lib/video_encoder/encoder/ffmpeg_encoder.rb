@@ -47,7 +47,7 @@ module VideoEncoder
         @logger.info(stdout) unless stdout.empty?
         @logger.error(stderr) unless stderr.empty?
 
-        return if status.success?
+        return output if status.success?
 
         message = stderr.lines.reject(&:empty?).last&.strip
         message ||= "ffmpeg failed (exit #{status.exitstatus})"

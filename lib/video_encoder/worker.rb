@@ -3,11 +3,12 @@
 module VideoEncoder
   # Worker processes encoding jobs from a repository.
   class Worker
-    def initialize(repo:, encoder:, logger:, config:)
+    def initialize(repo:, encoder:, verifier:, cleaner:, logger:)
       @repo = repo
       @encoder = encoder
+      @verifier = verifier
+      @cleaner = cleaner
       @logger = logger
-      @config = config
     end
 
     def run_once
@@ -44,7 +45,11 @@ module VideoEncoder
     def process_job(job)
       @repo.mark_running(job)
 
-      @encoder.encode(job)
+      output = @encoder.encode(job)
+
+      @verifier.verify!(output)
+
+      @cleaner.clean(job.source)
 
       @repo.mark_done(job)
 

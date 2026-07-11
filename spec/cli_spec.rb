@@ -229,7 +229,7 @@ RSpec.describe VideoEncoder::CLI do
               'Video codec:',
               'Audio codec:',
               'Preset:',
-              'CRF:'
+              'CQ:'
             )
           ).to_stdout
       end

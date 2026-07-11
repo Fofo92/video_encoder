@@ -7,13 +7,16 @@ RSpec.describe VideoEncoder::Worker do
   let(:encoder) { instance_double(VideoEncoder::Encoder::Base) }
   let(:logger)  { instance_double(Logger, info: nil) }
   let(:config)  { instance_double(VideoEncoder::Config) }
-  
+  let(:verifier) { instance_double(VideoEncoder::Verifier) }
+  let(:cleaner) { instance_double(VideoEncoder::Cleaner) }
+
   subject(:worker) do
     described_class.new(
       repo: repo,
       encoder: encoder,
-      logger: logger,
-      config: config
+      verifier: verifier,
+      cleaner: cleaner,
+      logger: logger
       )
     end
 
@@ -24,7 +27,14 @@ RSpec.describe VideoEncoder::Worker do
       allow(repo).to receive(:next).and_return(job, nil)
       allow(repo).to receive(:mark_running)
       allow(repo).to receive(:mark_done)
-      allow(encoder).to receive(:encode)
+      allow(encoder).to receive(:encode).and_return('encoded/video.mkv')
+      allow(verifier).to receive(:verify!)
+        .with('encoded/video.mkv')
+        .and_return(true)
+      allow(cleaner).to receive(:clean)
+      allow(cleaner)
+        .to receive(:clean)
+        .with(job.source)
     end
 
     it 'processes a queued job' do
@@ -32,6 +42,13 @@ RSpec.describe VideoEncoder::Worker do
 
       expect(repo).to have_received(:mark_running).with(job)
       expect(encoder).to have_received(:encode).with(job)
+      expect(repo).to have_received(:mark_done).with(job)
+      expect(verifier)
+        .to have_received(:verify!)
+        .with('encoded/video.mkv')
+      expect(cleaner)
+        .to have_received(:clean)
+        .with(job.source)
       expect(repo).to have_received(:mark_done).with(job)
     end
   end

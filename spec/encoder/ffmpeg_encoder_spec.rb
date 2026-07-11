@@ -8,10 +8,17 @@ RSpec.describe VideoEncoder::Encoder::FFmpegEncoder do
   let(:config) do
     instance_double(
       VideoEncoder::FFmpegConfig,
-      video_codec: 'hevc_nvenc',
-      audio_codec: 'aac',
-      preset: 'p6',
-      crf: 22
+    container: 'mkv',
+    video_codec: 'hevc_nvenc',
+    preset: 'p6',
+    tune: 'hq',
+    rc: 'vbr_hq',
+    cq: 22,
+    deinterlace: true,
+    spatial_aq: true,
+    aq_strength: 8,
+    b_ref_mode: 'middle',
+    audio_codec: 'aac'
     )
   end
 
@@ -40,14 +47,15 @@ RSpec.describe VideoEncoder::Encoder::FFmpegEncoder do
           'ffmpeg',
           '-y',
           '-i', 'video.mkv',
+          '-vf', 'bwdif',
           '-c:v', 'hevc_nvenc',
           '-preset', 'p6',
           '-tune', 'hq',
+          '-rc', 'vbr_hq',
           '-cq', '22',
-          'rc', 'vbr',
-          'spatial_aq', 'true',
-          'b_ref_mode', 'middle',
-          'deinterlace', 'true',
+          '-spatial_aq', '1',
+          '-aq-strength', '8',
+          '-b_ref_mode', 'middle',
           '-c:a', 'aac',
           'video.mkv'
         )
