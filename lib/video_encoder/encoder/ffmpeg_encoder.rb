@@ -6,18 +6,38 @@ module VideoEncoder
   module Encoder
     # FFmpegEncoder encodes video files using ffmpeg.
     class FFmpegEncoder < Base
+      def initialize(logger:, config:)
+        super(logger: logger)
+        @config = config
+      end
+
       def encode(job)
         source = job.source.to_s
-        output = source.sub(/\.[^.]+$/, '.mp4')
 
-        cmd = [
-          'ffmpeg',
-          '-y',
-          '-i', source,
-          '-c:v', 'libx264',
-          '-preset', 'medium',
-          '-crf', '22',
-          '-c:a', 'aac',
+        output = source.sub(/\.[^.]+$/, ".#{@config.container}")
+
+        cmd = ['ffmpeg', '-y', '-i', source]
+
+        cmd += ['-vf', 'bwdif'] if @config.deinterlace
+
+        cmd += [
+          '-c:v', @config.video_codec,
+          '-preset', @config.preset,
+          '-tune', @config.tune,
+          '-rc', @config.rc,
+          '-cq', @config.cq.to_s
+        ]
+
+        if @config.spatial_aq
+          cmd += [
+            '-spatial_aq', '1',
+            '-aq-strength', @config.aq_strength.to_s
+          ]
+        end
+
+        cmd += [
+          '-b_ref_mode', @config.b_ref_mode,
+          '-c:a', @config.audio_codec,
           output
         ]
 

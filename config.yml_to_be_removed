@@ -1,0 +1,18 @@
+encoder: ffmpeg
+
+database: video_encoder.db
+
+output_directory: encoded
+
+ffmpeg:
+  container: mkv
+  video_codec: hevc_nvenc
+  preset: p6
+  tune: hq
+  rc: vbr_hq
+  cq: 22
+  deinterlace: true
+  spatial_aq: true
+  aq_strength: 8
+  b_ref_mode: middle
+  audio_codec: aa3

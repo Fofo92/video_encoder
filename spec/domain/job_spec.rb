@@ -1,8 +1,19 @@
+# frozen_string_literal: true
+
 require 'spec_helper'
 
 RSpec.describe VideoEncoder::Job do
   subject(:job) { described_class.new(source: 'video.mp4') }
 
+  describe '#fail!' do
+    it 'marks the job as failed' do
+      job.fail!('boom')
+
+      expect(job).to be_failed
+      expect(job.error).to eq('boom')
+      expect(job.finished_at).to be_a(Time)
+    end
+  end
   describe '#initialization' do
     it 'generates an id' do
       expect(job.id).not_to be_nil
@@ -40,15 +51,4 @@ RSpec.describe VideoEncoder::Job do
       expect(job.finished_at).to be_a(Time)
     end
   end
-
-  describe '#fail!' do
-    it 'marks the job as failed' do
-      job.fail!('boom')
-
-      expect(job).to be_failed
-      expect(job.error).to eq('boom')
-      expect(job.finished_at).to be_a(Time)
-    end
-  end
-
 end

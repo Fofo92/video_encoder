@@ -7,7 +7,7 @@ module VideoEncoder
     # Database persistence adapter using Sequel and SQLite.
     class Database
       def self.connect(path = 'video_encoder.db')
-        @connect ||= Sequel.sqlite(path)
+        @connection ||= Sequel.sqlite(path)
       end
     end
   end

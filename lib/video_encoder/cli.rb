@@ -7,8 +7,9 @@ module VideoEncoder
       new(argv).run
     end
 
-    def initialize(argv)
+    def initialize(argv, config: VideoEncoder::Config.load)
       @argv = argv
+      @config = config
     end
 
     def run
@@ -30,6 +31,15 @@ module VideoEncoder
       when 'failed'
         failed
 
+      when 'run'
+        run_worker
+
+      when 'config'
+        show_config
+
+      when 'watch'
+        watch
+
       else
         puts usage
         exit 1
@@ -39,13 +49,17 @@ module VideoEncoder
     private
 
     def config
-      @config ||= VideoEncoder::Configuration.load
+      @config
+    end
+
+    def database
+      @database ||= VideoEncoder::Persistence::Database.connect(
+        config.database
+      )
     end
 
     def repo
-      @repo ||= VideoEncoder::Persistence::JobRepository.new(
-        VideoEncoder::Persistence::Database.connect(config.database)
-      )
+      @repo ||= VideoEncoder::Persistence::JobRepository.new(database)
     end
 
     def list
@@ -108,16 +122,82 @@ module VideoEncoder
     end
 
     def logger
-      config.logger
+      @logger ||= Logger.new($stdout)
     end
 
     def encoder
-      @encoder ||=
-        if config.encoder == 'ffmpeg'
-          VideoEncoder::Encoder::FFmpegEncoder.new(logger: logger)
-        else
-          VideoEncoder::Encoder::FakeEncoder.new(logger: logger)
+      @encoder ||= if config.encoder == "ffmpeg"
+        VideoEncoder::Encoder::FFmpegEncoder.new(
+          logger: logger,
+          config: config.ffmpeg
+        )
+      else
+        VideoEncoder::Encoder::FakeEncoder.new(
+          logger: logger
+        )
+      end
+    end
+
+    def run_worker
+      mode = @argv.shift
+
+      puts 'Starting worker...'
+
+      if mode == '--once'
+        worker.run_once
+      else
+        puts 'Running in loop (CTRL+C to stop)'
+        worker.run
+      end
+    end
+
+    def worker
+      @worker ||= VideoEncoder::Worker.new(
+        repo: repo,
+        encoder: encoder,
+        logger: logger,
+        config: config
+      )
+    end
+
+    def show_config
+      puts "Database: #{config.database}"
+      puts "Encoder:  #{config.encoder}"
+      puts
+
+      puts 'Directories'
+      puts '-----------'
+      puts "Incoming: #{config.directories.incoming}"
+      puts "Queue:    #{config.directories.queue}"
+      puts "Encoded:  #{config.directories.encoded}"
+      puts "Archive:  #{config.directories.archive}"
+      puts
+      puts 'FFmpeg'
+      puts '-------'
+      puts "Container:   #{config.ffmpeg.container}"
+      puts "Video codec: #{config.ffmpeg.video_codec}"
+      puts "Preset:      #{config.ffmpeg.preset}"
+      puts "Tune:        #{config.ffmpeg.tune}"
+      puts "RC:          #{config.ffmpeg.rc}"
+      puts "CQ:          #{config.ffmpeg.cq}"
+      puts "Audio codec: #{config.ffmpeg.audio_codec}"
+    end
+
+    def watch
+      mode = @argv.shift
+
+      puts 'Starting watcher...'
+
+      if mode == '--once'
+        watcher.scan_once
+      else
+        puts "Watching #{config.directories.incoming} (CTRL+C to stop)"
+
+        loop do
+          watcher.scan_once
+          sleep 1
         end
+      end
     end
 
     def usage
@@ -125,10 +205,19 @@ module VideoEncoder
         Usage:
           video_encoder version
           video_encoder enqueue <file>
+          video_encoder run [--once]
           video_encoder list
           video_encoder status <job_id>
           video_encoder failed
       TEXT
+    end
+
+    def watcher
+      @watcher ||= VideoEncoder::Watcher.new(
+        incoming: config.directories.incoming,
+        queue: config.directories.queue,
+        repo: repo
+      )
     end
   end
 end

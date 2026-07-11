@@ -9,7 +9,14 @@ directories:
   archive: archive
 
 ffmpeg:
-  video_codec: libx264
+  container: mkv
+  video_codec: hevc_nvenc
+  preset: p6
+  tune: hq
+  cq: 22
+  rc: vbr_hq
+  spatial_aq: true
+  aq_strength: 8
+  b_ref_mode: middle
+  deinterlace: true
   audio_codec: aac
-  preset: medium
-  crf: 22

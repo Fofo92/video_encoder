@@ -10,6 +10,16 @@ module VideoEncoder
       def initialize(logger:)
         @logger = logger
       end
+
+      def encode(_job)
+        raise NotImplementedError, "#{self.class} must implement #encode"
+      end
+
+      private
+
+      def log(message)
+        logger.info(message)
+      end
     end
   end
 end

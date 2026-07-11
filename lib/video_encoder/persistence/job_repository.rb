@@ -6,7 +6,7 @@ module VideoEncoder
   module Persistence
     # JobRepository manages persistence of encoding jobs in the database.
     class JobRepository
-      def initialize(db = Database.connect('video_encoder.db'))
+      def initialize(db)
         @jobs = db[:jobs]
       end
 
@@ -73,12 +73,6 @@ module VideoEncoder
         return nil unless row
 
         build_job(row)
-      end
-
-      def increment_attempts(job)
-        @jobs.where(job_id: job.id).update(
-          attempts: Sequel[:attempts] + 1
-        )
       end
 
       private

@@ -3,10 +3,11 @@
 module VideoEncoder
   # Worker processes encoding jobs from a repository.
   class Worker
-    def initialize(repo:, encoder:, logger:)
+    def initialize(repo:, encoder:, logger:, config:)
       @repo = repo
       @encoder = encoder
       @logger = logger
+      @config = config
     end
 
     def run_once
