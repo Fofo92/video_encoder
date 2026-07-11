@@ -13,6 +13,7 @@ require_relative 'video_encoder/persistence/job_repository'
 
 require_relative 'video_encoder/encoder/base'
 require_relative 'video_encoder/encoder/fake_encoder'
+require_relative 'video_encoder/encoder/ffmpeg_runner'
 require_relative 'video_encoder/encoder/ffmpeg_encoder'
 
 require_relative 'video_encoder/worker'

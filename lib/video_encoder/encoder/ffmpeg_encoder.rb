@@ -6,9 +6,10 @@ module VideoEncoder
   module Encoder
     # FFmpegEncoder encodes video files using ffmpeg.
     class FFmpegEncoder < Base
-      def initialize(logger:, config:)
+      def initialize(logger:, config:, runner: nil)
         super(logger: logger)
         @config = config
+        @runner = runner || FFmpegRunner.new(logger: logger)
       end
 
       def encode(job)
@@ -16,7 +17,13 @@ module VideoEncoder
 
         output = source.sub(/\.[^.]+$/, ".#{@config.container}")
 
-        cmd = ['ffmpeg', '-y', '-i', source]
+        cmd = [
+          'ffmpeg',
+          '-y',
+          '-progress', 'pipe:1',
+          '-nostats',
+          '-i', source
+        ]
 
         cmd += ['-vf', 'bwdif'] if @config.deinterlace
 
@@ -42,17 +49,17 @@ module VideoEncoder
         ]
 
         @logger.info(cmd.join(' '))
-        stdout, stderr, status = Open3.capture3(*cmd)
+        @runner.run(cmd)
 
-        @logger.info(stdout) unless stdout.empty?
-        @logger.error(stderr) unless stderr.empty?
+        output
+        # @logger.error(stderr) unless stderr.empty?
 
-        return output if status.success?
+        # return output if status.success?
 
-        message = stderr.lines.reject(&:empty?).last&.strip
-        message ||= "ffmpeg failed (exit #{status.exitstatus})"
+        # message = stderr.lines.reject(&:empty?).last&.strip
+        # message ||= "ffmpeg failed (exit #{status.exitstatus})"
 
-        raise "#{message} (exit #{status.exitstatus})"
+        # raise "#{message} (exit #{status.exitstatus})"
       end
     end
   end
