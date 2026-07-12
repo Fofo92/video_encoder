@@ -12,17 +12,47 @@ module VideoEncoder
       def run(cmd)
         @logger.info(cmd.join(' '))
 
-        stdout, stderr, status = Open3.capture3(*cmd)
+        stdout_data = String.new
+        stderr_data = String.new
 
-        @logger.info(stdout) unless stdout.empty?
-        @logger.error(stderr) unless stderr.empty?
+        Open3.popen3(*cmd) do |_stdin, stdout, stderr, wait_thr|
 
-        return if status.success?
+          out_thread = Thread.new do
+            stdout.each_line do |line|
+              stdout_data << line
+              yield(:stdout, line) if block_given?
+            end
+          end
 
-        message = stderr.lines.reject(&:empty?).last&.strip
-        message ||= "ffmpeg failed (exit #{status.exitstatus})"
+          err_thread = Thread.new do
+            stderr.each_line do |line|
+              stderr_data << line
+              yield(:stderr, line) if block_given?
+            end
+          end
 
-        raise "#{message} (exit #{status.exitstatus})"
+          out_thread.join
+          err_thread.join
+
+          status = wait_thr.value
+
+          @logger.info(stdout_data) unless stdout_data.empty?
+          @logger.error(stderr_data) unless stderr_data.empty?
+
+          return if status.success?
+          message = last_error(stderr_data, status)
+
+          raise RuntimeError, message
+        end
+      end
+
+      private
+
+      def last_error(stderr_data, status)
+        message = stderr_data.lines.reject(&:empty?).last&.strip
+        message ||= "ffmpeg failed"
+
+        "#{message} (exit #{status.exitstatus})"
       end
     end
   end
