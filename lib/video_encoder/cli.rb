@@ -141,10 +141,6 @@ module VideoEncoder
     def verifier
       @verifier ||= VideoEncoder::Verifier.new(logger: logger)
     end
-    
-    def cleaner
-      @cleaner ||= VideoEncoder::Cleaner.new(logger: logger)
-    end
 
     def run_worker
       mode = @argv.shift
@@ -164,8 +160,9 @@ module VideoEncoder
         repo: repo,
         encoder: encoder,
         verifier: verifier,
-        cleaner: cleaner,
-        logger: logger
+        logger: logger,
+        config: @config,
+        workspace: workspace
       )
     end
 
@@ -227,6 +224,10 @@ module VideoEncoder
         queue: config.directories.queue,
         repo: repo
       )
+    end
+
+    def workspace
+      @workspace ||= VideoEncoder::Workspace.new(directories: @config.directories)
     end
   end
 end

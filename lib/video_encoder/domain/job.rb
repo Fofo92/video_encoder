@@ -71,6 +71,19 @@ module VideoEncoder
       self
     end
 
+    def with_source(source)
+      self.class.new(
+        id: id,
+        source: source,
+        status: status,
+        attempts: attempts,
+        created_at: created_at,
+        started_at: started_at,
+        finished_at: finished_at,
+        error: error
+      )
+    end
+    
     private
 
     def now

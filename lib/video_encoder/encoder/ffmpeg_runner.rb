@@ -5,7 +5,7 @@ require 'open3'
 module VideoEncoder
   module Encoder
     class FFmpegRunner
-      def initialize(logger:)
+      def initialize(logger:, parser: nil)
         @logger = logger
       end
 

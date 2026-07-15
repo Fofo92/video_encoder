@@ -15,6 +15,10 @@ module VideoEncoder
       @data['queue']
     end
 
+    def encoding
+      @data['encoding']
+    end
+    
     def encoded
       @data['encoded']
     end

@@ -49,5 +49,13 @@ module VideoEncoder
     def b_ref_mode
       @data.fetch('b_ref_mode', 'middle')
     end
+
+    def max_width
+      @data['max_width']
+    end
+
+    def max_height
+      @data['max_height']
+    end
   end
 end

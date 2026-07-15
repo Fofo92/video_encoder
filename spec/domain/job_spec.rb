@@ -14,6 +14,7 @@ RSpec.describe VideoEncoder::Job do
       expect(job.finished_at).to be_a(Time)
     end
   end
+
   describe '#initialization' do
     it 'generates an id' do
       expect(job.id).not_to be_nil
@@ -49,6 +50,23 @@ RSpec.describe VideoEncoder::Job do
 
       expect(job).to be_done
       expect(job.finished_at).to be_a(Time)
+    end
+  end
+
+  describe '#with_source' do
+    it 'returns a copy with a different source' do
+      job = described_class.new(
+        id: '123',
+        source: 'video.mp4',
+        status: 'queued'
+      )
+
+      moved = job.with_source('Encoding/video.mp4')
+
+      expect(moved).not_to equal(job)
+      expect(moved.id).to eq(job.id)
+      expect(moved.status).to eq(job.status)
+      expect(moved.source.to_s).to eq('Encoding/video.mp4')
     end
   end
 end

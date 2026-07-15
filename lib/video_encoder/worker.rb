@@ -3,12 +3,13 @@
 module VideoEncoder
   # Worker processes encoding jobs from a repository.
   class Worker
-    def initialize(repo:, encoder:, verifier:, cleaner:, logger:)
+    def initialize(repo:, encoder:, verifier:, logger:, config:, workspace:)
       @repo = repo
       @encoder = encoder
       @verifier = verifier
-      @cleaner = cleaner
       @logger = logger
+      @config = config
+      @workspace = workspace
     end
 
     def run_once
@@ -45,17 +46,27 @@ module VideoEncoder
     def process_job(job)
       @repo.mark_running(job)
 
+      source = @workspace.move_to_encoding(job.source)
+      job = job.with_source(source)
+
       output = @encoder.encode(job)
 
       @verifier.verify!(output)
 
-      @cleaner.clean(job.source)
-
+      output = @workspace.finalize(
+        source: job.source,
+        output: output
+      )
+      
       @repo.mark_done(job)
 
       log "Done job #{job.id}"
+
     rescue StandardError => e
+      @workspace.remove_partial_output(output) if defined?(output) && output
+
       @repo.mark_failed(job, e.message)
+
       log "Failed job #{job.id}: #{e.message}"
     end
 

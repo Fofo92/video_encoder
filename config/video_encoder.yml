@@ -2,21 +2,32 @@ database: video_encoder.db
 
 encoder: ffmpeg
 
-directories:
-  incoming: to_be_encoded
-  queue: queue
-  encoded: encoded
-  archive: archive
+library_root: /commun
 
+directories:
+  incoming: /commun/to_be_encoded
+  queue: /commun/Queue
+  encoding: /commun/Encoding
+  encoded: /commun/Encoded
+  archive: /commun/Archive
+
+# Profil validé sur des films TNT HD 1080i.
+# Objectif : qualité visuelle satisfaisante et taille ≈ 1 à 2 Go pour un film de 2 h.
 ffmpeg:
+  max_width: 1280
+  max_height: 720
   container: mkv
   video_codec: hevc_nvenc
   preset: p6
   tune: hq
-  cq: 22
-  rc: vbr_hq
+  cq: 30
+  maxrate: 3M
+  bufsize: 6M
+  rc: vbr
   spatial_aq: true
   aq_strength: 8
   b_ref_mode: middle
   deinterlace: true
   audio_codec: aac
+  audio_bitrate: 160k
+  audio_channels: 2
