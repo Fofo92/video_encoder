@@ -32,5 +32,7 @@ require_relative 'video_encoder/ffmpeg_config'
 require_relative 'video_encoder/watcher'
 require_relative 'video_encoder/verifier'
 require_relative 'video_encoder/workspace'
+require_relative 'video_encoder/media'
+require_relative 'video_encoder/track'
 
 require 'logger'
