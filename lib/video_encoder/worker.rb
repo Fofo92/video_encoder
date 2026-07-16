@@ -3,12 +3,11 @@
 module VideoEncoder
   # Worker processes encoding jobs from a repository.
   class Worker
-    def initialize(repo:, encoder:, verifier:, logger:, config:, workspace:)
+    def initialize(repo:, encoder:, verifier:, logger:, workspace:)
       @repo = repo
       @encoder = encoder
       @verifier = verifier
       @logger = logger
-      @config = config
       @workspace = workspace
     end
 
@@ -46,32 +45,30 @@ module VideoEncoder
     def process_job(job)
       @repo.mark_running(job)
 
-      source = @workspace.move_to_encoding(job.source)
-      job = job.with_source(source)
+      output = nil
+      encoding_job = nil
 
-      output = @encoder.encode(job)
+      source = @workspace.move_to_encoding(job.source)
+      encoding_job = job.with_source(source)
+
+      output = @encoder.encode(encoding_job)
 
       @verifier.verify!(output)
 
-      output = @workspace.finalize(
-        source: job.source,
+      @workspace.finalize(
+        source: encoding_job.source,
         output: output
       )
-      
-      @repo.mark_done(job)
 
-      log "Done job #{job.id}"
+      @repo.mark_done(encoding_job)
 
+      log "Done job #{encoding_job.id}"
     rescue StandardError => e
-      @workspace.remove_partial_output(output) if defined?(output) && output
+      @workspace.remove_partial_output(output) if output
 
-      @repo.mark_failed(job, e.message)
+      @repo.mark_failed(encoding_job || job, e.message)
 
-      log "Failed job #{job.id}: #{e.message}"
-    end
-
-    def log(msg)
-      @logger.info("[Worker] #{msg}")
+      log "Failed job #{(encoding_job || job).id}: #{e.message}"
     end
   end
 end

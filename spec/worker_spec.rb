@@ -6,19 +6,6 @@ RSpec.describe VideoEncoder::Worker do
   let(:repo)    { instance_double(VideoEncoder::Persistence::JobRepository) }
   let(:encoder) { instance_double(VideoEncoder::Encoder::Base) }
   let(:logger)  { instance_double(Logger, info: nil) }
-  let(:directories) do
-    instance_double(
-      VideoEncoder::Directories,
-      encoding: '/commun/Encoding'
-    )
-  end
-
-  let(:config) do
-    instance_double(
-      VideoEncoder::Config,
-      directories: directories
-    )
-  end
 
   let(:verifier) { instance_double(VideoEncoder::Verifier) }
   let(:job) { VideoEncoder::Job.new(source: 'video.mp4') }
@@ -30,7 +17,6 @@ RSpec.describe VideoEncoder::Worker do
       encoder: encoder,
       verifier: verifier,
       logger: logger,
-      config: config,
       workspace: workspace
       )
     end
@@ -45,29 +31,44 @@ RSpec.describe VideoEncoder::Worker do
       allow(encoder).to receive(:encode).and_return('encoded/video.mkv')
 
       allow(verifier).to receive(:verify!)
-      .with('encoded/video.mkv')
-      .and_return(true)
+        .with('encoded/video.mkv')
+        .and_return(true)
 
       allow(FileUtils).to receive(:mv)
 
-      expect(workspace)
-        .to have_received(:move_to_encoding)
-        .with(job.source)
+      allow(workspace)
+        .to receive(:move_to_encoding)
+        .and_return("/commun/Encoding/video.mp4")
+
+      allow(workspace)
+        .to receive(:finalize)
+        .and_return("/commun/Encoded/video.mkv")
+
+      allow(workspace)
+        .to receive(:remove_partial_output)
     end
 
     it 'processes a queued job' do
       worker.run_once
 
       expect(repo).to have_received(:mark_running).with(job)
-      expect(encoder).to have_received(:encode).with(job)
-      expect(repo).to have_received(:mark_done).with(job)
+      expect(encoder)
+        .to have_received(:encode) do |encoding_job|
+          expect(encoding_job.source.to_s)
+            .to eq('/commun/Encoding/video.mp4')
+        end
+
+      expect(repo).to have_received(:mark_done) do |done_job|
+        expect(done_job.source.to_s)
+          .to eq('/commun/Encoding/video.mp4')
+      end
       expect(verifier)
         .to have_received(:verify!)
         .with('encoded/video.mkv')
-      expect(cleaner)
-        .to have_received(:clean)
-        .with(job.source)
-      expect(repo).to have_received(:mark_done).with(job)
+      expect(repo).to have_received(:mark_done) do |done_job|
+        expect(done_job.source.to_s)
+          .to eq('/commun/Encoding/video.mp4')
+      end
     end
   end
 
@@ -78,7 +79,7 @@ RSpec.describe VideoEncoder::Worker do
       allow(repo).to receive(:mark_failed)
       allow(workspace)
         .to receive(:move_to_encoding)
-        .and_return("/commun/Encoding/video.mp4")
+        .and_return('/commun/Encoding/video.mp4')
 
       allow(encoder).to receive(:encode)
         .and_raise(StandardError, 'boom')
@@ -88,7 +89,16 @@ RSpec.describe VideoEncoder::Worker do
       worker.run_once
 
       expect(repo).to have_received(:mark_running).with(job)
-      expect(repo).to have_received(:mark_failed).with(job, 'boom')
+
+      expect(repo).to have_received(:mark_failed) do |failed_job, message|
+        # p failed_job
+        # p failed_job.source
+        # p message
+        expect(failed_job.source.to_s)
+          .to eq('/commun/Encoding/video.mp4')
+
+        expect(message).to eq('boom')
+      end
     end
   end
 
@@ -100,14 +110,6 @@ RSpec.describe VideoEncoder::Worker do
       allow(repo).to receive(:mark_failed)
       allow(encoder).to receive(:encode)
       allow(FileUtils).to receive(:mv)
-
-       expect(workspace)
-        .to have_received(:move_to_encoding)
-        .with(job.source)
-      
-      expect(workspace)
-        .to have_received(:move_to_encoded)
-        .with("encoded/video.mkv")
     end
 
     it 'does not process any job' do

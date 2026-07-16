@@ -23,7 +23,7 @@ module VideoEncoder
     end
 
     def rc
-      @data.fetch('rc', 'vbr_hq')
+      @data.fetch('rc', 'vbr')
     end
 
     def cq

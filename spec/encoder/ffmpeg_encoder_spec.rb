@@ -23,17 +23,17 @@ RSpec.describe VideoEncoder::Encoder::FFmpegEncoder do
   let(:config) do
     instance_double(
       VideoEncoder::FFmpegConfig,
-    container: 'mkv',
-    video_codec: 'hevc_nvenc',
-    preset: 'p6',
-    tune: 'hq',
-    rc: 'vbr_hq',
-    cq: 22,
-    deinterlace: true,
-    spatial_aq: true,
-    aq_strength: 8,
-    b_ref_mode: 'middle',
-    audio_codec: 'aac'
+      container: 'mkv',
+      video_codec: 'hevc_nvenc',
+      preset: 'p6',
+      tune: 'hq',
+      rc: 'vbr',
+      cq: 22,
+      deinterlace: true,
+      spatial_aq: true,
+      aq_strength: 8,
+      b_ref_mode: 'middle',
+      audio_codec: 'aac'
     )
   end
 
@@ -50,28 +50,33 @@ RSpec.describe VideoEncoder::Encoder::FFmpegEncoder do
       encoder.encode(job)
 
       expect(runner).to have_received(:run).with(
-      [
-        'ffmpeg',
-        '-y',
-        '-progress', 'pipe:1',
-        '-nostats',
-        '-i', 'video.mkv',
-        '-vf', 'bwdif,scale=w=1280:h=720:force_original_aspect_ratio=decrease',
-        '-c:v', 'hevc_nvenc',
-        '-preset', 'p6',
-        '-tune', 'hq',
-        '-rc', 'vbr_hq',
-        '-cq', '22',
-        '-spatial_aq', '1',
-        '-aq-strength', '8',
-        '-b_ref_mode', 'middle',
-        '-c:a', 'aac',
-        'video.mkv'
-      ]
-    )
+        [
+          'ffmpeg',
+          '-y',
+          '-progress', 'pipe:1',
+          '-nostats',
+          '-i', 'video.mkv',
+          '-vf', 'bwdif,scale=w=1280:h=720:force_original_aspect_ratio=decrease',
+          '-c:v', 'hevc_nvenc',
+          '-preset', 'p6',
+          '-tune', 'hq',
+          '-rc', 'vbr',
+          '-cq', '30',
+          '-maxrate', '3M',
+          '-bufsize', '6M',
+          '-spatial_aq', '1',
+          '-aq-strength', '8',
+          '-b_ref_mode', 'middle',
+          '-c:a', 'aac',
+          '-b:a', '160k',
+          '-ac', '2',
+          '-disposition:v:0', 'default',
+          '-disposition:a:0', 'default',
+          'video.mkv'
+        ]
+      )
     end
   end
-
 
   context 'when ffmpeg fails' do
     before do

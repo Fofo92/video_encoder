@@ -161,7 +161,6 @@ module VideoEncoder
         encoder: encoder,
         verifier: verifier,
         logger: logger,
-        config: @config,
         workspace: workspace
       )
     end
