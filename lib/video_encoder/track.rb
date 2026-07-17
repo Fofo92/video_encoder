@@ -8,7 +8,9 @@ module VideoEncoder
                 :language,
                 :codec,
                 :default,
-                :forced
+                :forced,
+                :hearing_impaired,
+                :visual_impaired
 
     def initialize(
       index:,
@@ -16,7 +18,9 @@ module VideoEncoder
       language: nil,
       codec: nil,
       default: false,
-      forced: false
+      forced: false,
+      hearing_impaired: false,
+      visual_impaired: false
     )
       @index = index
       @type = type
@@ -24,6 +28,8 @@ module VideoEncoder
       @codec = codec
       @default = default
       @forced = forced
+      @hearing_impaired = hearing_impaired
+      @visual_impaired = visual_impaired
     end
   end
 end

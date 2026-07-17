@@ -6,15 +6,20 @@ module VideoEncoder
   module Encoder
     # FFmpegEncoder encodes video files using ffmpeg.
     class FFmpegEncoder < Base
-      def initialize(logger:, config:, runner: nil, monitor_factory: nil)
+      def initialize(logger:, config:, selector:, media_probe:, runner: nil, monitor_factory: nil)
         super(logger: logger)
         @config = config
         @runner = runner || FFmpegRunner.new(logger: logger)
+        @selector = selector
+        @media_probe = media_probe
         @monitor_factory = monitor_factory || VideoEncoder::EncodingMonitorFactory
       end
 
       def encode(job)
         source = job.source.to_s
+
+        media = @media_probe.read(source)
+        selection = @selector.select(media)
 
         output = source.sub(/\.[^.]+$/, ".#{@config.container}")
 
@@ -23,8 +28,10 @@ module VideoEncoder
           '-y',
           '-progress', 'pipe:1',
           '-nostats',
-          '-i', source
+          '-i', source,
         ]
+
+        cmd = add_maps(cmd, selection)
 
         filters = []
 
@@ -76,14 +83,22 @@ module VideoEncoder
         end
 
         output
-        # @logger.error(stderr) unless stderr.empty?
+      end
 
-        # return output if status.success?
+      private
 
-        # message = stderr.lines.reject(&:empty?).last&.strip
-        # message ||= "ffmpeg failed (exit #{status.exitstatus})"
+      def add_maps(cmd, selection)
+        cmd += ['-map', "0:#{selection[:video].index}"]
 
-        # raise "#{message} (exit #{status.exitstatus})"
+        selection[:audio].each do |track|
+          cmd += ['-map', "0:#{track.index}"]
+        end
+
+        selection[:subtitles].each do |track|
+          cmd += ['-map', "0:#{track.index}"]
+        end
+
+        cmd
       end
     end
   end

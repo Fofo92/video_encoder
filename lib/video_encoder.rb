@@ -34,5 +34,6 @@ require_relative 'video_encoder/verifier'
 require_relative 'video_encoder/workspace'
 require_relative 'video_encoder/media'
 require_relative 'video_encoder/track'
+require_relative 'video_encoder/track_selector'
 
 require 'logger'

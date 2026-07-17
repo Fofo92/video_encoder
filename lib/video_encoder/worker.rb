@@ -42,6 +42,10 @@ module VideoEncoder
       log "Start job #{job.id}"
     end
 
+    def log(message)
+      @logger.info("[Worker] #{message}")
+    end
+
     def process_job(job)
       @repo.mark_running(job)
 

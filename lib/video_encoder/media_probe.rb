@@ -21,18 +21,23 @@ module VideoEncoder
       )
     end
 
-    def parse_audio_tracks(_json)
-      []
-    end
-
-    def parse_video_tracks(_json)
-      []
-    end
-
-    def parse_subtitle_tracks(_json)
-      []
-    end
     private
+
+    def parse_duration(json)
+      json.dig('format', 'duration').to_f
+    end
+
+    def parse_audio_tracks(json)
+      parse_tracks(json, 'audio')
+    end
+
+    def parse_video_tracks(json)
+      parse_tracks(json, 'video')
+    end
+
+    def parse_subtitle_tracks(json)
+      parse_tracks(json, 'subtitle')
+    end
 
     def probe(path)
       stdout, stderr, status = Open3.capture3(
@@ -52,6 +57,25 @@ module VideoEncoder
       end
 
       JSON.parse(stdout)
+    end
+
+    def parse_tracks(json, type)
+      json.fetch('streams', [])
+          .select { |stream| stream['codec_type'] == type }
+          .map do |stream|
+            Track.new(
+              index: stream['index'],
+              type: type.to_sym,
+              codec: stream['codec_name'],
+              language: stream.dig('tags', 'language'),
+              default: stream.dig('disposition', 'default') == 1,
+              forced: stream.dig('disposition', 'forced') == 1,
+              hearing_impaired:
+                stream.dig('disposition', 'hearing_impaired') == 1,
+              visual_impaired:
+                stream.dig('disposition', 'visual_impaired') == 1
+            )
+          end
     end
   end
 end

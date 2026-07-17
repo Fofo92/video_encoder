@@ -129,7 +129,9 @@ module VideoEncoder
       @encoder ||= if config.encoder == "ffmpeg"
         VideoEncoder::Encoder::FFmpegEncoder.new(
           logger: logger,
-          config: config.ffmpeg
+          config: @config.ffmpeg,
+          selector: track_selector,
+          media_probe: media_probe
         )
       else
         VideoEncoder::Encoder::FakeEncoder.new(
@@ -227,6 +229,14 @@ module VideoEncoder
 
     def workspace
       @workspace ||= VideoEncoder::Workspace.new(directories: @config.directories)
+    end
+
+    def track_selector
+      @track_selector ||= VideoEncoder::TrackSelector.new
+    end
+
+    def media_probe
+      @media_probe ||= VideoEncoder::MediaProbe.new
     end
   end
 end

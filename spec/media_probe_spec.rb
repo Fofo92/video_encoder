@@ -9,9 +9,16 @@ RSpec.describe VideoEncoder::MediaProbe do
     it 'returns the duration in seconds' do
       status = instance_double(Process::Status, success?: true)
 
+      stdout = JSON.generate(
+        'format' => {
+          'duration' => '123.456'
+        },
+        'streams' => []
+      )
+
       allow(Open3)
         .to receive(:capture3)
-        .and_return(["123.456\n", "", status])
+        .and_return([stdout, '', status])
 
       expect(
         media_probe.duration('movie.m2t')
@@ -27,7 +34,7 @@ RSpec.describe VideoEncoder::MediaProbe do
 
       allow(Open3)
         .to receive(:capture3)
-        .and_return(["", "file not found\n", status])
+        .and_return(['', "file not found\n", status])
 
       expect {
         media_probe.duration('movie.m2t')
