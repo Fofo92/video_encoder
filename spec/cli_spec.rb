@@ -203,28 +203,20 @@ RSpec.describe VideoEncoder::CLI do
       expect(worker).to have_received(:run)
       expect(worker).not_to have_received(:run_once)
     end
+
     describe 'config' do
       it 'prints the application configuration' do
         cli = described_class.new(['config'])
 
         expect { cli.run }
           .to output(
-            include('Database:', 'Encoder:')
-          ).to_stdout
-
-        expect { cli.run }
-          .to output(
             a_string_including(
+              'Database:',
+              'Encoder:',
               'Incoming:',
               'Queue:',
               'Encoded:',
-              'Archive:'
-            )
-          ).to_stdout
-
-        expect { cli.run }
-          .to output(
-            a_string_including(
+              'Archive:',
               'FFmpeg',
               'Video codec:',
               'Audio codec:',

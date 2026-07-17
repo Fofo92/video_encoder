@@ -6,6 +6,7 @@ RSpec.describe VideoEncoder::Track do
   it 'stores metadata' do
     track = described_class.new(
       index: 1,
+      type: :audio,
       language: "fra",
       codec: "aac"
     )
