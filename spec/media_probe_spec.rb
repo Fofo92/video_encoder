@@ -2,8 +2,8 @@
 
 require 'spec_helper'
 
-RSpec.describe VideoEncoder::MediaInfo do
-  subject(:media_info) { described_class.new }
+RSpec.describe VideoEncoder::MediaProbe do
+  subject(:media_probe) { described_class.new }
 
   describe '#duration' do
     it 'returns the duration in seconds' do
@@ -14,7 +14,7 @@ RSpec.describe VideoEncoder::MediaInfo do
         .and_return(["123.456\n", "", status])
 
       expect(
-        media_info.duration('movie.m2t')
+        media_probe.duration('movie.m2t')
       ).to eq(123.456)
     end
 
@@ -30,7 +30,7 @@ RSpec.describe VideoEncoder::MediaInfo do
         .and_return(["", "file not found\n", status])
 
       expect {
-        media_info.duration('movie.m2t')
+        media_probe.duration('movie.m2t')
       }.to raise_error(RuntimeError, /file not found/)
     end
   end

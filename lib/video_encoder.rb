@@ -16,7 +16,7 @@ require_relative 'video_encoder/encoder/fake_encoder'
 require_relative 'video_encoder/encoder/ffmpeg_runner'
 require_relative 'video_encoder/encoder/ffmpeg_encoder'
 
-require_relative 'video_encoder/media_info'
+require_relative 'video_encoder/media_probe'
 require_relative 'video_encoder/encoding_progress'
 require_relative 'video_encoder/progress_parser'
 require_relative 'video_encoder/progress_reporter'

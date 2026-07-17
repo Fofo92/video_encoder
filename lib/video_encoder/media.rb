@@ -19,5 +19,9 @@ module VideoEncoder
       @audio_tracks = audio_tracks
       @subtitle_tracks = subtitle_tracks
     end
+
+    def tracks
+      video_tracks + audio_tracks + subtitle_tracks
+    end
   end
 end

@@ -3,7 +3,7 @@
 module VideoEncoder
   class EncodingMonitorFactory
     def self.build(source)
-      duration = MediaInfo.new.duration(source)
+      duration = MediaProbe.new.duration(source)
 
       EncodingMonitor.new(
         parser: ProgressParser.new,

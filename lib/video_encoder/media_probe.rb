@@ -5,7 +5,7 @@ require 'json'
 
 module VideoEncoder
   # Retrieves media information using ffprobe.
-  class MediaInfo
+  class MediaProbe
     def duration(path)
       read(path).duration
     end
