@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'open3'
+require 'pathname'
 
 module VideoEncoder
   module Encoder
@@ -15,20 +16,22 @@ module VideoEncoder
         @monitor_factory = monitor_factory || VideoEncoder::EncodingMonitorFactory
       end
 
-      def encode(job)
-        source = job.source.to_s
+     def encode(job)
+        source = Pathname(job.source.to_s)
 
-        media = @media_probe.read(source)
+        media = @media_probe.read(source.to_s)
         selection = @selector.select(media)
 
-        output = source.sub(/\.[^.]+$/, ".#{@config.container}")
+        output = source.dirname.join(
+          "#{source.basename(source.extname)}.encoded.#{@config.container}"
+        )
 
         cmd = [
           'ffmpeg',
           '-y',
           '-progress', 'pipe:1',
           '-nostats',
-          '-i', source,
+          '-i', source.to_s,
         ]
 
         cmd = add_maps(cmd, selection)
@@ -65,15 +68,18 @@ module VideoEncoder
           '-b:a', '160k',
           '-ac', '2',
 
+          '-c:s', 'copy',
+
           '-disposition:v:0', 'default',
           '-disposition:a:0', 'default',
 
-          output
+          output.to_s
         ]
+
 
         @logger.info(cmd.join(' '))
 
-        monitor = @monitor_factory.build(source)
+        monitor = @monitor_factory.build(source.to_s)
         begin
           @runner.run(cmd) do |stream, line|
             monitor.call(stream, line)
@@ -82,7 +88,7 @@ module VideoEncoder
           monitor.finish
         end
 
-        output
+        output.to_s
       end
 
       private

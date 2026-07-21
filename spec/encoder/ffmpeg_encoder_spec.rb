@@ -46,56 +46,56 @@ RSpec.describe VideoEncoder::Encoder::FFmpegEncoder do
   end
 
   let(:video_track) do
-  VideoEncoder::Track.new(
-    index: 0,
-    type: :video,
-    codec: 'h264'
-  )
-end
+    VideoEncoder::Track.new(
+      index: 0,
+      type: :video,
+      codec: 'h264'
+    )
+  end
 
-let(:audio_track) do
-  VideoEncoder::Track.new(
-    index: 1,
-    type: :audio,
-    language: 'fra',
-    codec:'aac'
-  )
-end
+  let(:audio_track) do
+    VideoEncoder::Track.new(
+      index: 1,
+      type: :audio,
+      language: 'fra',
+      codec: 'aac'
+    )
+  end
 
-let(:original_audio_track) do
-  VideoEncoder::Track.new(
-    index: 4,
-    type: :audio,
-    language: 'deu',
-    codec: 'eac3'
-  )
-end
+  let(:original_audio_track) do
+    VideoEncoder::Track.new(
+      index: 4,
+      type: :audio,
+      language: 'deu',
+      codec: 'eac3'
+    )
+  end
 
-let(:subtitle_track) do
-  VideoEncoder::Track.new(
-    index: 6,
-    type: :subtitle,
-    language: 'fra',
-    codec: 'dvb_subtitle'
-  )
-end
+  let(:subtitle_track) do
+    VideoEncoder::Track.new(
+      index: 6,
+      type: :subtitle,
+      language: 'fra',
+      codec: 'dvb_subtitle'
+    )
+  end
 
-let(:media) do
-  VideoEncoder::Media.new(
-    duration: 100,
-    video_tracks: [video_track],
-    audio_tracks: [audio_track, original_audio_track],
-    subtitle_tracks: [subtitle_track]
-  )
-end
+  let(:media) do
+    VideoEncoder::Media.new(
+      duration: 100,
+      video_tracks: [video_track],
+      audio_tracks: [audio_track, original_audio_track],
+      subtitle_tracks: [subtitle_track]
+    )
+  end
 
-let(:selection) do
-  {
-    video: video_track,
-    audio: [audio_track, original_audio_track],
-    subtitles: [subtitle_track]
-  }
-end
+  let(:selection) do
+    {
+      video: video_track,
+      audio: [audio_track, original_audio_track],
+      subtitles: [subtitle_track]
+    }
+  end
 
   subject(:encoder) do
     described_class.new(
@@ -108,11 +108,13 @@ end
     )
   end
 
-  let(:job) do
-    VideoEncoder::Job.new(source: 'video.mkv')
-  end
-
   describe '#encode' do
+    let(:source) { 'video.mkv' }
+
+    let(:job) do
+      VideoEncoder::Job.new(source: source)
+    end
+
     before do
       allow(media_probe)
         .to receive(:read)
@@ -161,9 +163,10 @@ end
           '-c:a', 'aac',
           '-b:a', '160k',
           '-ac', '2',
+          '-c:s', 'copy',
           '-disposition:v:0', 'default',
           '-disposition:a:0', 'default',
-          'video.mkv'
+          'video.encoded.mkv'
         ]
       )
     end
@@ -171,13 +174,53 @@ end
     context 'when ffmpeg fails' do
       before do
         allow(runner)
-        .to receive(:run)
-        .and_raise(RuntimeError, 'input file not found')
+          .to receive(:run)
+          .and_raise(RuntimeError, 'input file not found')
       end
 
       it 'raises an exception with ffmpeg stderr' do
         expect { encoder.encode(job) }
-        .to raise_error(RuntimeError, /input file not found/)
+          .to raise_error(RuntimeError, /input file not found/)
+      end
+    end
+
+    context 'when the source already uses the output container' do
+      let(:source) do
+        "/commun/Encoding/Grey's Anatomy - S22 E15.mkv"
+      end
+
+      let(:job) do
+        VideoEncoder::Job.new(source: source)
+      end
+
+      before do
+        allow(media_probe)
+          .to receive(:read)
+          .with(source)
+          .and_return(media)
+      end
+
+      it 'uses a distinct temporary output path' do
+        expect(source).to eq(
+          "/commun/Encoding/Grey's Anatomy - S22 E15.mkv"
+        )
+
+        expect(job.source.to_s).to eq(source)
+        encoder.encode(job)
+
+        expect(runner).to have_received(:run).with(
+          array_including(
+            '-i',
+            source,
+            "/commun/Encoding/Grey's Anatomy - S22 E15.encoded.mkv"
+          )
+        )
+      end
+
+      it 'returns the temporary output path' do
+        expect(encoder.encode(job)).to eq(
+          "/commun/Encoding/Grey's Anatomy - S22 E15.encoded.mkv"
+        )
       end
     end
   end

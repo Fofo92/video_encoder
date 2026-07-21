@@ -13,7 +13,9 @@ module VideoEncoder
     end
 
     def move_to_encoded(output)
-      move(output, @directories.encoded)
+      move(output, @directories.encoded) do |filename|
+        filename.sub(/\.encoded(\.[^.]+)\z/, '\1')
+      end
     end
 
     def move_to_archive(source)
@@ -33,7 +35,10 @@ module VideoEncoder
     private
 
     def move(path, destination_dir)
-      destination = File.join(destination_dir, File.basename(path))
+      filename = block_given? ? yield(File.basename(path)) : File.basename(path)
+
+      destination = File.join(destination_dir, filename)
+
       FileUtils.mv(path, destination)
       destination
     end
