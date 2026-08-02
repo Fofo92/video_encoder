@@ -11,5 +11,22 @@ module VideoEncoder
       @start_time = start_time
       @end_time = end_time
     end
+
+    def duration
+      time_in_milliseconds(end_time) -
+        time_in_milliseconds(start_time)
+    end
+
+    private
+
+    def time_in_milliseconds(time)
+      hours, minutes, seconds = time.split(':')
+
+      (
+        hours.to_i * 3_600_000 +
+        minutes.to_i * 60_000 +
+        seconds.to_f * 1_000
+      ).round
+    end
   end
 end

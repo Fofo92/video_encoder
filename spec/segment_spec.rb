@@ -32,4 +32,15 @@ RSpec.describe VideoEncoder::Segment do
       end.to raise_error(ArgumentError)
     end
   end
+
+  describe '#duration' do
+    it 'returns the segment duration in milliseconds' do
+      segment = described_class.new(
+        start_time: '01:02:40.000',
+        end_time:   '01:03:40.250'
+      )
+
+      expect(segment.duration).to eq(60_250)
+    end
+  end
 end
