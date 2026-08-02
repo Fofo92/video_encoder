@@ -35,5 +35,7 @@ require_relative 'video_encoder/workspace'
 require_relative 'video_encoder/media'
 require_relative 'video_encoder/track'
 require_relative 'video_encoder/track_selector'
+require_relative 'video_encoder/segment'
+require_relative 'video_encoder/trim_project'
 
 require 'logger'

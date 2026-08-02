@@ -3,7 +3,7 @@
 module VideoEncoder
   class TrackSelector
     FRENCH_CODES = %w[fra fre].freeze
-    SPECIAL_AUDIO_CODES = %w[qaa].freeze
+    ORIGINAL_VERSION_CODES = %w[qaa].freeze
 
     def select(media)
       {
@@ -20,12 +20,10 @@ module VideoEncoder
     end
 
     def select_audio(tracks)
-      usable = tracks.reject do |track|
-        track.visual_impaired || special_audio?(track)
-      end
+      usable = tracks.reject(&:visual_impaired)
 
       french = usable.find { |track| french?(track) }
-      original = usable.find { |track| !french?(track) }
+      original = usable.find { |track| original_version?(track) }
 
       [french, original].compact.uniq
     end
@@ -42,6 +40,10 @@ module VideoEncoder
 
     def french?(track)
       FRENCH_CODES.include?(track.language)
+    end
+
+    def original_version?(track)
+      ORIGINAL_VERSION_CODES.include?(track.language)
     end
   end
 end

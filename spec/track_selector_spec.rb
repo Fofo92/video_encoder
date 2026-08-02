@@ -22,13 +22,22 @@ RSpec.describe VideoEncoder::TrackSelector do
     )
   end
 
-  let(:descriptive_audio) do
+  let(:accessibility_audio) do
     VideoEncoder::Track.new(
       index: 2,
       type: :audio,
-      language: 'qaa',
+      language: 'fra',
       codec: 'eac3',
       visual_impaired: true
+    )
+  end
+
+  let(:original_audio) do
+    VideoEncoder::Track.new(
+      index: 3,
+      type: :audio,
+      language: 'qaa',
+      codec: 'eac3'
     )
   end
 
@@ -66,8 +75,8 @@ RSpec.describe VideoEncoder::TrackSelector do
       video_tracks: [video],
       audio_tracks: [
         french_audio,
-        descriptive_audio,
-        german_audio
+        accessibility_audio,
+        original_audio
       ],
       subtitle_tracks: [
         french_subtitle,
@@ -76,52 +85,146 @@ RSpec.describe VideoEncoder::TrackSelector do
     )
   end
 
-  it 'selects the first video track' do
-    expect(selector.select(media)[:video]).to eq(video)
+  describe '#select' do
+    it 'selects the first video track' do
+      expect(selector.select(media)[:video]).to eq(video)
+    end
+
+    it 'selects French and original-version audio tracks' do
+      expect(selector.select(media)[:audio])
+        .to eq([french_audio, original_audio])
+    end
+
+    it 'ignores accessibility audio tracks' do
+      expect(selector.select(media)[:audio])
+        .not_to include(accessibility_audio)
+    end
+
+    it 'selects standard French subtitles when original audio is kept' do
+      expect(selector.select(media)[:subtitles])
+        .to eq([french_subtitle])
+    end
+
+    it 'ignores hearing impaired subtitles' do
+      expect(selector.select(media)[:subtitles])
+        .not_to include(hearing_impaired_subtitle)
+    end
   end
 
-  it 'selects French and original audio tracks' do
-    expect(selector.select(media)[:audio])
-      .to eq([french_audio, german_audio])
+  context 'when another foreign-language track is present' do
+    let(:german_audio) do
+      VideoEncoder::Track.new(
+        index: 4,
+        type: :audio,
+        language: 'deu',
+        codec: 'eac3'
+      )
+    end
+
+    let(:media) do
+      VideoEncoder::Media.new(
+        duration: 100,
+        video_tracks: [video],
+        audio_tracks: [
+          french_audio,
+          accessibility_audio,
+          original_audio,
+          german_audio
+        ],
+        subtitle_tracks: [french_subtitle]
+      )
+    end
+
+    it 'keeps the original-version audio instead of another foreign-language track' do
+      expect(selector.select(media)[:audio])
+        .to eq([french_audio, original_audio])
+    end
   end
+  context 'when no original-version audio track is available' do
+    let(:media) do
+      VideoEncoder::Media.new(
+        duration: 100,
+        video_tracks: [video],
+        audio_tracks: [
+          french_audio,
+          accessibility_audio
+        ],
+        subtitle_tracks: [
+          french_subtitle,
+          hearing_impaired_subtitle
+        ]
+      )
+    end
 
-  it 'ignores descriptive audio' do
-    expect(selector.select(media)[:audio])
-      .not_to include(descriptive_audio)
-  end
+    it 'selects only the French audio track' do
+      expect(selector.select(media)[:audio])
+        .to eq([french_audio])
+    end
 
-  it 'selects standard French subtitles for foreign audio' do
-    expect(selector.select(media)[:subtitles])
-      .to eq([french_subtitle])
-  end
-  it 'returns the selected track indexes' do
-    selection = selector.select(media)
+    context 'when several foreign-language audio tracks are available' do
+      let(:german_audio) do
+        VideoEncoder::Track.new(
+          index: 4,
+          type: :audio,
+          language: 'deu',
+          codec: 'eac3'
+        )
+      end
 
-    expect(selection[:video].index).to eq(0)
-    expect(selection[:audio].map(&:index)).to eq([1, 3])
-    expect(selection[:subtitles].map(&:index)).to eq([4])
-  end
+      let(:media) do
+        VideoEncoder::Media.new(
+          duration: 100,
+          video_tracks: [video],
+          audio_tracks: [
+            french_audio,
+            accessibility_audio,
+            original_audio,
+            german_audio
+          ],
+          subtitle_tracks: [
+            french_subtitle
+          ]
+        )
+      end
 
-  it 'ignores qaa audio tracks' do
-    qaa_audio = VideoEncoder::Track.new(
-      index: 2,
-      type: :audio,
-      language: 'qaa',
-      codec: 'eac3'
-    )
+      it 'selects only the original-version audio track' do
+        expect(selector.select(media)[:audio])
+          .to eq([french_audio, original_audio])
+      end
+    end
 
-    media_with_qaa = VideoEncoder::Media.new(
-      duration: 100,
-      video_tracks: [video],
-      audio_tracks: [
-        french_audio,
-        qaa_audio,
-        german_audio
-      ],
-      subtitle_tracks: [french_subtitle]
-    )
+    context 'when several French audio tracks are available' do
+      let(:second_french_audio) do
+        VideoEncoder::Track.new(
+          index: 4,
+          type: :audio,
+          language: 'fra',
+          codec: 'aac'
+        )
+      end
 
-    expect(selector.select(media_with_qaa)[:audio])
-      .to eq([french_audio, german_audio])
+      let(:media) do
+        VideoEncoder::Media.new(
+          duration: 100,
+          video_tracks: [video],
+          audio_tracks: [
+            french_audio,
+            second_french_audio,
+            original_audio
+          ],
+          subtitle_tracks: [french_subtitle]
+        )
+      end
+
+      it 'selects the first French audio track' do
+        expect(selector.select(media)[:audio])
+          .to eq([french_audio, original_audio])
+      end
+    end
+    
+    it 'does not select subtitles' do
+      expect(selector.select(media)[:subtitles])
+        .to eq([])
+    end
   end
 end
