@@ -1,0 +1,20 @@
+<mlt>
+  <profile colorspace="709"
+     description="HD 1080i 25 fps"
+     display_aspect_den="9"
+     display_aspect_num="16"
+     frame_rate_den="1"
+     frame_rate_num="25"
+     height="1080"
+     progressive="0"
+     sample_aspect_den="1"
+     sample_aspect_num="1"
+     width="1920"/>
+  <chain id="source">
+    <property name="resource">/commun/to_be_cut/test_trimmer/The Truman Show.m2t</property>
+  </chain>
+  <playlist id="segments">
+    <entry in="01:02:40.000" out="01:03:40.000" producer="source"/>
+    <entry in="01:09:55.000" out="01:10:55.000" producer="source"/>
+  </playlist>
+</mlt>

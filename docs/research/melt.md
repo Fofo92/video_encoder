@@ -87,9 +87,9 @@ Les segments sont définis dans une `playlist` par une succession de balises `en
 </playlist>
 ```
 
-La concaténation des segments est  donc obtenue par la succession des entrées de la playlist. Une même  chaîne peut être référencée plusieurs fois avec des points d'entrée et  de sortie différents, conformément au modèle **MLT**. 
+La concaténation des segments est  donc obtenue par la succession des entrées de la playlist. Une même  chaîne peut être référencée plusieurs fois avec des points d'entrée et  de sortie différents, conformément au modèle **MLT**.
 
-Les playlists sont ensuite regroupées dans un `tractor`, qui constitue l'objet chargé d'assembler les différentes pistes (audio, vidéo, etc.) pour le rendu. 
+Les playlists sont ensuite regroupées dans un `tractor`, qui constitue l'objet chargé d'assembler les différentes pistes (audio, vidéo, etc.) pour le rendu.
 
 - Plusieurs `tractor` et `chain` sont présents dans le projet. Leur rôle exact reste à déterminer.
 
@@ -236,7 +236,7 @@ Cet écart est faible et probablement imperceptible, mais il doit être noté. S
 
 ## MLT-005
 
-### Question 
+### Question
 
 Vérifier qu’un profil MLT adapté à la TNT HD française permet de conserver la résolution et les caractéristiques vidéo de la source.
 
@@ -277,8 +277,6 @@ Le profil standard MLT `atsc_1080i_50` correspond aux caractéristiques généra
 - espace colorimétrique BT.709.
 
 Son utilisation empêche le redimensionnement involontaire en `1280 × 720` provoqué par le profil initial du projet **Kdenlive**.
-
-## MLT-006
 
 ## MLT-006
 
@@ -324,13 +322,55 @@ Pour conserver une VF et une VO comme deux pistes distinctes, il faudra probable
 
 MLT resterait chargé de produire des jonctions temporelles propres, tandis que FFmpeg assurerait l’assemblage final des flux indépendants.
 
+## MLT-007
 
+## MLT-008
 
+### Objet
 
+Vérifier qu’un projet MLT minimal produit par `MltProjectBuilder` permet de rendre correctement plusieurs segments d’un même enregistrement.
 
+### Commande
+
+```bash
+melt-7 generated.mlt \
+  -consumer avformat:generated-test.mkv \
+  vcodec=libx265
+```
+
+### Observations
+
+* Le fichier Matroska produit est lisible.
+* La vidéo paraît propre.
+* La jonction entre les deux segments est nette.
+* La précision de la coupe à l’image près reste à confirmer.
+* Une seule piste audio est produite.
+* Aucun sous-titre n’est conservé.
+
+### Conclusion
+
+Le document MLT minimal engendré par `MltProjectBuilder` suffit à décrire et rendre une timeline composée de plusieurs segments.
+
+Les informations supplémentaires présentes dans un projet Kdenlive ne sont donc pas nécessaires au besoin actuel de `video_encoder`.
+
+MLT est validé comme moteur de *timeline* pour obtenir des jonctions propres. La gestion des pistes audio multiples et des sous-titres devra être réalisée séparément.
+
+## La suite logique
+
+Je ne chercherais pas encore la précision à l’image près. Nous savons déjà que MLT produit une jonction nettement meilleure que la concaténation FFmpeg en copie de flux.
+
+Le prochain chantier devrait être la **séparation des rendus par flux** :
+
+```text
+timeline unique
+    ├── vidéo
+    ├── audio VF
+    └── audio VO
+
+puis leur remultiplexage par FFmpeg.
 ### Conclusion Générale
 
-MLT semble être un candidat crédible pour réaliser le découpage et la reconstitution du film. En effet : 
+MLT semble être un candidat crédible pour réaliser le découpage et la reconstitution du film. En effet :
 
 - une timeline est représentée de manière simple et cohérente ;
 - `melt` peut être piloté en ligne de commande ;

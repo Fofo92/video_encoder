@@ -10,6 +10,7 @@ gem 'sqlite3'
 
 group :development, :test do
   gem 'rake'
+  gem 'rexml'
   gem 'rspec'
   gem 'rubocop', require: false
   gem 'simplecov', require: false

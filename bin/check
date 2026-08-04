@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$PROJECT_ROOT"
+
+run_step() {
+  local label="$1"
+  shift
+
+  printf '\n🐷  %s\n' "$label"
+
+  if "$@"; then
+    printf '✅  %s\n' "$label"
+  else
+    printf '❌  %s\n' "$label" >&2
+    exit 1
+  fi
+}
+
+run_integration_checks() {
+  if ! command -v melt-7 >/dev/null 2>&1; then
+    printf '\n⚠️  Tests d’intégration ignorés : melt-7 est introuvable.\n'
+    return
+  fi
+
+  run_step \
+    "Tests d’intégration MLT" \
+    bundle exec rspec --tag integration
+}
+
+printf '🐷  Le petit cochon inspecte video_encoder…\n'
+
+run_step \
+  "Dépendances Ruby" \
+  bundle check
+
+run_step \
+  "Analyse RuboCop" \
+  bundle exec rubocop
+
+run_step \
+  "Tests unitaires" \
+  bundle exec rspec --tag '~integration'
+
+case "${1:-}" in
+  --integration | --all)
+    run_integration_checks
+    ;;
+  "")
+    ;;
+  *)
+    printf '\nUsage : bin/check [--integration|--all]\n' >&2
+    exit 2
+    ;;
+esac
+
+printf '\n🐷✨ Tout est propre. Le cochon approuve !\n'
