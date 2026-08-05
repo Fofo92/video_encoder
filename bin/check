@@ -30,7 +30,7 @@ run_integration_checks() {
     bundle exec rspec --tag integration
 }
 
-printf '🐷  Le petit cochon inspecte video_encoder…\n'
+printf '🐷  Rubychon inspecte video_encoder…\n'
 
 run_step \
   "Dépendances Ruby" \
@@ -56,4 +56,4 @@ case "${1:-}" in
     ;;
 esac
 
-printf '\n🐷✨ Tout est propre. Le cochon approuve !\n'
+printf '\n🐷✨ Tout est propre. Rubychon approuve !\n'

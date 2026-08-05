@@ -7,6 +7,8 @@ require_relative '../lib/video_encoder'
 SOURCE = '/commun/to_be_cut/test_trimmer/The Truman Show.m2t'
 
 output_path = ARGV.fetch(0, 'generated.mlt')
+video_index = Integer(ARGV.fetch(1, 0))
+audio_index = Integer(ARGV.fetch(2, 0))
 
 project = VideoEncoder::TrimProject.new(source: SOURCE)
 
@@ -25,7 +27,11 @@ project.add_segment(
 )
 
 builder = VideoEncoder::MltProjectBuilder.new
-xml = builder.build(project)
+xml = builder.build(
+  project,
+  video_index: video_index,
+  audio_index: audio_index
+)
 
 FileUtils.mkdir_p(File.dirname(output_path))
 File.write(output_path, xml)
