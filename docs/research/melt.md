@@ -324,6 +324,16 @@ MLT resterait chargé de produire des jonctions temporelles propres, tandis que 
 
 ## MLT-007
 
+### Question
+
+MLT accepte-t-il notre projet ?
+
+### Conclusion
+
+Le projet MLT minimal construit par `MltProjectBuilder` est accepté par `melt` et peut être parcouru jusqu'à son terme avec le consommateur `null`.
+
+Cette étape valide la structure minimale du document (profil, source, playlist, tractor) indépendamment de tout rendu vidéo. La validation du rendu proprement dit est reportée à **MLT-008**.
+
 ## MLT-008
 
 ### Objet
@@ -340,12 +350,12 @@ melt-7 generated.mlt \
 
 ### Observations
 
-* Le fichier Matroska produit est lisible.
-* La vidéo paraît propre.
-* La jonction entre les deux segments est nette.
-* La précision de la coupe à l’image près reste à confirmer.
-* Une seule piste audio est produite.
-* Aucun sous-titre n’est conservé.
+- Le fichier Matroska produit est lisible.
+- La vidéo paraît propre.
+- La jonction entre les deux segments est nette.
+- La précision de la coupe à l’image près reste à confirmer.
+- Une seule piste audio est produite.
+- Aucun sous-titre n’est conservé.
 
 ### Conclusion
 
@@ -355,20 +365,116 @@ Les informations supplémentaires présentes dans un projet Kdenlive ne sont don
 
 MLT est validé comme moteur de *timeline* pour obtenir des jonctions propres. La gestion des pistes audio multiples et des sous-titres devra être réalisée séparément.
 
-## La suite logique
+## MLT-009 : Sélection des flux audio et vidéo
 
-Je ne chercherais pas encore la précision à l’image près. Nous savons déjà que MLT produit une jonction nettement meilleure que la concaténation FFmpeg en copie de flux.
+### Objet
 
-Le prochain chantier devrait être la **séparation des rendus par flux** :
+Déterminer comment MLT sélectionne les flux du média source et comment contrôler les flux effectivement écrits dans le fichier de sortie.
+
+### Expériences
+
+#### Vidéo seule
+
+Projet MLT :
+
+```xml
+<propertyname="video_index">0</property><propertyname="audio_index">-1</property>
+```
+
+### Commande
+
+```shell
+melt-7 video_only.mlt\
+  -consumer avformat:video_only.mkv\
+  vcodec=libx265
+```
+
+### Observations
+
+Le fichier obtenu contient :
+
+- une piste vidéo HEVC ;
+- une piste audio Vorbis silencieuse.
+
+### Analyse
+
+```shell
+ffmpeg -i video_only.mkv\
+  -map0:a:0\
+  -af volumedetect\
+  -f null -
+```
+
+### Résultat
 
 ```text
-timeline unique
-    ├── vidéo
-    ├── audio VF
-    └── audio VO
+mean_volume: -91.0 dB
+max_volume:  -91.0 dB
+```
 
-puis leur remultiplexage par FFmpeg.
-### Conclusion Générale
+Le consumer crée donc une piste audio silencieuse bien que le producteur n'ait sélectionné aucune piste audio.
+
+En ajoutant :
+
+```shell
+an=1
+```
+
+au consumer, le fichier de sortie ne contient plus qu'une piste vidéo.
+
+#### Audio seule
+
+##### Premier essai
+
+```xml
+<propertyname="video_index">-1</property><propertyname="audio_index">0</property>
+```
+
+Le fichier produit dure environ **2 min 43 s**, durée incohérente avec la timeline.
+
+##### Deuxième essai :
+
+```xml
+<propertyname="video_index">-1</property><propertyname="audio_index">1</property>
+```
+
+Le fichier obtenu contient :
+
+- une seule piste FLAC ;
+- une durée de **00:02:00.096**, cohérente avec la vidéo.
+
+### Conclusions
+
+- `video_index` et `audio_index` désignent les **indices absolus** des flux dans le conteneur.
+
+- Dans le média étudié :
+
+  - `video_index = 0`
+  - `audio_index = 1`
+
+  - `audio_index = -1` désactive la lecture de l'audio par le producteur MLT.
+
+  - Le consumer `avformat` génère néanmoins une piste audio silencieuse ; il faut utiliser `an=1` pour supprimer effectivement l'audio du fichier de sortie.
+
+  - La sélection des flux du média et la sélection des flux écrits dans le fichier de sortie relèvent de deux responsabilités distinctes.
+
+### Conséquences pour l'architecture
+
+Cette expérience met en évidence deux niveaux indépendants :
+
+```text
+MltProjectBuilder
+    ↓
+sélection des flux lus par MLT
+
+Consumer avformat
+    ↓
+sélection des flux écrits dans le média final
+```
+
+La génération du projet MLT ne doit donc pas porter les options du consumer (`an`, `vn`, etc.), qui relèveront d'un futur composant chargé du rendu.
+
+## Conclusion Générale
 
 MLT semble être un candidat crédible pour réaliser le découpage et la reconstitution du film. En effet :
 
@@ -381,4 +487,4 @@ Il reste encore quelques inconnues importantes :
 
 - la gestion des multiples pistes audio ;
 - les sous-titres DVB ;
-- les paramètres exacts du consumer `avformat`.
+- les paramètres exacts du consumer `avformat`

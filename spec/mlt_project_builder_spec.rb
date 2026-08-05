@@ -112,5 +112,32 @@ RSpec.describe VideoEncoder::MltProjectBuilder do
         expect(status).to be_success, stderr
       end
     end
+
+    it 'selects the requested audio and video streams' do
+      xml = builder.build(
+        project,
+        video_index: 0,
+        audio_index: 1
+      )
+
+      document = REXML::Document.new(xml)
+      chain = document.elements['mlt/chain[@id="source"]']
+
+      expect(chain.elements['property[@name="video_index"]'].text).to eq('0')
+      expect(chain.elements['property[@name="audio_index"]'].text).to eq('1')
+    end
+
+    it 'can disable the audio stream' do
+      xml = builder.build(
+        project,
+        video_index: 0,
+        audio_index: -1
+      )
+
+      document = REXML::Document.new(xml)
+      chain = document.elements['mlt/chain[@id="source"]']
+
+      expect(chain.elements['property[@name="audio_index"]'].text).to eq('-1')
+    end
   end
 end

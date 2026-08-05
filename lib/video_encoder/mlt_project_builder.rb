@@ -3,7 +3,7 @@
 module VideoEncoder
   # Builds an MLT project XML document for a given video encoder project.
   class MltProjectBuilder
-    def build(project)
+    def build(project, video_index: 0, audio_index: 0)
       entries = project.segments.map do |segment|
         <<~XML.strip
           <entry in="#{segment.start_time}" out="#{segment.end_time}" producer="source"/>
@@ -25,6 +25,8 @@ module VideoEncoder
              width="1920"/>
           <chain id="source">
             <property name="resource">#{project.source}</property>
+            <property name="video_index">#{video_index}</property>
+            <property name="audio_index">#{audio_index}</property>
           </chain>
           <playlist id="segments">
             #{entries.join("\n    ")}
