@@ -3,3 +3,5 @@
 *.mlt
 *.mkv
 *.mka
+!spec/fixtures/**/*.mkv
+!spec/fixtures/**/*.mka
