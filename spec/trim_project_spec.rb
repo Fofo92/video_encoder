@@ -103,4 +103,25 @@ RSpec.describe VideoEncoder::TrimProject do
       expect(project.duration).to eq(150_750)
     end
   end
+
+  describe '#remove_segment' do
+    it 'removes a segment from the project' do
+      first = VideoEncoder::Segment.new(
+        start_time: '00:10:00.000',
+        end_time:   '00:11:00.000'
+      )
+
+      second = VideoEncoder::Segment.new(
+        start_time: '00:20:00.000',
+        end_time:   '00:21:00.000'
+      )
+
+      project.add_segment(first)
+      project.add_segment(second)
+
+      project.remove_segment(first)
+
+      expect(project.segments).to eq([second])
+    end
+  end
 end

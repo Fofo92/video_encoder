@@ -21,5 +21,9 @@ module VideoEncoder
     def duration
       segments.sum(&:duration)
     end
+
+    def remove_segment(segment)
+      @segments.delete(segment)
+    end
   end
 end
