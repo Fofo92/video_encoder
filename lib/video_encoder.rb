@@ -41,5 +41,6 @@ require_relative 'video_encoder/mlt_project_builder'
 require_relative 'video_encoder/mlt_renderer'
 require_relative 'video_encoder/ffmpeg_remuxer'
 require_relative 'video_encoder/trim_exporter'
+require_relative 'video_encoder/trim_workspace'
 
 require 'logger'
