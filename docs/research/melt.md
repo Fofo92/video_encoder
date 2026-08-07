@@ -474,17 +474,30 @@ sélection des flux écrits dans le média final
 
 La génération du projet MLT ne doit donc pas porter les options du consumer (`an`, `vn`, etc.), qui relèveront d'un futur composant chargé du rendu.
 
-## Conclusion Générale
+## Conclusion générale
 
-MLT semble être un candidat crédible pour réaliser le découpage et la reconstitution du film. En effet :
+MLT s'est révélé être un excellent candidat pour réaliser le découpage et la reconstitution d'un enregistrement vidéo.
 
-- une timeline est représentée de manière simple et cohérente ;
-- `melt` peut être piloté en ligne de commande ;
-- l'encodage est configurable ;
-- la qualité des jonctions est bien meilleure que celle obtenue par une simple concaténation de flux.
+Les différentes expérimentations ont permis d'établir les points suivants :
 
-Il reste encore quelques inconnues importantes :
+- une timeline est représentée de manière simple, cohérente et facilement générable en XML ;
+- `melt` peut être piloté entièrement en ligne de commande ;
+- un projet MLT minimal suffit à réaliser un découpage de qualité, sans reproduire la complexité des projets générés par Kdenlive ;
+- les jonctions obtenues sont nettement plus propres que celles produites par une simple concaténation de flux avec FFmpeg ;
+- la sélection des flux audio et vidéo est contrôlée par le producteur MLT (`video_index`, `audio_index`, ou leurs variantes relatives `vstream` et `astream`) ;
+- la sélection des flux effectivement écrits dans le média final relève du consumer (`an`, `vn`, etc.), ce qui met en évidence une séparation claire des responsabilités.
 
-- la gestion des multiples pistes audio ;
-- les sous-titres DVB ;
-- les paramètres exacts du consumer `avformat`
+Ces travaux conduisent naturellement à l'architecture retenue pour `video_encoder` :
+
+- **MLT** est responsable du découpage temporel et de la reconstruction de la timeline ;
+- **FFmpeg** est responsable de l'encodage final, du remultiplexage des flux et de la conservation de leurs métadonnées.
+
+Cette séparation correspond également à la philosophie de Kdenlive, qui s'appuie lui-même sur MLT pour le montage et sur FFmpeg pour les opérations de codage. `video_encoder` reprend ces briques logicielles, mais avec une architecture beaucoup plus spécialisée, adaptée au traitement automatisé d'enregistrements télévisés.
+
+Les principales questions restant à explorer ne concernent plus le fonctionnement de MLT lui-même, mais son intégration dans le pipeline complet de `video_encoder` :
+
+- la préservation des métadonnées des pistes (langues, pistes destinées aux malentendants, etc.) lors du remultiplexage final ;
+- la gestion des sous-titres DVB ;
+- l'orchestration complète du pipeline de génération, depuis le `TrimProject` jusqu'au média final.
+
+À ce stade, MLT peut être considéré comme un composant maîtrisé de l'architecture du projet. Les expérimentations consignées dans ce document constituent désormais une base de référence pour les développements ultérieurs.
