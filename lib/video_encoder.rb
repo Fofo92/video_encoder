@@ -38,5 +38,8 @@ require_relative 'video_encoder/track_selector'
 require_relative 'video_encoder/segment'
 require_relative 'video_encoder/trim_project'
 require_relative 'video_encoder/mlt_project_builder'
+require_relative 'video_encoder/mlt_renderer'
+require_relative 'video_encoder/ffmpeg_remuxer'
+require_relative 'video_encoder/trim_exporter'
 
 require 'logger'
