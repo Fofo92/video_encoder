@@ -40,6 +40,8 @@ Médias source
 
 # Flux de travail
 
+Le flux de travail (ou _workflow_) décrit les gestes. Les classes ne sont que les outils qui permettent de les accomplir.
+
 ## 1. Charger les médias
 
 L'utilisateur ouvre un ou plusieurs médias.
@@ -75,9 +77,13 @@ Lorsqu'une première image d'une séquence intéressante est atteinte, l'utilisa
 
 Il poursuit ensuite sa lecture jusqu'à la dernière image à conserver avant la publicité (ou toute autre portion à supprimer), puis définit un point de sortie (*Out*).
 
+### Montage à l'image près
+
 La sélection est réalisée **à l'image près**.
 
-Les horodatages servent uniquement à identifier ces images.
+L'image constitue l'unité élémentaire du montage. Les points d'entrée (*In*) et de sortie (*Out*) désignent des images précises du média.
+
+Les horodatages (timecodes) servent à identifier et à afficher ces positions, ainsi qu'à dialoguer avec les outils techniques (MLT, FFmpeg, etc.). Ils ne constituent pas le concept métier fondamental.
 
 Une fois les deux bornes validées, un **Segment** est créé et ajouté au **TrimProject**.
 
