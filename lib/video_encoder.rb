@@ -3,6 +3,7 @@
 require 'pathname'
 require 'securerandom'
 require 'time'
+require 'logger'
 
 require_relative 'video_encoder/version'
 require_relative 'video_encoder/domain/status'
@@ -42,5 +43,4 @@ require_relative 'video_encoder/mlt_renderer'
 require_relative 'video_encoder/ffmpeg_remuxer'
 require_relative 'video_encoder/trim_exporter'
 require_relative 'video_encoder/trim_workspace'
-
-require 'logger'
+require_relative 'video_encoder/trim_editor'
