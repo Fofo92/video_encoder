@@ -31,6 +31,15 @@ RSpec.describe VideoEncoder::Segment do
         )
       end.to raise_error(ArgumentError)
     end
+
+    it 'rejects a segment with identical boundaries' do
+      expect do
+        described_class.new(
+          start_time: '01:03:40.000',
+          end_time:   '01:03:40.000'
+        )
+      end.to raise_error(ArgumentError)
+    end
   end
 
   describe '#duration' do
@@ -41,6 +50,36 @@ RSpec.describe VideoEncoder::Segment do
       )
 
       expect(segment.duration).to eq(60_250)
+    end
+  end
+
+  describe '#==' do
+    it 'is equal to another segment with the same boundaries' do
+      first = described_class.new(
+        start_time: '00:10:00.000',
+        end_time:   '00:11:00.000'
+      )
+
+      second = described_class.new(
+        start_time: '00:10:00.000',
+        end_time:   '00:11:00.000'
+      )
+
+      expect(first).to eq(second)
+    end
+
+    it 'is not equal to a segment with different boundaries' do
+      first = described_class.new(
+        start_time: '00:10:00.000',
+        end_time:   '00:11:00.000'
+      )
+
+      second = described_class.new(
+        start_time: '00:10:00.000',
+        end_time:   '00:12:00.000'
+      )
+
+      expect(first).not_to eq(second)
     end
   end
 end

@@ -17,6 +17,12 @@ module VideoEncoder
         time_in_milliseconds(start_time)
     end
 
+    def ==(other)
+      other.is_a?(self.class) &&
+        start_time == other.start_time &&
+        end_time == other.end_time
+    end
+
     private
 
     def time_in_milliseconds(time)
