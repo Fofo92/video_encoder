@@ -82,4 +82,47 @@ RSpec.describe VideoEncoder::Segment do
       expect(first).not_to eq(second)
     end
   end
+  describe '#start_frame' do
+    it 'returns the first frame of the segment' do
+      segment = described_class.new(
+        start_frame: 1_500,
+        end_frame:   3_000
+      )
+
+      expect(segment.start_frame).to eq(1_500)
+    end
+  end
+
+  describe '#end_frame' do
+    it 'returns the last frame of the segment' do
+      segment = described_class.new(
+        start_frame: 1_500,
+        end_frame:   3_000
+      )
+
+      expect(segment.end_frame).to eq(3_000)
+    end
+  end
+
+  describe '#initialize with frames' do
+    it 'rejects a segment whose end frame precedes its start frame' do
+      expect do
+        described_class.new(
+          start_frame: 3_000,
+          end_frame:   1_500
+        )
+      end.to raise_error(ArgumentError)
+    end
+  end
+
+  describe '#frame_count' do
+    it 'returns the number of frames including both boundaries' do
+      segment = described_class.new(
+        start_frame: 1_500,
+        end_frame:   3_000
+      )
+
+      expect(segment.frame_count).to eq(1_501)
+    end
+  end
 end
