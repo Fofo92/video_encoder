@@ -35,6 +35,8 @@ module VideoEncoder
     private
 
     def segments_overlap_or_are_contiguous?(previous, segment)
+      return false if previous.source != segment.source
+
       if previous.end_frame && segment.start_frame
         segment.start_frame <= previous.end_frame + 1
       else

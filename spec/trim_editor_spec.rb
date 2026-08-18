@@ -72,6 +72,7 @@ RSpec.describe VideoEncoder::TrimEditor do
 
       expect(project).to have_received(:add_segment).with(
         VideoEncoder::Segment.new(
+          source: media,
           start_frame: 12_345,
           end_frame: 15_678
         )
@@ -170,11 +171,13 @@ RSpec.describe VideoEncoder::TrimEditor do
       expect(project.timeline).to eq(
         [
           VideoEncoder::Segment.new(
+            source: media,
             start_frame: 1_000,
             end_frame: 2_000
           ),
           VideoEncoder::Gap.new(frame_count: 50),
           VideoEncoder::Segment.new(
+            source: media,
             start_frame: 3_000,
             end_frame: 4_000
           )

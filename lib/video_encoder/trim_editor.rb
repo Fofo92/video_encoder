@@ -14,6 +14,7 @@ module VideoEncoder
     def validate_selection
       project.add_segment(
         Segment.new(
+          source: media,
           start_frame: in_frame,
           end_frame: out_frame
         )

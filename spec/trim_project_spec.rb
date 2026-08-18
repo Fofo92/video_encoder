@@ -138,6 +138,28 @@ RSpec.describe VideoEncoder::TrimProject do
 
       expect(project.timeline).to eq([segment])
     end
+
+    it 'accepts segments from different media sources' do
+      media_a = instance_double(VideoEncoder::Media)
+      media_c = instance_double(VideoEncoder::Media)
+
+      first = VideoEncoder::Segment.new(
+        source: media_a,
+        start_frame: 1_000,
+        end_frame: 2_000
+      )
+
+      second = VideoEncoder::Segment.new(
+        source: media_c,
+        start_frame: 500,
+        end_frame: 1_500
+      )
+
+      project.add_segment(first)
+      project.add_segment(second)
+
+      expect(project.timeline).to eq([first, second])
+    end
   end
 
   describe '#source' do

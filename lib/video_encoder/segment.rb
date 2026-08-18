@@ -3,9 +3,16 @@
 module VideoEncoder
   # Represents a video segment with a start and end time.
   class Segment
-    attr_reader :start_time, :end_time, :start_frame, :end_frame
+    attr_reader :source, :start_time, :end_time, :start_frame, :end_frame
 
-    def initialize(start_time: nil, end_time: nil, start_frame: nil, end_frame: nil)
+    def initialize(
+      source: nil,
+      start_time: nil,
+      end_time: nil,
+      start_frame: nil,
+      end_frame: nil
+    )
+      @source = source
       @start_time = start_time
       @end_time = end_time
       @start_frame = start_frame
@@ -22,6 +29,7 @@ module VideoEncoder
 
     def ==(other)
       other.is_a?(self.class) &&
+        source == other.source &&
         start_time == other.start_time &&
         end_time == other.end_time &&
         start_frame == other.start_frame &&

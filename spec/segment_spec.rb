@@ -125,4 +125,18 @@ RSpec.describe VideoEncoder::Segment do
       expect(segment.frame_count).to eq(1_501)
     end
   end
+
+  describe '#source' do
+    it 'returns the media from which the segment originates' do
+      source = instance_double(VideoEncoder::Media)
+
+      segment = described_class.new(
+        source: source,
+        start_frame: 1_000,
+        end_frame: 2_000
+      )
+
+      expect(segment.source).to eq(source)
+    end
+  end
 end
