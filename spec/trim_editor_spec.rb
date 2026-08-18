@@ -117,5 +117,23 @@ RSpec.describe VideoEncoder::TrimEditor do
         VideoEncoder::Gap.new(frame_count: 50)
       )
     end
+
+    it 'rounds the gap duration to the nearest frame' do
+      video_track = instance_double(
+        VideoEncoder::VideoTrack,
+        frame_rate: Rational(25, 1)
+      )
+
+      allow(media).to receive(:video_tracks)
+        .and_return([video_track])
+
+      allow(project).to receive(:add_gap)
+
+      editor.insert_gap(duration: 1.5)
+
+      expect(project).to have_received(:add_gap).with(
+        VideoEncoder::Gap.new(frame_count: 38)
+      )
+    end
   end
 end

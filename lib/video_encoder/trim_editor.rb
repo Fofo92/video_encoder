@@ -36,7 +36,7 @@ module VideoEncoder
 
     def insert_gap(duration:)
       frame_rate = media.video_tracks.first.frame_rate
-      frame_count = (duration * frame_rate).to_i
+      frame_count = (duration * frame_rate).round
 
       project.add_gap(
         Gap.new(frame_count: frame_count)
