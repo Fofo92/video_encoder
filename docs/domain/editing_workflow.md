@@ -85,6 +85,10 @@ L'image constitue l'unité élémentaire du montage. Les points d'entrée (*In*)
 
 Les horodatages (timecodes) servent à identifier et à afficher ces positions, ainsi qu'à dialoguer avec les outils techniques (MLT, FFmpeg, etc.). Ils ne constituent pas le concept métier fondamental.
 
+Les bornes d'un segment sont inclusives : le point (*In*) désigne la première image visible conservée et le point (*Out*) la dernière image visible conservée.
+
+Toute frontière de montage coïncide ainsi avec une image. Une coupure ne peut pas se situer entre deux images.
+
 Une fois les deux bornes validées, un **Segment** est créé et ajouté au **TrimProject**.
 
 ---
@@ -93,7 +97,27 @@ Une fois les deux bornes validées, un **Segment** est créé et ajouté au **Tr
 
 Les étapes précédentes sont répétées autant de fois que nécessaire jusqu'à couvrir l'ensemble du programme.
 
-Le **TrimProject** devient progressivement la représentation complète des portions du média qui devront être conservées.
+Chaque segment validé est ajouté à la timeline du **TrimProject**.
+
+Dans le cas le plus simple, les segments sont placés successivement dans l'ordre du montage.
+
+Il peut cependant être nécessaire de conserver volontairement un intervalle entre deux segments, par exemple lorsqu'une portion de mauvaise qualité a été supprimée et qu'aucun enregistrement de remplacement n'est encore disponible.
+
+Cet intervalle constitue un **Gap**. Il correspond, dans le média final, à une image noire accompagnée de silence.
+
+L'utilisateur peut exprimer la longueur de ce blanc sous la forme d'une durée. L'unité interne du montage restant l'image, cette durée est convertie en un nombre entier d'images selon la cadence vidéo du média.
+
+La timeline peut ainsi être constituée, par exemple, de :
+
+```
+Segment A
+    ↓
+   Gap
+    ↓
+Segment B
+```
+
+Le **TrimProject** devient progressivement la représentation complète du montage à produire.
 
 Il constitue la description métier du montage.
 
@@ -103,7 +127,7 @@ Il constitue la description métier du montage.
 
 Un **moniteur de projet** permet de parcourir le montage obtenu.
 
-Contrairement au moniteur de clip, celui-ci présente uniquement les segments retenus.
+Contrairement au moniteur de clip, celui-ci présente le montage tel qu'il est décrit par la timeline du **TrimProject**, notamment les segments retenus et les éventuels intervalles qui les séparent.
 
 Cette étape permet de vérifier la cohérence du projet avant son export.
 
