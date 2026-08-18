@@ -33,5 +33,14 @@ module VideoEncoder
     def seek_to(frame)
       @current_frame = frame
     end
+
+    def insert_gap(duration:)
+      frame_rate = media.video_tracks.first.frame_rate
+      frame_count = (duration * frame_rate).to_i
+
+      project.add_gap(
+        Gap.new(frame_count: frame_count)
+      )
+    end
   end
 end

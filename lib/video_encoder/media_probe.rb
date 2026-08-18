@@ -63,10 +63,11 @@ module VideoEncoder
       json.fetch('streams', [])
           .select { |stream| stream['codec_type'] == type }
           .map do |stream|
-            Track.new(
+            VideoTrack.new(
               index: stream['index'],
               type: type.to_sym,
               codec: stream['codec_name'],
+              frame_rate: parse_frame_rate(stream),
               language: stream.dig('tags', 'language'),
               default: stream.dig('disposition', 'default') == 1,
               forced: stream.dig('disposition', 'forced') == 1,
@@ -76,6 +77,13 @@ module VideoEncoder
                 stream.dig('disposition', 'visual_impaired') == 1
             )
           end
+    end
+
+    def parse_frame_rate(stream)
+      value = stream['avg_frame_rate']
+      return if value.nil? || value == '0/0'
+
+      Rational(value)
     end
   end
 end

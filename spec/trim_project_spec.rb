@@ -73,6 +73,71 @@ RSpec.describe VideoEncoder::TrimProject do
         project.add_segment(second)
       end.to raise_error(ArgumentError)
     end
+    it 'accepts successive segments defined by frames' do
+      first = VideoEncoder::Segment.new(
+        start_frame: 1_000,
+        end_frame:   2_000
+      )
+
+      second = VideoEncoder::Segment.new(
+        start_frame: 3_000,
+        end_frame:   4_000
+      )
+
+      project.add_segment(first)
+      project.add_segment(second)
+
+      expect(project.timeline).to eq([first, second])
+    end
+
+    it 'rejects overlapping segments defined by frames' do
+      first = VideoEncoder::Segment.new(
+        start_frame: 1_000,
+        end_frame:   2_000
+      )
+
+      second = VideoEncoder::Segment.new(
+        start_frame: 1_500,
+        end_frame:   2_500
+      )
+
+      project.add_segment(first)
+
+      expect do
+        project.add_segment(second)
+      end.to raise_error(ArgumentError)
+    end
+
+    it 'rejects contiguous segments defined by frames' do
+      first = VideoEncoder::Segment.new(
+        start_frame: 1_000,
+        end_frame:   2_000
+      )
+
+      second = VideoEncoder::Segment.new(
+        start_frame: 2_001,
+        end_frame:   3_000
+      )
+
+      project.add_segment(first)
+
+      expect do
+        project.add_segment(second)
+      end.to raise_error(ArgumentError)
+    end
+  end
+
+  describe '#add_segment' do
+    it 'adds the segment to the timeline' do
+      segment = VideoEncoder::Segment.new(
+        start_frame: 1_000,
+        end_frame:   2_000
+      )
+
+      project.add_segment(segment)
+
+      expect(project.timeline).to eq([segment])
+    end
   end
 
   describe '#source' do
@@ -122,6 +187,35 @@ RSpec.describe VideoEncoder::TrimProject do
       project.remove_segment(first)
 
       expect(project.segments).to eq([second])
+    end
+  end
+
+  describe '#add_gap' do
+    it 'adds a gap to the timeline' do
+      gap = VideoEncoder::Gap.new(frame_count: 50)
+
+      project.add_gap(gap)
+
+      expect(project.timeline).to eq([gap])
+    end
+
+    it 'adds a gap after the existing segments' do
+      segment = VideoEncoder::Segment.new(
+        start_frame: 1_000,
+        end_frame:   2_000
+      )
+      gap = VideoEncoder::Gap.new(frame_count: 50)
+
+      project.add_segment(segment)
+      project.add_gap(gap)
+
+      expect(project.timeline).to eq([segment, gap])
+    end
+  end
+
+  describe '#timeline' do
+    it 'is initially empty' do
+      expect(project.timeline).to be_empty
     end
   end
 end

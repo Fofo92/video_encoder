@@ -98,4 +98,24 @@ RSpec.describe VideoEncoder::TrimEditor do
       end.to raise_error(ArgumentError)
     end
   end
+
+  describe '#insert_gap' do
+    it 'adds a gap expressed in frames to the project' do
+      video_track = instance_double(
+        VideoEncoder::VideoTrack,
+        frame_rate: Rational(25, 1)
+      )
+
+      allow(media).to receive(:video_tracks)
+        .and_return([video_track])
+
+      allow(project).to receive(:add_gap)
+
+      editor.insert_gap(duration: 2)
+
+      expect(project).to have_received(:add_gap).with(
+        VideoEncoder::Gap.new(frame_count: 50)
+      )
+    end
+  end
 end

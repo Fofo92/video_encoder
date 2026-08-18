@@ -13,4 +13,16 @@ RSpec.describe VideoEncoder::Track do
 
     expect(track.language).to eq("fra")
   end
+
+  # describe '#frame_rate' do
+  #   it 'returns the frame rate' do
+  #     track = described_class.new(
+  #       index: 0,
+  #       type: :video,
+  #       frame_rate: Rational(25, 1)
+  #     )
+
+  #     expect(track.frame_rate).to eq(Rational(25, 1))
+  #   end
+  # end
 end
