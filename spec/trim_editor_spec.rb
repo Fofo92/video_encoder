@@ -136,4 +136,50 @@ RSpec.describe VideoEncoder::TrimEditor do
       )
     end
   end
+
+  describe 'building a timeline with a gap' do
+    it 'places a gap between two validated segments' do
+      video_track = instance_double(
+        VideoEncoder::VideoTrack,
+        frame_rate: Rational(25, 1)
+      )
+
+      allow(media).to receive(:video_tracks)
+        .and_return([video_track])
+
+      project = VideoEncoder::TrimProject.new(source: media)
+      editor = described_class.new(
+        media: media,
+        project: project
+      )
+
+      editor.seek_to(1_000)
+      editor.mark_in
+      editor.seek_to(2_000)
+      editor.mark_out
+      editor.validate_selection
+
+      editor.insert_gap(duration: 2)
+
+      editor.seek_to(3_000)
+      editor.mark_in
+      editor.seek_to(4_000)
+      editor.mark_out
+      editor.validate_selection
+
+      expect(project.timeline).to eq(
+        [
+          VideoEncoder::Segment.new(
+            start_frame: 1_000,
+            end_frame: 2_000
+          ),
+          VideoEncoder::Gap.new(frame_count: 50),
+          VideoEncoder::Segment.new(
+            start_frame: 3_000,
+            end_frame: 4_000
+          )
+        ]
+      )
+    end
+  end
 end
