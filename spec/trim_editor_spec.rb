@@ -3,6 +3,7 @@
 require 'spec_helper'
 
 RSpec.describe VideoEncoder::TrimEditor do
+  #  testing workflow A′ → C → B′ with 2 editors
   let(:media) { instance_double(VideoEncoder::Media) }
   let(:project) { instance_double(VideoEncoder::TrimProject) }
 
@@ -180,6 +181,66 @@ RSpec.describe VideoEncoder::TrimEditor do
             source: media,
             start_frame: 3_000,
             end_frame: 4_000
+          )
+        ]
+      )
+    end
+  end
+
+  describe 'building a project from multiple media sources' do
+    it 'builds A prime, C, B prime from two media sources' do
+      media_a = instance_double(VideoEncoder::Media)
+      media_c = instance_double(VideoEncoder::Media)
+
+      project = VideoEncoder::TrimProject.new(source: media_a)
+
+      editor_a = described_class.new(
+        media: media_a,
+        project: project
+      )
+
+      editor_c = described_class.new(
+        media: media_c,
+        project: project
+      )
+
+      # A′
+      editor_a.seek_to(0)
+      editor_a.mark_in
+      editor_a.seek_to(1_999)
+      editor_a.mark_out
+      editor_a.validate_selection
+
+      # C
+      editor_c.seek_to(500)
+      editor_c.mark_in
+      editor_c.seek_to(999)
+      editor_c.mark_out
+      editor_c.validate_selection
+
+      # B′
+      editor_a.seek_to(3_000)
+      editor_a.mark_in
+      editor_a.seek_to(4_999)
+      editor_a.mark_out
+      editor_a.validate_selection
+
+      expect(project.timeline).to eq(
+        [
+          VideoEncoder::Segment.new(
+            source: media_a,
+            start_frame: 0,
+            end_frame: 1_999
+          ),
+          VideoEncoder::Segment.new(
+            source: media_c,
+            start_frame: 500,
+            end_frame: 999
+          ),
+          VideoEncoder::Segment.new(
+            source: media_a,
+            start_frame: 3_000,
+            end_frame: 4_999
           )
         ]
       )

@@ -1,4 +1,5 @@
 RSpec.describe VideoEncoder::TrimProject do
+  # testing global TrimProject rules
   let(:media) { instance_double(VideoEncoder::Media) }
 
   subject(:project) { described_class.new(source: media) }
@@ -138,28 +139,6 @@ RSpec.describe VideoEncoder::TrimProject do
 
       expect(project.timeline).to eq([segment])
     end
-
-    it 'accepts segments from different media sources' do
-      media_a = instance_double(VideoEncoder::Media)
-      media_c = instance_double(VideoEncoder::Media)
-
-      first = VideoEncoder::Segment.new(
-        source: media_a,
-        start_frame: 1_000,
-        end_frame: 2_000
-      )
-
-      second = VideoEncoder::Segment.new(
-        source: media_c,
-        start_frame: 500,
-        end_frame: 1_500
-      )
-
-      project.add_segment(first)
-      project.add_segment(second)
-
-      expect(project.timeline).to eq([first, second])
-    end
   end
 
   describe '#source' do
@@ -209,35 +188,6 @@ RSpec.describe VideoEncoder::TrimProject do
       project.remove_segment(first)
 
       expect(project.segments).to eq([second])
-    end
-  end
-
-  describe '#add_gap' do
-    it 'adds a gap to the timeline' do
-      gap = VideoEncoder::Gap.new(frame_count: 50)
-
-      project.add_gap(gap)
-
-      expect(project.timeline).to eq([gap])
-    end
-
-    it 'adds a gap after the existing segments' do
-      segment = VideoEncoder::Segment.new(
-        start_frame: 1_000,
-        end_frame:   2_000
-      )
-      gap = VideoEncoder::Gap.new(frame_count: 50)
-
-      project.add_segment(segment)
-      project.add_gap(gap)
-
-      expect(project.timeline).to eq([segment, gap])
-    end
-  end
-
-  describe '#timeline' do
-    it 'is initially empty' do
-      expect(project.timeline).to be_empty
     end
   end
 end

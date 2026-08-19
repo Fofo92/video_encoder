@@ -44,15 +44,18 @@ Le flux de travail (ou _workflow_) décrit les gestes. Les classes ne sont que l
 
 ## 1. Charger les médias
 
-L'utilisateur ouvre un ou plusieurs médias.
-
 Le cas général consiste à charger un unique enregistrement.
 
-Cependant, plusieurs médias peuvent être utilisés lorsque plusieurs enregistrements partiels d'une même émission doivent être combinés afin de reconstituer un programme complet.
+Cependant, plusieurs médias peuvent être utilisés lorsqu'il est nécessaire de
+combiner des portions provenant de sources différentes.
 
-À ce stade, aucun découpage n'est encore réalisé.
+C'est notamment le cas lorsqu'un média déjà monté contient une portion
+manquante et qu'un autre enregistrement permet ultérieurement de la remplacer.
 
----
+Chaque média reste une source indépendante. Les positions de montage sont
+exprimées dans le référentiel d'images propre à chaque source.
+
+À ce stade, aucun découpage n'est encore réalisé.L'utilisateur ouvre un ou plusieurs médias.
 
 ## 2. Explorer un média
 
@@ -117,9 +120,50 @@ Segment A
 Segment B
 ```
 
-Le **TrimProject** devient progressivement la représentation complète du montage à produire.
+### Remplacer une portion manquante depuis une autre source
 
-Il constitue la description métier du montage.
+Lorsqu'un autre enregistrement devient disponible, il peut fournir une portion
+permettant de remplacer un **Gap**.
+
+Le média contenant le **Gap** et le média de remplacement peuvent être explorés
+simultanément dans deux moniteurs de clip.
+
+Le remplacement ne consiste pas nécessairement à substituer au **Gap** une
+portion de même durée.
+
+L'utilisateur recherche visuellement deux raccords pertinents entre les
+sources, par exemple à l'occasion d'un changement de scène.
+
+Le premier raccord détermine :
+
+* la dernière image conservée avant l'insertion ;
+* la première image conservée dans le média de remplacement.
+
+Le second raccord détermine :
+
+* la dernière image conservée dans le média de remplacement ;
+* la première image reprise dans le média d'origine.
+
+Ainsi, à partir d'un média contenant :
+
+```text
+[ Segment A ][ Gap ][ Segment B ]
+```
+
+et d'une portion sélectionnée dans un autre média, le nouveau montage peut devenir :
+
+```text
+[ Segment A′ ][ Segment C ][ Segment B′ ]
+```
+
+`Segment C` possède un point d'entrée (*In*) et un point de sortie (*Out*) dans son propre média source.
+
+Sa durée est indépendante de celle du **Gap**. Il peut donc être plus court,  égal ou plus long que celui-ci. Dans ce dernier cas, les raccords peuvent également raccourcir les portions adjacentes du média d'origine.
+
+Les segments du nouveau `TrimProject` conservent chacun la référence au média source dont ils
+proviennent. Leurs positions en images sont définies dans le référentiel de cette source. 
+
+Le **TrimProject** devient progressivement la représentation métier complète du montage.
 
 ---
 
@@ -152,7 +196,7 @@ Le workflow repose sur une séparation claire des responsabilités.
 | Élément         | Responsabilité                                   |
 | --------------- | ------------------------------------------------ |
 | Clip Monitor    | Naviguer dans un média source.                   |
-| TrimProject     | Décrire les portions du média à conserver.       |
+| TrimProject     | Décrire les portions des médias à conserver.     |
 | Project Monitor | Prévisualiser le montage.                        |
 | TrimExporter    | Produire le média final à partir du TrimProject. |
 
