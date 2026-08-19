@@ -6,7 +6,7 @@ module VideoEncoder
     attr_reader :source, :start_time, :end_time, :start_frame, :end_frame
 
     def initialize(
-      source: nil,
+      source:,
       start_time: nil,
       end_time: nil,
       start_frame: nil,
@@ -18,6 +18,7 @@ module VideoEncoder
       @start_frame = start_frame
       @end_frame = end_frame
 
+      validate_source
       validate_boundaries
     end
 
@@ -41,6 +42,10 @@ module VideoEncoder
     end
 
     private
+
+    def validate_source
+      raise ArgumentError, 'source is required' unless source
+    end
 
     def time_in_milliseconds(time)
       hours, minutes, seconds = time.split(':')

@@ -19,6 +19,7 @@ RSpec.describe VideoEncoder::TrimProject do
 
     it 'adds a gap after the existing segments' do
       segment = VideoEncoder::Segment.new(
+        source: media,
         start_frame: 1_000,
         end_frame: 2_000
       )

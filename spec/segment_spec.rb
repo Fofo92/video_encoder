@@ -3,8 +3,11 @@
 require 'spec_helper'
 
 RSpec.describe VideoEncoder::Segment do
+  let(:source) { instance_double(VideoEncoder::Media) }
+
   subject(:segment) do
     described_class.new(
+      source: source,
       start_time: '01:02:40.000',
       end_time:   '01:03:40.000'
     )
@@ -26,6 +29,7 @@ RSpec.describe VideoEncoder::Segment do
     it 'rejects a segment whose end precedes its beginning' do
       expect do
         described_class.new(
+          source: source,
           start_time: '01:03:40.000',
           end_time:   '01:02:40.000'
         )
@@ -35,6 +39,7 @@ RSpec.describe VideoEncoder::Segment do
     it 'rejects a segment with identical boundaries' do
       expect do
         described_class.new(
+          source: source,
           start_time: '01:03:40.000',
           end_time:   '01:03:40.000'
         )
@@ -45,6 +50,7 @@ RSpec.describe VideoEncoder::Segment do
   describe '#duration' do
     it 'returns the segment duration in milliseconds' do
       segment = described_class.new(
+        source: source,
         start_time: '01:02:40.000',
         end_time:   '01:03:40.250'
       )
@@ -56,11 +62,13 @@ RSpec.describe VideoEncoder::Segment do
   describe '#==' do
     it 'is equal to another segment with the same boundaries' do
       first = described_class.new(
+        source: source,
         start_time: '00:10:00.000',
         end_time:   '00:11:00.000'
       )
 
       second = described_class.new(
+        source: source,
         start_time: '00:10:00.000',
         end_time:   '00:11:00.000'
       )
@@ -70,11 +78,13 @@ RSpec.describe VideoEncoder::Segment do
 
     it 'is not equal to a segment with different boundaries' do
       first = described_class.new(
+        source: source,
         start_time: '00:10:00.000',
         end_time:   '00:11:00.000'
       )
 
       second = described_class.new(
+        source: source,
         start_time: '00:10:00.000',
         end_time:   '00:12:00.000'
       )
@@ -82,9 +92,29 @@ RSpec.describe VideoEncoder::Segment do
       expect(first).not_to eq(second)
     end
   end
+
+  it 'is not equal to a segment from a different source' do
+    other_source = instance_double(VideoEncoder::Media)
+
+    first = described_class.new(
+      source: source,
+      start_frame: 1_000,
+      end_frame: 2_000
+    )
+
+    second = described_class.new(
+      source: other_source,
+      start_frame: 1_000,
+      end_frame: 2_000
+    )
+
+    expect(first).not_to eq(second)
+  end
+
   describe '#start_frame' do
     it 'returns the first frame of the segment' do
       segment = described_class.new(
+        source: source,
         start_frame: 1_500,
         end_frame:   3_000
       )
@@ -96,6 +126,7 @@ RSpec.describe VideoEncoder::Segment do
   describe '#end_frame' do
     it 'returns the last frame of the segment' do
       segment = described_class.new(
+        source: source,
         start_frame: 1_500,
         end_frame:   3_000
       )
@@ -108,6 +139,7 @@ RSpec.describe VideoEncoder::Segment do
     it 'rejects a segment whose end frame precedes its start frame' do
       expect do
         described_class.new(
+          source: source,
           start_frame: 3_000,
           end_frame:   1_500
         )
@@ -118,6 +150,7 @@ RSpec.describe VideoEncoder::Segment do
   describe '#frame_count' do
     it 'returns the number of frames including both boundaries' do
       segment = described_class.new(
+        source: source,
         start_frame: 1_500,
         end_frame:   3_000
       )
@@ -137,6 +170,16 @@ RSpec.describe VideoEncoder::Segment do
       )
 
       expect(segment.source).to eq(source)
+    end
+
+    it 'rejects a missing source' do
+      expect do
+        described_class.new(
+          source: nil,
+          start_frame: 1_000,
+          end_frame: 2_000
+        )
+      end.to raise_error(ArgumentError, 'source is required')
     end
   end
 end

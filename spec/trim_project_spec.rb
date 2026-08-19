@@ -13,6 +13,7 @@ RSpec.describe VideoEncoder::TrimProject do
   describe '#add_segment' do
     it 'adds a segment to the project' do
       segment = VideoEncoder::Segment.new(
+        source: media,
         start_time: '01:02:40.000',
         end_time: '01:03:40.000'
       )
@@ -24,11 +25,13 @@ RSpec.describe VideoEncoder::TrimProject do
 
     it 'preserves the insertion order' do
       first = VideoEncoder::Segment.new(
+        source: media,
         start_time: '00:10:00.000',
         end_time: '00:11:00.000'
       )
 
       second = VideoEncoder::Segment.new(
+        source: media,
         start_time: '00:20:00.000',
         end_time: '00:21:00.000'
       )
@@ -41,11 +44,13 @@ RSpec.describe VideoEncoder::TrimProject do
 
     it 'rejects overlapping segments' do
       first = VideoEncoder::Segment.new(
+        source: media,
         start_time: '01:00:00.000',
         end_time:   '01:10:00.000'
       )
 
       second = VideoEncoder::Segment.new(
+        source: media,
         start_time: '01:05:00.000',
         end_time:   '01:15:00.000'
       )
@@ -59,11 +64,13 @@ RSpec.describe VideoEncoder::TrimProject do
 
     it 'rejects contiguous segments' do
       first = VideoEncoder::Segment.new(
+        source: media,
         start_time: '01:00:00.000',
         end_time:   '01:10:00.000'
       )
 
       second = VideoEncoder::Segment.new(
+        source: media,
         start_time: '01:10:00.000',
         end_time:   '01:20:00.000'
       )
@@ -76,11 +83,13 @@ RSpec.describe VideoEncoder::TrimProject do
     end
     it 'accepts successive segments defined by frames' do
       first = VideoEncoder::Segment.new(
+        source: media,
         start_frame: 1_000,
         end_frame:   2_000
       )
 
       second = VideoEncoder::Segment.new(
+        source: media,
         start_frame: 3_000,
         end_frame:   4_000
       )
@@ -93,11 +102,13 @@ RSpec.describe VideoEncoder::TrimProject do
 
     it 'rejects overlapping segments defined by frames' do
       first = VideoEncoder::Segment.new(
+        source: media,
         start_frame: 1_000,
         end_frame:   2_000
       )
 
       second = VideoEncoder::Segment.new(
+        source: media,
         start_frame: 1_500,
         end_frame:   2_500
       )
@@ -111,11 +122,13 @@ RSpec.describe VideoEncoder::TrimProject do
 
     it 'rejects contiguous segments defined by frames' do
       first = VideoEncoder::Segment.new(
+        source: media,
         start_frame: 1_000,
         end_frame:   2_000
       )
 
       second = VideoEncoder::Segment.new(
+        source: media,
         start_frame: 2_001,
         end_frame:   3_000
       )
@@ -131,6 +144,7 @@ RSpec.describe VideoEncoder::TrimProject do
   describe '#add_segment' do
     it 'adds the segment to the timeline' do
       segment = VideoEncoder::Segment.new(
+        source: media,
         start_frame: 1_000,
         end_frame:   2_000
       )
@@ -154,11 +168,13 @@ RSpec.describe VideoEncoder::TrimProject do
   describe '#duration' do
     it 'returns the total duration of all segments in milliseconds' do
       first = VideoEncoder::Segment.new(
+        source: media,
         start_time: '00:10:00.000',
         end_time:   '00:11:00.250'
       )
 
       second = VideoEncoder::Segment.new(
+        source: media,
         start_time: '00:20:00.000',
         end_time:   '00:21:30.500'
       )
@@ -173,11 +189,13 @@ RSpec.describe VideoEncoder::TrimProject do
   describe '#remove_segment' do
     it 'removes a segment from the project' do
       first = VideoEncoder::Segment.new(
+        source: media,
         start_time: '00:10:00.000',
         end_time:   '00:11:00.000'
       )
 
       second = VideoEncoder::Segment.new(
+        source: media,
         start_time: '00:20:00.000',
         end_time:   '00:21:00.000'
       )

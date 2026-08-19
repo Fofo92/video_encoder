@@ -9,11 +9,13 @@ RSpec.describe VideoEncoder::MltProjectBuilder do
   subject(:builder) { described_class.new }
 
   let(:source) { '/commun/The Truman Show.m2t' }
+  let(:media) { instance_double(VideoEncoder::Media) }
 
   let(:project) do
     VideoEncoder::TrimProject.new(source: source).tap do |trim_project|
       trim_project.add_segment(
         VideoEncoder::Segment.new(
+          source: media,
           start_time: '01:02:40.000',
           end_time: '01:03:40.000'
         )
@@ -21,6 +23,7 @@ RSpec.describe VideoEncoder::MltProjectBuilder do
 
       trim_project.add_segment(
         VideoEncoder::Segment.new(
+          source: media,
           start_time: '01:09:55.000',
           end_time: '01:10:55.000'
         )

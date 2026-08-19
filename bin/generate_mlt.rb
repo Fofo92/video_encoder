@@ -11,9 +11,11 @@ video_index = Integer(ARGV.fetch(1, 0))
 audio_index = Integer(ARGV.fetch(2, 0))
 
 project = VideoEncoder::TrimProject.new(source: SOURCE)
+media = VideoEncoder::MediaProbe.new.read(SOURCE)
 
 project.add_segment(
   VideoEncoder::Segment.new(
+    source: media,
     start_time: '01:02:40.000',
     end_time: '01:03:40.000'
   )
@@ -21,6 +23,7 @@ project.add_segment(
 
 project.add_segment(
   VideoEncoder::Segment.new(
+    source: media,
     start_time: '01:09:55.000',
     end_time: '01:10:55.000'
   )
