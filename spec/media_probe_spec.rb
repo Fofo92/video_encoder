@@ -43,6 +43,25 @@ RSpec.describe VideoEncoder::MediaProbe do
   end
 
   describe '#read' do
+    it 'preserves the probed file path' do
+      status = instance_double(Process::Status, success?: true)
+
+      stdout = JSON.generate(
+        'format' => {
+          'duration' => '123.456'
+        },
+        'streams' => []
+      )
+
+      allow(Open3)
+        .to receive(:capture3)
+        .and_return([stdout, '', status])
+
+      media = media_probe.read('movie.m2t')
+
+      expect(media.path).to eq(Pathname('movie.m2t'))
+    end
+
     it 'preserves the frame rate of a video track' do
       status = instance_double(Process::Status, success?: true)
 

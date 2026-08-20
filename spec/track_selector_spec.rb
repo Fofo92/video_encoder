@@ -71,7 +71,7 @@ RSpec.describe VideoEncoder::TrackSelector do
 
   let(:media) do
     VideoEncoder::Media.new(
-      duration: 100,
+      path: 'movie.mkv', duration: 100,
       video_tracks: [video],
       audio_tracks: [
         french_audio,
@@ -123,7 +123,7 @@ RSpec.describe VideoEncoder::TrackSelector do
 
     let(:media) do
       VideoEncoder::Media.new(
-        duration: 100,
+        path: 'movie.mkv', duration: 100,
         video_tracks: [video],
         audio_tracks: [
           french_audio,
@@ -143,8 +143,8 @@ RSpec.describe VideoEncoder::TrackSelector do
   context 'when no original-version audio track is available' do
     let(:media) do
       VideoEncoder::Media.new(
-        duration: 100,
-        video_tracks: [video],
+        path: 'movie.mkv',
+        duration: 100, video_tracks: [video],
         audio_tracks: [
           french_audio,
           accessibility_audio
@@ -173,8 +173,8 @@ RSpec.describe VideoEncoder::TrackSelector do
 
       let(:media) do
         VideoEncoder::Media.new(
-          duration: 100,
-          video_tracks: [video],
+          path: 'movie.mkv',
+          duration: 100, video_tracks: [video],
           audio_tracks: [
             french_audio,
             accessibility_audio,
@@ -205,7 +205,7 @@ RSpec.describe VideoEncoder::TrackSelector do
 
       let(:media) do
         VideoEncoder::Media.new(
-          duration: 100,
+          path: 'movie.mkv', duration: 100,
           video_tracks: [video],
           audio_tracks: [
             french_audio,
@@ -221,7 +221,7 @@ RSpec.describe VideoEncoder::TrackSelector do
           .to eq([french_audio, original_audio])
       end
     end
-    
+
     it 'does not select subtitles' do
       expect(selector.select(media)[:subtitles])
         .to eq([])

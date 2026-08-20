@@ -14,6 +14,7 @@ module VideoEncoder
       json = probe(path)
 
       Media.new(
+        path: path,
         duration: parse_duration(json),
         audio_tracks: parse_audio_tracks(json),
         video_tracks: parse_video_tracks(json),

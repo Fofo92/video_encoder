@@ -82,6 +82,7 @@ RSpec.describe VideoEncoder::Encoder::FFmpegEncoder do
 
   let(:media) do
     VideoEncoder::Media.new(
+      path: 'video.mkv',
       duration: 100,
       video_tracks: [video_track],
       audio_tracks: [audio_track, original_audio_track],
