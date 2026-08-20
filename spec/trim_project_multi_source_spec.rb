@@ -8,9 +8,7 @@ RSpec.describe VideoEncoder::TrimProject do
   let(:media_a) { instance_double(VideoEncoder::Media) }
   let(:media_c) { instance_double(VideoEncoder::Media) }
 
-  subject(:project) do
-    described_class.new(source: media)
-  end
+  subject(:project) { described_class.new }
 
   describe 'multiple sources' do
     it 'accepts segments from different media sources' do
@@ -39,7 +37,7 @@ RSpec.describe VideoEncoder::TrimProject do
       media_a = instance_double(VideoEncoder::Media)
       media_c = instance_double(VideoEncoder::Media)
 
-      project = described_class.new(source: media_a)
+      project = described_class.new
 
       segment_a = VideoEncoder::Segment.new(
         source: media_a,

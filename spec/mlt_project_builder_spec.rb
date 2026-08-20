@@ -18,7 +18,7 @@ RSpec.describe VideoEncoder::MltProjectBuilder do
   end
 
   let(:project) do
-    VideoEncoder::TrimProject.new(source: source).tap do |trim_project|
+    VideoEncoder::TrimProject.new.tap do |trim_project|
       trim_project.add_segment(
         VideoEncoder::Segment.new(
           source: media,
@@ -44,9 +44,7 @@ RSpec.describe VideoEncoder::MltProjectBuilder do
         path: Pathname('/media/segment.mkv')
       )
 
-      project = VideoEncoder::TrimProject.new(
-        source: '/legacy/project.mkv'
-      )
+      project = VideoEncoder::TrimProject.new
 
       project.add_segment(
         VideoEncoder::Segment.new(
@@ -89,9 +87,7 @@ RSpec.describe VideoEncoder::MltProjectBuilder do
         path: Pathname('/media/c.m2t')
       )
 
-      project = VideoEncoder::TrimProject.new(
-        source: '/legacy/project.mkv'
-      )
+      project = VideoEncoder::TrimProject.new
 
       project.add_segment(
         VideoEncoder::Segment.new(
@@ -218,8 +214,7 @@ RSpec.describe VideoEncoder::MltProjectBuilder do
     it 'reuses the producer when a media source appears again' do
       media_a = instance_double(VideoEncoder::Media, path: Pathname('/media/a.mkv'))
       media_c = instance_double(VideoEncoder::Media, path: Pathname('/media/c.m2t'))
-      project = VideoEncoder::TrimProject.new(source: '/legacy/project.mkv')
-
+      project = VideoEncoder::TrimProject.new
       project.add_segment(
         VideoEncoder::Segment.new(
           source: media_a,

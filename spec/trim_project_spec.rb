@@ -2,11 +2,17 @@ RSpec.describe VideoEncoder::TrimProject do
   # testing global TrimProject rules
   let(:media) { instance_double(VideoEncoder::Media) }
 
-  subject(:project) { described_class.new(source: media) }
+  subject(:project) { described_class.new }
 
   describe '#segments' do
     it 'is initially empty' do
       expect(project.segments).to be_empty
+    end
+  end
+
+  describe '.new' do
+    it 'does not require a project source' do
+      expect { described_class.new }.not_to raise_error
     end
   end
 
@@ -152,16 +158,6 @@ RSpec.describe VideoEncoder::TrimProject do
       project.add_segment(segment)
 
       expect(project.timeline).to eq([segment])
-    end
-  end
-
-  describe '#source' do
-    it 'returns the source media' do
-      media = instance_double(VideoEncoder::Media)
-
-      project = described_class.new(source: media)
-
-      expect(project.source).to eq(media)
     end
   end
 

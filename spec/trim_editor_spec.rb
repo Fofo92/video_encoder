@@ -149,7 +149,7 @@ RSpec.describe VideoEncoder::TrimEditor do
       allow(media).to receive(:video_tracks)
         .and_return([video_track])
 
-      project = VideoEncoder::TrimProject.new(source: media)
+      project = VideoEncoder::TrimProject.new
       editor = described_class.new(
         media: media,
         project: project
@@ -192,7 +192,7 @@ RSpec.describe VideoEncoder::TrimEditor do
       media_a = instance_double(VideoEncoder::Media)
       media_c = instance_double(VideoEncoder::Media)
 
-      project = VideoEncoder::TrimProject.new(source: media_a)
+      project = VideoEncoder::TrimProject.new
 
       editor_a = described_class.new(
         media: media_a,

@@ -5,9 +5,8 @@ require 'spec_helper'
 RSpec.describe VideoEncoder::TrimProject do
   let(:media) { instance_double(VideoEncoder::Media) }
 
-  subject(:project) do
-    described_class.new(source: media)
-  end
+  subject(:project) { described_class.new }
+
   describe '#add_gap' do
     it 'adds a gap to the timeline' do
       gap = VideoEncoder::Gap.new(frame_count: 50)

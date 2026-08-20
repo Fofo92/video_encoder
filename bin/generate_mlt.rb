@@ -10,7 +10,7 @@ output_path = ARGV.fetch(0, 'generated.mlt')
 video_index = Integer(ARGV.fetch(1, 0))
 audio_index = Integer(ARGV.fetch(2, 0))
 
-project = VideoEncoder::TrimProject.new(source: SOURCE)
+project = VideoEncoder::TrimProject.new
 media = VideoEncoder::MediaProbe.new.read(SOURCE)
 
 project.add_segment(
