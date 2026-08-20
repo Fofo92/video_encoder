@@ -193,11 +193,7 @@ RSpec.describe VideoEncoder::MltProjectBuilder do
     end
 
     it 'selects the requested audio and video streams' do
-      xml = builder.build(
-        project,
-        video_index: 0,
-        audio_index: 1
-      )
+      xml = builder.build(project, video_index: 0, audio_index: 1)
 
       document = REXML::Document.new(xml)
       chain = document.elements['mlt/chain[@id="source"]']
@@ -217,6 +213,48 @@ RSpec.describe VideoEncoder::MltProjectBuilder do
       chain = document.elements['mlt/chain[@id="source"]']
 
       expect(chain.elements['property[@name="audio_index"]'].text).to eq('-1')
+    end
+
+    it 'reuses the producer when a media source appears again' do
+      media_a = instance_double(VideoEncoder::Media, path: Pathname('/media/a.mkv'))
+      media_c = instance_double(VideoEncoder::Media, path: Pathname('/media/c.m2t'))
+      project = VideoEncoder::TrimProject.new(source: '/legacy/project.mkv')
+
+      project.add_segment(
+        VideoEncoder::Segment.new(
+          source: media_a,
+          start_time: '00:00:00.000',
+          end_time: '00:00:10.000'
+        )
+      )
+
+      project.add_segment(
+        VideoEncoder::Segment.new(
+          source: media_c,
+          start_time: '00:01:00.000',
+          end_time: '00:01:10.000'
+        )
+      )
+
+      project.add_segment(
+        VideoEncoder::Segment.new(
+          source: media_a,
+          start_time: '00:02:00.000',
+          end_time: '00:02:10.000'
+        )
+      )
+
+      xml = builder.build(project)
+
+      resource = '<property name="resource">/media/a.mkv</property>'
+
+      expect(xml.scan(resource).size).to eq(1)
+
+      expect(xml).to include(
+        '<entry in="00:00:00.000" out="00:00:10.000" producer="source"/>',
+        '<entry in="00:01:00.000" out="00:01:10.000" producer="source_1"/>',
+        '<entry in="00:02:00.000" out="00:02:10.000" producer="source"/>'
+      )
     end
   end
 end
