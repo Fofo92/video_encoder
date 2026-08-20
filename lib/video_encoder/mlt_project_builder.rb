@@ -3,7 +3,12 @@
 module VideoEncoder
   # Builds an MLT project XML document for a given video encoder project.
   class MltProjectBuilder
-    def build(project, video_index: 0, audio_index: 0)
+    def build(
+      project,
+      video_index: 0,
+      audio_index: 0,
+      audio_tracks_by_source: nil
+    )
       sources = project.segments.map(&:source).uniq
       source_ids = sources.each_with_index.to_h do |source, index|
         source_id = index.zero? ? 'source' : "source_#{index}"
@@ -13,11 +18,18 @@ module VideoEncoder
 
       chains = sources.map do |source|
         source_id = source_ids.fetch(source)
+        selected_audio_index =
+          if audio_tracks_by_source
+            audio_tracks_by_source.fetch(source).index
+          else
+            audio_index
+          end
+
         <<~CHAIN.chomp
           <chain id="#{source_id}">
             <property name="resource">#{source.path}</property>
             <property name="video_index">#{video_index}</property>
-            <property name="audio_index">#{audio_index}</property>
+            <property name="audio_index">#{selected_audio_index}</property>
           </chain>
         CHAIN
       end.join("\n")
