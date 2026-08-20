@@ -78,6 +78,51 @@ RSpec.describe VideoEncoder::MltProjectBuilder do
       )
     end
 
+    it 'uses every segment media source' do
+      media_a = instance_double(
+        VideoEncoder::Media,
+        path: Pathname('/media/a.mkv')
+      )
+
+      media_c = instance_double(
+        VideoEncoder::Media,
+        path: Pathname('/media/c.m2t')
+      )
+
+      project = VideoEncoder::TrimProject.new(
+        source: '/legacy/project.mkv'
+      )
+
+      project.add_segment(
+        VideoEncoder::Segment.new(
+          source: media_a,
+          start_time: '00:00:00.000',
+          end_time: '00:00:10.000'
+        )
+      )
+
+      project.add_segment(
+        VideoEncoder::Segment.new(
+          source: media_c,
+          start_time: '00:01:00.000',
+          end_time: '00:01:10.000'
+        )
+      )
+
+      xml = builder.build(project)
+
+      expect(xml).to include(
+        '<property name="resource">/media/a.mkv</property>'
+      )
+
+      expect(xml).to include(
+        '<property name="resource">/media/c.m2t</property>'
+      )
+      expect(xml).to include(
+        '<entry in="00:01:00.000" out="00:01:10.000" producer="source_1"/>'
+      )
+    end
+
     it 'creates one playlist entry per segment' do
       xml = builder.build(project)
 

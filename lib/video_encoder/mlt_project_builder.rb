@@ -4,9 +4,29 @@ module VideoEncoder
   # Builds an MLT project XML document for a given video encoder project.
   class MltProjectBuilder
     def build(project, video_index: 0, audio_index: 0)
+      sources = project.segments.map(&:source).uniq
+      source_ids = sources.each_with_index.to_h do |source, index|
+        source_id = index.zero? ? 'source' : "source_#{index}"
+
+        [source, source_id]
+      end
+
+      chains = sources.map do |source|
+        source_id = source_ids.fetch(source)
+        <<~CHAIN.chomp
+          <chain id="#{source_id}">
+            <property name="resource">#{source.path}</property>
+            <property name="video_index">#{video_index}</property>
+            <property name="audio_index">#{audio_index}</property>
+          </chain>
+        CHAIN
+      end.join("\n")
+
       entries = project.segments.map do |segment|
+        source_id = source_ids.fetch(segment.source)
+
         <<~XML.strip
-          <entry in="#{segment.start_time}" out="#{segment.end_time}" producer="source"/>
+          <entry in="#{segment.start_time}" out="#{segment.end_time}" producer="#{source_id}"/>
         XML
       end
 
@@ -23,11 +43,7 @@ module VideoEncoder
              sample_aspect_den="1"
              sample_aspect_num="1"
              width="1920"/>
-          <chain id="source">
-            <property name="resource">#{project.segments.first.source.path}</property>
-            <property name="video_index">#{video_index}</property>
-            <property name="audio_index">#{audio_index}</property>
-          </chain>
+             #{chains}
           <playlist id="segments">
             #{entries.join("\n    ")}
           </playlist>
