@@ -9,7 +9,13 @@ RSpec.describe VideoEncoder::MltProjectBuilder do
   subject(:builder) { described_class.new }
 
   let(:source) { '/commun/The Truman Show.m2t' }
-  let(:media) { instance_double(VideoEncoder::Media) }
+
+  let(:media) do
+    instance_double(
+      VideoEncoder::Media,
+      path: Pathname(source)
+    )
+  end
 
   let(:project) do
     VideoEncoder::TrimProject.new(source: source).tap do |trim_project|
@@ -32,6 +38,31 @@ RSpec.describe VideoEncoder::MltProjectBuilder do
   end
 
   describe '#build' do
+    it 'uses the segment media path as the resource' do
+      media = instance_double(
+        VideoEncoder::Media,
+        path: Pathname('/media/segment.mkv')
+      )
+
+      project = VideoEncoder::TrimProject.new(
+        source: '/legacy/project.mkv'
+      )
+
+      project.add_segment(
+        VideoEncoder::Segment.new(
+          source: media,
+          start_time: '00:10:00.000',
+          end_time: '00:11:00.000'
+        )
+      )
+
+      xml = builder.build(project)
+
+      expect(xml).to include(
+        '<property name="resource">/media/segment.mkv</property>'
+      )
+    end
+
     it 'returns an XML document' do
       xml = builder.build(project)
 

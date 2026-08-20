@@ -24,7 +24,7 @@ module VideoEncoder
              sample_aspect_num="1"
              width="1920"/>
           <chain id="source">
-            <property name="resource">#{project.source}</property>
+            <property name="resource">#{project.segments.first.source.path}</property>
             <property name="video_index">#{video_index}</property>
             <property name="audio_index">#{audio_index}</property>
           </chain>
