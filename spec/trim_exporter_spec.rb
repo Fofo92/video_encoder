@@ -28,6 +28,13 @@ RSpec.describe VideoEncoder::TrimExporter do
   end
 
   let(:source_track) { instance_double(VideoEncoder::Track) }
+  let(:video_track) { instance_double(VideoEncoder::VideoTrack) }
+
+  let(:video_tracks_by_source) do
+    {
+      media => video_track
+    }
+  end
 
   let(:audio_output_track) do
     instance_double(
@@ -65,13 +72,15 @@ RSpec.describe VideoEncoder::TrimExporter do
 
       exporter.call(
         trim_project: trim_project,
+        video_tracks_by_source: video_tracks_by_source,
         audio_output_tracks: [audio_output_track],
         output_path: 'movie.mkv'
       )
 
       expect(builder).to have_received(:build).with(
         trim_project,
-        audio_index: -1
+        audio_index: -1,
+        video_tracks_by_source: video_tracks_by_source
       )
 
       expect(builder).to have_received(:build).with(
@@ -126,6 +135,7 @@ RSpec.describe VideoEncoder::TrimExporter do
     exporter.call(
       trim_project: trim_project,
       audio_output_tracks: [audio_output_track],
+      video_tracks_by_source: video_tracks_by_source,
       output_path: 'movie.mkv'
     )
 
@@ -180,6 +190,7 @@ RSpec.describe VideoEncoder::TrimExporter do
 
     exporter.call(
       trim_project: trim_project,
+      video_tracks_by_source: video_tracks_by_source,
       audio_output_tracks: [
         audio_output_track,
         original_output_track

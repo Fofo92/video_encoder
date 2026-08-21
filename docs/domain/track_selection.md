@@ -216,6 +216,22 @@ La valeur `qaa` est conservée afin que le fichier exporté puisse être utilis�
 
 Elle ne prétend pas représenter la langue réelle du contenu.
 
+### Pistes vidéo
+
+La première piste vidéo déclarée est sélectionnée séparément dans chaque média source.
+
+Les indices de flux peuvent différer d'un média à l'autre. La piste vidéo du média A et celle du média C sont donc associées individuellement à leurs chaînes MLT respectives, plutôt que sélectionnées à partir d'un index vidéo global.
+
+Cette sélection ne cherche pas à harmoniser :
+
+- les codecs ;
+- les dimensions ;
+- les cadences d'images ;
+- le caractère progressif ou entrelacé ;
+- les rapports d'aspect.
+
+Ces différences ne relèvent pas de `TrimProject`. Elles doivent être prises en charge par la construction du projet d'export et par le transcodage du fichier final.
+
 ### Construction de l'export
 
 Chaque piste audio de sortie est rendue à partir d'un projet MLT distinct.

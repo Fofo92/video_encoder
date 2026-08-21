@@ -25,6 +25,12 @@ module VideoEncoder
       [french, original].compact
     end
 
+    def select_video_tracks(media_sources)
+      media_sources.to_h do |media|
+        [media, media.video_tracks.first]
+      end
+    end
+
     private
 
     def special_audio?(track)

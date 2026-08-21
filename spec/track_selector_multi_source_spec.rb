@@ -93,4 +93,29 @@ RSpec.describe VideoEncoder::TrackSelector do
       expect(original.track_for(media_c)).to eq(original_c)
     end
   end
+
+  describe '#select_video_tracks' do
+    it 'selects the first video track from every media source' do
+      video_a = instance_double(VideoEncoder::VideoTrack)
+      alternate_video_a = instance_double(VideoEncoder::VideoTrack)
+      video_c = instance_double(VideoEncoder::VideoTrack)
+
+      media_a = instance_double(
+        VideoEncoder::Media,
+        video_tracks: [video_a, alternate_video_a]
+      )
+
+      media_c = instance_double(
+        VideoEncoder::Media,
+        video_tracks: [video_c]
+      )
+
+      expect(
+        selector.select_video_tracks([media_a, media_c])
+      ).to eq(
+        media_a => video_a,
+        media_c => video_c
+      )
+    end
+  end
 end

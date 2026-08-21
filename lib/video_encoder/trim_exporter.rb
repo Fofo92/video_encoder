@@ -10,12 +10,18 @@ module VideoEncoder
       @workspace = workspace
     end
 
-    def call(trim_project:, audio_output_tracks:, output_path:)
+    def call(
+      trim_project:,
+      video_tracks_by_source:,
+      audio_output_tracks:,
+      output_path:
+    )
       sources = trim_project.segments.map(&:source).uniq
 
       video_xml = builder.build(
         trim_project,
-        audio_index: -1
+        audio_index: -1,
+        video_tracks_by_source: video_tracks_by_source
       )
 
       workspace.write_mlt(video_xml)

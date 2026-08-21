@@ -23,6 +23,8 @@ RSpec.describe VideoEncoder::TrimExporter do
       media_c = instance_double(VideoEncoder::Media)
       track_a = instance_double(VideoEncoder::Track)
       track_c = instance_double(VideoEncoder::Track)
+      video_a = instance_double(VideoEncoder::VideoTrack)
+      video_c = instance_double(VideoEncoder::VideoTrack)
 
       segment_a = instance_double(VideoEncoder::Segment, source: media_a)
       segment_c = instance_double(VideoEncoder::Segment, source: media_c)
@@ -65,8 +67,21 @@ RSpec.describe VideoEncoder::TrimExporter do
 
       exporter.call(
         trim_project: trim_project,
+        video_tracks_by_source: {
+          media_a => video_a,
+          media_c => video_c
+        },
         audio_output_tracks: [output_track],
         output_path: 'movie.mkv'
+      )
+
+      expect(builder).to have_received(:build).with(
+        trim_project,
+        audio_index: -1,
+        video_tracks_by_source: {
+          media_a => video_a,
+          media_c => video_c
+        }
       )
 
       expect(builder).to have_received(:build).with(
@@ -79,6 +94,9 @@ RSpec.describe VideoEncoder::TrimExporter do
       )
     end
     it 'omits an audio output that does not cover every source' do
+      video_a = instance_double(VideoEncoder::VideoTrack)
+      video_c = instance_double(VideoEncoder::VideoTrack)
+
       media_a = instance_double(VideoEncoder::Media)
       media_c = instance_double(VideoEncoder::Media)
 
@@ -110,6 +128,10 @@ RSpec.describe VideoEncoder::TrimExporter do
 
       exporter.call(
         trim_project: trim_project,
+        video_tracks_by_source: {
+          media_a => video_a,
+          media_c => video_c
+        },
         audio_output_tracks: [output_track],
         output_path: 'movie.mkv'
       )
