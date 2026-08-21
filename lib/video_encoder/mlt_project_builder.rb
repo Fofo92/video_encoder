@@ -3,6 +3,10 @@
 module VideoEncoder
   # Builds an MLT project XML document for a given video encoder project.
   class MltProjectBuilder
+    def initialize(profile: VideoExportProfile.hd_720p25)
+      @profile = profile
+    end
+
     def build(
       project,
       video_index: 0, audio_index: 0,
@@ -48,17 +52,16 @@ module VideoEncoder
 
       <<~XML
         <mlt>
-          <profile colorspace="709"
-             description="HD 1080i 25 fps"
-             display_aspect_den="9"
-             display_aspect_num="16"
-             frame_rate_den="1"
-             frame_rate_num="25"
-             height="1080"
-             progressive="0"
-             sample_aspect_den="1"
-             sample_aspect_num="1"
-             width="1920"/>
+          <profile colorspace="#{@profile.colorspace}"
+            display_aspect_den="#{@profile.display_aspect_ratio.denominator}"
+            display_aspect_num="#{@profile.display_aspect_ratio.numerator}"
+            frame_rate_den="#{@profile.frame_rate.denominator}"
+            frame_rate_num="#{@profile.frame_rate.numerator}"
+            height="#{@profile.height}"
+            progressive="#{@profile.progressive? ? 1 : 0}"
+            sample_aspect_den="#{@profile.sample_aspect_ratio.denominator}"
+            sample_aspect_num="#{@profile.sample_aspect_ratio.numerator}"
+            width="#{@profile.width}"/>
              #{chains}
           <playlist id="segments">
             #{entries.join("\n    ")}

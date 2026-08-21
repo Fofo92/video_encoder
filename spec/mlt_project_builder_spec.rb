@@ -146,19 +146,17 @@ RSpec.describe VideoEncoder::MltProjectBuilder do
       )
     end
 
-    it 'declares the 1080i 25 fps profile' do
+    it 'declares the 720p 25 fps profile by default' do
       document = REXML::Document.new(builder.build(project))
       profile = document.elements['mlt/profile']
 
-      expect(profile.attributes['description']).to eq('HD 1080i 25 fps')
-
-      expect(profile.attributes['width']).to eq('1920')
-      expect(profile.attributes['height']).to eq('1080')
+      expect(profile.attributes['width']).to eq('1280')
+      expect(profile.attributes['height']).to eq('720')
 
       expect(profile.attributes['frame_rate_den']).to eq('1')
       expect(profile.attributes['frame_rate_num']).to eq('25')
 
-      expect(profile.attributes['progressive']).to eq('0')
+      expect(profile.attributes['progressive']).to eq('1')
       expect(profile.attributes['colorspace']).to eq('709')
 
       expect(profile.attributes['display_aspect_den']).to eq('9')
