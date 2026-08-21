@@ -39,9 +39,10 @@ module VideoEncoder
 
       entries = project.segments.map do |segment|
         source_id = source_ids.fetch(segment.source)
+        start_position, end_position = segment_boundaries(segment)
 
         <<~XML.strip
-          <entry in="#{segment.start_time}" out="#{segment.end_time}" producer="#{source_id}"/>
+          <entry in="#{start_position}" out="#{end_position}" producer="#{source_id}"/>
         XML
       end
 
@@ -72,6 +73,13 @@ module VideoEncoder
       return default_index unless tracks_by_source
 
       tracks_by_source.fetch(source).index
+    end
+
+    def segment_boundaries(segment)
+      [
+        segment.start_frame || segment.start_time,
+        segment.end_frame || segment.end_time
+      ]
     end
   end
 end

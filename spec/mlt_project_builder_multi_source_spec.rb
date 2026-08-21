@@ -122,4 +122,27 @@ RSpec.describe VideoEncoder::MltProjectBuilder do
       XML
     )
   end
+
+  it 'uses frame boundaries for project segments' do
+    media = instance_double(
+      VideoEncoder::Media,
+      path: Pathname('/media/movie.mkv')
+    )
+
+    project = VideoEncoder::TrimProject.new
+
+    project.add_segment(
+      VideoEncoder::Segment.new(
+        source: media,
+        start_frame: 1_000,
+        end_frame: 2_000
+      )
+    )
+
+    xml = builder.build(project)
+
+    expect(xml).to include(
+      '<entry in="1000" out="2000" producer="source"/>'
+    )
+  end
 end
