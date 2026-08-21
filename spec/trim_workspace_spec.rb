@@ -31,27 +31,17 @@ RSpec.describe VideoEncoder::TrimWorkspace do
   end
 
   describe '#audio_path' do
-    it 'returns the temporary path for an audio track' do
+    it 'returns a temporary path identified by the output role' do
       Dir.mktmpdir do |directory|
         workspace = described_class.new(directory: directory)
-        track = instance_double(VideoEncoder::Track, index: 1)
 
-        expect(workspace.audio_path(track)).to eq(
-          File.join(directory, 'audio_1.mka')
+        output_track = instance_double(
+          VideoEncoder::AudioOutputTrack,
+          role: :french
         )
-      end
-    end
-  end
 
-  describe '#audio_path' do
-    it 'returns the temporary path for an audio track' do
-      Dir.mktmpdir do |directory|
-        workspace = described_class.new(directory: directory)
-
-        track = instance_double(VideoEncoder::Track, index: 1)
-
-        expect(workspace.audio_path(track)).to eq(
-          File.join(directory, 'audio_1.mka')
+        expect(workspace.audio_path(output_track)).to eq(
+          File.join(directory, 'audio_french.mka')
         )
       end
     end

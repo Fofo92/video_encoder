@@ -19,8 +19,8 @@ module VideoEncoder
       File.join(directory, 'video.mkv')
     end
 
-    def audio_path(track)
-      File.join(directory, "audio_#{track.index}.mka")
+    def audio_path(output_track)
+      File.join(directory, "audio_#{output_track.role}.mka")
     end
 
     private

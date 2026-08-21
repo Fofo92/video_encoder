@@ -3,6 +3,11 @@
 module VideoEncoder
   # Combines separately rendered streams into the final media file.
   class FfmpegRemuxer
+    LANGUAGE_BY_ROLE = {
+      french: 'fra',
+      original: 'qaa'
+    }.freeze
+
     def initialize(runner:)
       @runner = runner
     end
@@ -26,9 +31,12 @@ module VideoEncoder
       command.push('-c', 'copy')
 
       audio_inputs.each_with_index do |audio_input, index|
+        output_track = audio_input.fetch(:output_track)
+        language = LANGUAGE_BY_ROLE.fetch(output_track.role)
+
         command.push(
           "-metadata:s:a:#{index}",
-          "language=#{audio_input.fetch(:track).language}"
+          "language=#{language}"
         )
       end
 

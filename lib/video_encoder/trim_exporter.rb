@@ -10,18 +10,37 @@ module VideoEncoder
       @workspace = workspace
     end
 
-    def call(trim_project:, tracks:, output_path:)
-      xml = builder.build(trim_project)
+    def call(trim_project:, audio_output_tracks:, output_path:)
+      sources = trim_project.segments.map(&:source).uniq
 
-      workspace.write_mlt(xml)
+      video_xml = builder.build(
+        trim_project,
+        audio_index: -1
+      )
+
+      workspace.write_mlt(video_xml)
 
       renderer.render_video(
         project_path: workspace.mlt_path,
         output_path: workspace.video_path
       )
 
-      audio_inputs = tracks.map do |track|
-        audio_path = workspace.audio_path(track)
+      audio_inputs = audio_output_tracks
+                     .select { |output_track| output_track.complete_for?(sources) }
+                     .map do |output_track|
+        tracks_by_source = sources.to_h do |source|
+          [source, output_track.track_for(source)]
+        end
+
+        audio_xml = builder.build(
+          trim_project,
+          video_index: -1,
+          audio_tracks_by_source: tracks_by_source
+        )
+
+        workspace.write_mlt(audio_xml)
+
+        audio_path = workspace.audio_path(output_track)
 
         renderer.render_audio(
           project_path: workspace.mlt_path,
@@ -30,7 +49,7 @@ module VideoEncoder
 
         {
           path: audio_path,
-          track: track
+          output_track: output_track
         }
       end
 
