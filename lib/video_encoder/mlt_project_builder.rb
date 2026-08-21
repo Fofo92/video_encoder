@@ -43,7 +43,10 @@ module VideoEncoder
 
       entries = project.segments.map do |segment|
         source_id = source_ids.fetch(segment.source)
-        start_position, end_position = segment_boundaries(segment)
+        start_position, end_position = segment_boundaries(
+          segment,
+          video_tracks_by_source
+        )
 
         <<~XML.strip
           <entry in="#{start_position}" out="#{end_position}" producer="#{source_id}"/>
@@ -78,11 +81,26 @@ module VideoEncoder
       tracks_by_source.fetch(source).index
     end
 
-    def segment_boundaries(segment)
-      [
-        segment.start_frame || segment.start_time,
-        segment.end_frame || segment.end_time
-      ]
+    def segment_boundaries(segment, video_tracks_by_source)
+      return [segment.start_time, segment.end_time] if segment.start_frame.nil?
+
+      unless video_tracks_by_source
+        raise ArgumentError,
+              'video_tracks_by_source is required for frame boundaries'
+      end
+
+      source_frame_rate = video_tracks_by_source.fetch(segment.source).frame_rate
+      output_frame_rate = @profile.frame_rate
+
+      start_position = (
+        segment.start_frame * output_frame_rate / source_frame_rate
+      ).floor
+
+      exclusive_end_position = (
+        (segment.end_frame + 1) * output_frame_rate / source_frame_rate
+      ).ceil
+
+      [start_position, exclusive_end_position - 1]
     end
   end
 end

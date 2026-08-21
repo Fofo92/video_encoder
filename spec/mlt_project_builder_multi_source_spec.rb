@@ -123,7 +123,39 @@ RSpec.describe VideoEncoder::MltProjectBuilder do
     )
   end
 
-  it 'uses frame boundaries for project segments' do
+  it 'converts source frame boundaries to the export frame rate' do
+    media = instance_double(
+      VideoEncoder::Media,
+      path: Pathname('/media/movie.mkv')
+    )
+
+    video_track = instance_double(
+      VideoEncoder::VideoTrack,
+      index: 0,
+      frame_rate: Rational(50, 1)
+    )
+
+    project = VideoEncoder::TrimProject.new
+
+    project.add_segment(
+      VideoEncoder::Segment.new(
+        source: media,
+        start_frame: 100,
+        end_frame: 199
+      )
+    )
+
+    xml = builder.build(
+      project,
+      video_tracks_by_source: { media => video_track }
+    )
+
+    expect(xml).to include(
+      '<entry in="50" out="99" producer="source"/>'
+    )
+  end
+
+  it 'requires video tracks to convert frame boundaries' do
     media = instance_double(
       VideoEncoder::Media,
       path: Pathname('/media/movie.mkv')
@@ -134,15 +166,14 @@ RSpec.describe VideoEncoder::MltProjectBuilder do
     project.add_segment(
       VideoEncoder::Segment.new(
         source: media,
-        start_frame: 1_000,
-        end_frame: 2_000
+        start_frame: 100,
+        end_frame: 199
       )
     )
 
-    xml = builder.build(project)
-
-    expect(xml).to include(
-      '<entry in="1000" out="2000" producer="source"/>'
+    expect { builder.build(project) }.to raise_error(
+      ArgumentError,
+      'video_tracks_by_source is required for frame boundaries'
     )
   end
 end
