@@ -26,6 +26,11 @@ RSpec.describe VideoEncoder::TrimExporter do
       video_a = instance_double(VideoEncoder::VideoTrack)
       video_c = instance_double(VideoEncoder::VideoTrack)
 
+      video_tracks_by_source = {
+        media_a => video_a,
+        media_c => video_c
+      }
+
       segment_a = instance_double(VideoEncoder::Segment, source: media_a)
       segment_c = instance_double(VideoEncoder::Segment, source: media_c)
 
@@ -67,10 +72,7 @@ RSpec.describe VideoEncoder::TrimExporter do
 
       exporter.call(
         trim_project: trim_project,
-        video_tracks_by_source: {
-          media_a => video_a,
-          media_c => video_c
-        },
+        video_tracks_by_source: video_tracks_by_source,
         audio_output_tracks: [output_track],
         output_path: 'movie.mkv'
       )
@@ -90,7 +92,8 @@ RSpec.describe VideoEncoder::TrimExporter do
         audio_tracks_by_source: {
           media_a => track_a,
           media_c => track_c
-        }
+        },
+        video_tracks_by_source: video_tracks_by_source
       )
     end
     it 'omits an audio output that does not cover every source' do

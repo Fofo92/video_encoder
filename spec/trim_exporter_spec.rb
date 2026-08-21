@@ -88,7 +88,8 @@ RSpec.describe VideoEncoder::TrimExporter do
         video_index: -1,
         audio_tracks_by_source: {
           media => source_track
-        }
+        },
+        video_tracks_by_source: video_tracks_by_source
       )
 
       expect(renderer).to have_received(:render_video).with(

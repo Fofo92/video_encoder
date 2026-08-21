@@ -41,7 +41,8 @@ module VideoEncoder
         audio_xml = builder.build(
           trim_project,
           video_index: -1,
-          audio_tracks_by_source: tracks_by_source
+          audio_tracks_by_source: tracks_by_source,
+          video_tracks_by_source: video_tracks_by_source
         )
 
         workspace.write_mlt(audio_xml)
