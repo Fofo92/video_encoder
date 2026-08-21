@@ -158,6 +158,70 @@ La politique actuelle peut être résumée ainsi :
 | Français, version originale et autre langue    | Français et `qaa` | Français ordinaires      |
 | Français sans `qaa`, avec sous-titres déclarés | Français          | Aucun                    |
 
+## Montage multi-source
+
+### Pistes sources et pistes de sortie
+
+Dans un montage multi-source, une piste présente dans un média ne correspond pas directement à une piste du fichier exporté.
+
+Une piste de sortie est assemblée à partir d'une piste sélectionnée dans chaque média utilisé par le montage.
+
+Par exemple :
+
+| Rôle de sortie    | Média A                   | Média C                   |
+| ----------------- | ------------------------- | ------------------------- |
+| Français          | piste `fra` ou `fre` de A | piste `fra` ou `fre` de C |
+| Version originale | piste `qaa` de A          | piste `qaa` de C          |
+
+`Track` représente une piste observée dans un média.
+
+`AudioOutputTrack` représente une piste à produire. Elle possède :
+
+- un rôle métier, actuellement `french` ou `original` ;
+- une association entre chaque média source et la piste sélectionnée dans ce média.
+
+### Complétude d'une piste de sortie
+
+Une piste de sortie est produite uniquement lorsqu'une piste correspondant à son rôle est disponible dans chaque média utilisé par le montage.
+
+Si tous les médias possèdent une piste française sélectionnable, la piste française de sortie est produite.
+
+Si au moins un média ne possède aucune piste `qaa`, la piste de version originale est entièrement omise.
+
+Aucun silence n'est inséré et aucune autre piste étrangère n'est utilisée comme remplacement.
+
+En particulier, une piste `deu`, `eng` ou `ita` ne remplace pas une piste `qaa` absente.
+
+### Sous-titres
+
+Les sous-titres associés à la version originale sont produits uniquement lorsqu'une piste de sortie originale complète est disponible.
+
+Lorsque la version originale est omise, les sous-titres qui lui sont associés sont également omis.
+
+### Métadonnées du fichier exporté
+
+La piste française produite reçoit la métadonnée :
+
+```text
+language=fra
+```
+
+La piste de version originale produite reçoit la métadonnée :
+
+```
+language=qaa
+```
+
+La valeur `qaa` est conservée afin que le fichier exporté puisse être utilisé comme  source d'un montage ultérieur et que son rôle de version originale reste identifiable.
+
+Elle ne prétend pas représenter la langue réelle du contenu.
+
+### Construction de l'export
+
+Chaque piste audio de sortie est rendue à partir d'un projet MLT distinct.
+
+Pour une même piste de sortie,  chaque média peut utiliser un index de flux différent. La sélection est  donc effectuée par média source et non à partir d'un index audio global.
+
 ## Limites connues
 
 ### Langue réelle de la version originale
