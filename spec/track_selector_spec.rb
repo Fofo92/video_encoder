@@ -113,24 +113,14 @@ RSpec.describe VideoEncoder::TrackSelector do
 
   context 'when another foreign-language track is present' do
     let(:german_audio) do
-      VideoEncoder::Track.new(
-        index: 4,
-        type: :audio,
-        language: 'deu',
-        codec: 'eac3'
-      )
+      VideoEncoder::Track.new(index: 4, type: :audio, language: 'deu', codec: 'eac3')
     end
 
     let(:media) do
       VideoEncoder::Media.new(
         path: 'movie.mkv', duration: 100,
         video_tracks: [video],
-        audio_tracks: [
-          french_audio,
-          accessibility_audio,
-          original_audio,
-          german_audio
-        ],
+        audio_tracks: [french_audio, accessibility_audio, original_audio, german_audio],
         subtitle_tracks: [french_subtitle]
       )
     end
@@ -140,18 +130,17 @@ RSpec.describe VideoEncoder::TrackSelector do
         .to eq([french_audio, original_audio])
     end
   end
+
   context 'when no original-version audio track is available' do
     let(:media) do
       VideoEncoder::Media.new(
         path: 'movie.mkv',
         duration: 100, video_tracks: [video],
         audio_tracks: [
-          french_audio,
-          accessibility_audio
+          french_audio, accessibility_audio
         ],
         subtitle_tracks: [
-          french_subtitle,
-          hearing_impaired_subtitle
+          french_subtitle, hearing_impaired_subtitle
         ]
       )
     end
@@ -163,27 +152,15 @@ RSpec.describe VideoEncoder::TrackSelector do
 
     context 'when several foreign-language audio tracks are available' do
       let(:german_audio) do
-        VideoEncoder::Track.new(
-          index: 4,
-          type: :audio,
-          language: 'deu',
-          codec: 'eac3'
-        )
+        VideoEncoder::Track.new(index: 4, type: :audio, language: 'deu', codec: 'eac3')
       end
 
       let(:media) do
         VideoEncoder::Media.new(
           path: 'movie.mkv',
           duration: 100, video_tracks: [video],
-          audio_tracks: [
-            french_audio,
-            accessibility_audio,
-            original_audio,
-            german_audio
-          ],
-          subtitle_tracks: [
-            french_subtitle
-          ]
+          audio_tracks: [french_audio, accessibility_audio, original_audio, german_audio],
+          subtitle_tracks: [french_subtitle]
         )
       end
 
@@ -195,23 +172,14 @@ RSpec.describe VideoEncoder::TrackSelector do
 
     context 'when several French audio tracks are available' do
       let(:second_french_audio) do
-        VideoEncoder::Track.new(
-          index: 4,
-          type: :audio,
-          language: 'fra',
-          codec: 'aac'
-        )
+        VideoEncoder::Track.new(index: 4, type: :audio, language: 'fra', codec: 'aac')
       end
 
       let(:media) do
         VideoEncoder::Media.new(
           path: 'movie.mkv', duration: 100,
           video_tracks: [video],
-          audio_tracks: [
-            french_audio,
-            second_french_audio,
-            original_audio
-          ],
+          audio_tracks: [french_audio, second_french_audio, original_audio],
           subtitle_tracks: [french_subtitle]
         )
       end
@@ -225,6 +193,42 @@ RSpec.describe VideoEncoder::TrackSelector do
     it 'does not select subtitles' do
       expect(selector.select(media)[:subtitles])
         .to eq([])
+    end
+  end
+
+  describe '#select_subtitle_tracks' do
+    it 'selects standard French subtitles only from eligible sources' do
+      french_audio = instance_double(VideoEncoder::Track, language: 'fra', visual_impaired: false)
+
+      original_audio = instance_double(VideoEncoder::Track, language: 'qaa', visual_impaired: false)
+
+      standard_subtitle = instance_double(
+        VideoEncoder::Track, language: 'fra', hearing_impaired: false
+      )
+
+      hearing_impaired_subtitle = instance_double(
+        VideoEncoder::Track, language: 'fra', hearing_impaired: true
+      )
+
+      media_with_subtitles = instance_double(
+        VideoEncoder::Media,
+        audio_tracks: [french_audio, original_audio],
+        subtitle_tracks: [hearing_impaired_subtitle, standard_subtitle]
+      )
+
+      media_without_subtitles = instance_double(
+        VideoEncoder::Media,
+        audio_tracks: [french_audio],
+        subtitle_tracks: [hearing_impaired_subtitle]
+      )
+
+      expect(
+        selector.select_subtitle_tracks(
+          [media_with_subtitles, media_without_subtitles]
+        )
+      ).to eq(
+        media_with_subtitles => standard_subtitle
+      )
     end
   end
 end

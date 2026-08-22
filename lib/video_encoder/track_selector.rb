@@ -31,6 +31,14 @@ module VideoEncoder
       end
     end
 
+    def select_subtitle_tracks(media_sources)
+      media_sources.each_with_object({}) do |media, tracks_by_source|
+        subtitle = select_subtitles(media).first
+
+        tracks_by_source[media] = subtitle if subtitle
+      end
+    end
+
     private
 
     def special_audio?(track)
