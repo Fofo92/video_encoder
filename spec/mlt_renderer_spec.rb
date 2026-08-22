@@ -41,7 +41,8 @@ RSpec.describe VideoEncoder::MltRenderer do
         'tmp/project.mlt',
         '-consumer',
         'avformat:tmp/audio.mka',
-        'acodec=flac',
+        'acodec=aac',
+        'ab=160k',
         'vn=1'
       )
     end

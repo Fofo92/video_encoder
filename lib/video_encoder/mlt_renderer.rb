@@ -24,7 +24,8 @@ module VideoEncoder
         project_path,
         '-consumer',
         "avformat:#{output_path}",
-        'acodec=flac',
+        'acodec=aac',
+        'ab=160k',
         'vn=1'
       )
     end
