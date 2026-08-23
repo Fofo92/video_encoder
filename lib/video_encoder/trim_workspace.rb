@@ -23,6 +23,28 @@ module VideoEncoder
       File.join(directory, "audio_#{output_track.role}.mka")
     end
 
+    def subtitle_transport_path(segment_index)
+      File.join(
+        directory,
+        "subtitle_segment_#{segment_index}.ts"
+      )
+    end
+
+    def subtitle_srt_path(segment_index)
+      File.join(
+        directory,
+        "subtitle_segment_#{segment_index}.srt"
+      )
+    end
+
+    def subtitle_path
+      File.join(directory, 'subtitles.srt')
+    end
+
+    def write_subtitles(srt)
+      File.write(subtitle_path, srt)
+    end
+
     private
 
     attr_reader :directory
