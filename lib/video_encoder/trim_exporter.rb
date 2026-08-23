@@ -3,18 +3,20 @@
 module VideoEncoder
   # Orchestrates the production of a trimmed media file.
   class TrimExporter
-    def initialize(builder:, renderer:, remuxer:, workspace:)
+    def initialize(builder:, renderer:, remuxer:, workspace:, subtitle_exporter: nil)
       @builder = builder
       @renderer = renderer
       @remuxer = remuxer
       @workspace = workspace
+      @subtitle_exporter = subtitle_exporter
     end
 
     def call(
       trim_project:,
       video_tracks_by_source:,
       audio_output_tracks:,
-      output_path:
+      output_path:,
+      subtitle_tracks_by_source: {}
     )
       sources = trim_project.segments.map(&:source).uniq
 
@@ -60,15 +62,25 @@ module VideoEncoder
         }
       end
 
-      remuxer.remux(
+      subtitle_path = subtitle_exporter&.call(
+        trim_project: trim_project,
+        video_tracks_by_source: video_tracks_by_source,
+        subtitle_tracks_by_source: subtitle_tracks_by_source
+      )
+
+      remux_arguments = {
         video_path: workspace.video_path,
         audio_inputs: audio_inputs,
         output_path: output_path
-      )
+      }
+
+      remux_arguments[:subtitle_path] = subtitle_path if subtitle_path
+
+      remuxer.remux(**remux_arguments)
     end
 
     private
 
-    attr_reader :builder, :renderer, :remuxer, :workspace
+    attr_reader :builder, :renderer, :remuxer, :workspace, :subtitle_exporter
   end
 end
