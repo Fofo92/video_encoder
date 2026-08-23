@@ -54,5 +54,37 @@ RSpec.describe VideoEncoder::FfmpegRemuxer do
         'tmp/movie.mkv'
       )
     end
+
+    it 'adds an optional French SRT subtitle track' do
+      allow(runner).to receive(:run)
+
+      remuxer.remux(
+        video_path: 'tmp/video.mkv',
+        audio_inputs: [
+          {
+            path: 'tmp/audio_french.mka',
+            output_track: french_audio
+          }
+        ],
+        subtitle_path: 'tmp/subtitles.srt',
+        output_path: 'tmp/movie.mkv'
+      )
+
+      expect(runner).to have_received(:run).with(
+        'ffmpeg',
+        '-i', 'tmp/video.mkv',
+        '-i', 'tmp/audio_french.mka',
+        '-i', 'tmp/subtitles.srt',
+        '-map', '0:v:0',
+        '-map', '1:a:0',
+        '-map', '2:s:0',
+        '-c', 'copy',
+        '-c:s', 'srt',
+        '-metadata:s:a:0', 'language=fra',
+        '-metadata:s:s:0', 'language=fra',
+        '-metadata:s:s:0', 'title=Français',
+        'tmp/movie.mkv'
+      )
+    end
   end
 end
