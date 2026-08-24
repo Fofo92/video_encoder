@@ -218,7 +218,7 @@ RSpec.describe VideoEncoder::TrackSelector do
 
       media_without_subtitles = instance_double(
         VideoEncoder::Media,
-        audio_tracks: [french_audio],
+        audio_tracks: [french_audio, original_audio],
         subtitle_tracks: [hearing_impaired_subtitle]
       )
 

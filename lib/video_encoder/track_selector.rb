@@ -32,6 +32,8 @@ module VideoEncoder
     end
 
     def select_subtitle_tracks(media_sources)
+      return {} unless complete_original_audio?(media_sources)
+
       media_sources.each_with_object({}) do |media, tracks_by_source|
         subtitle = select_subtitles(media).first
 
@@ -40,6 +42,14 @@ module VideoEncoder
     end
 
     private
+
+    def complete_original_audio?(media_sources)
+      media_sources.all? do |media|
+        usable = media.audio_tracks.reject(&:visual_impaired)
+
+        usable.any? { |track| original_version?(track) }
+      end
+    end
 
     def special_audio?(track)
       SPECIAL_AUDIO_CODES.include?(track.language)
