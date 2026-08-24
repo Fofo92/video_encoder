@@ -18,12 +18,17 @@ module VideoEncoder
         directory: workspace_directory
       )
 
-      exporter = TrimExporter.new(
+      trim_exporter = TrimExporter.new(
         builder: MltProjectBuilder.new,
         renderer: MltRenderer.new(runner: runner),
         remuxer: FfmpegRemuxer.new(runner: runner),
         workspace: workspace,
         subtitle_exporter: build_subtitle_exporter(workspace)
+      )
+
+      exporter = WorkspaceCleaningExporter.new(
+        exporter: trim_exporter,
+        workspace: workspace
       )
 
       ExportTrimProject.new(

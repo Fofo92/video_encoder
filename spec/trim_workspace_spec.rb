@@ -105,4 +105,20 @@ RSpec.describe VideoEncoder::TrimWorkspace do
       end
     end
   end
+
+  describe '#cleanup' do
+    it 'removes the complete workspace directory' do
+      directory = Dir.mktmpdir('video_encoder_workspace')
+      workspace = described_class.new(directory: directory)
+
+      File.write(
+        File.join(directory, 'intermediate.dat'),
+        'temporary data'
+      )
+
+      workspace.cleanup
+
+      expect(Dir.exist?(directory)).to be(false)
+    end
+  end
 end

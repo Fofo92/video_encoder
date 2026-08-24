@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'fileutils'
+
 module VideoEncoder
   # Workspace for writing a trim project's MLT file.
   class TrimWorkspace
@@ -57,6 +59,12 @@ module VideoEncoder
 
     def write_subtitles(srt)
       File.write(subtitle_path, srt)
+    end
+
+    def cleanup
+      return unless Dir.exist?(directory)
+
+      FileUtils.remove_entry_secure(directory)
     end
 
     private

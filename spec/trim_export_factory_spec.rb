@@ -6,6 +6,9 @@ RSpec.describe VideoEncoder::TrimExportFactory do
   describe '#build' do
     it 'builds the trim export application service' do
       runner = instance_double(VideoEncoder::CommandRunner)
+      allow(VideoEncoder::WorkspaceCleaningExporter)
+        .to receive(:new)
+        .and_call_original
 
       factory = described_class.new(
         runner: runner,
@@ -18,6 +21,12 @@ RSpec.describe VideoEncoder::TrimExportFactory do
       )
 
       expect(service).to be_a(VideoEncoder::ExportTrimProject)
+      expect(VideoEncoder::WorkspaceCleaningExporter)
+        .to have_received(:new)
+        .with(
+          exporter: an_instance_of(VideoEncoder::TrimExporter),
+          workspace: an_instance_of(VideoEncoder::TrimWorkspace)
+        )
     end
   end
 end
