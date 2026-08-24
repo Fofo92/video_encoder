@@ -12,7 +12,7 @@ RSpec.describe VideoEncoder::TrimSubtitleExporter do
   end
 
   let(:processor) do
-    instance_double(VideoEncoder::SubtitleSegmentProcessor)
+    instance_double(VideoEncoder::SubtitleProjectProcessor)
   end
 
   let(:composer) { instance_double(VideoEncoder::SrtComposer) }
@@ -58,9 +58,17 @@ RSpec.describe VideoEncoder::TrimSubtitleExporter do
         .with(1)
         .and_return('/tmp/subtitle_segment_1.ts')
 
-      allow(workspace).to receive(:subtitle_srt_path)
-        .with(1)
-        .and_return('/tmp/subtitle_segment_1.srt')
+      allow(workspace).to receive(:subtitle_manifest_path)
+        .with(0)
+        .and_return('/tmp/subtitle_project_0.ffconcat')
+
+      allow(workspace).to receive(:subtitle_project_transport_path)
+        .with(0)
+        .and_return('/tmp/subtitle_project_0.ts')
+
+      allow(workspace).to receive(:subtitle_project_srt_path)
+        .with(0)
+        .and_return('/tmp/subtitle_project_0.srt')
 
       allow(processor).to receive(:call)
         .and_return("normalized segment\n")
@@ -85,12 +93,18 @@ RSpec.describe VideoEncoder::TrimSubtitleExporter do
       )
 
       expect(processor).to have_received(:call).with(
-        segment: second_segment,
-        video_track: second_video,
-        subtitle_track: subtitle,
+        segments: [
+          {
+            segment: second_segment,
+            video_track: second_video,
+            subtitle_track: subtitle,
+            transport_path: '/tmp/subtitle_segment_1.ts'
+          }
+        ],
         timeline_start: 60,
-        transport_path: '/tmp/subtitle_segment_1.ts',
-        srt_path: '/tmp/subtitle_segment_1.srt'
+        manifest_path: '/tmp/subtitle_project_0.ffconcat',
+        transport_path: '/tmp/subtitle_project_0.ts',
+        srt_path: '/tmp/subtitle_project_0.srt'
       )
 
       expect(workspace).to have_received(:write_subtitles)

@@ -27,8 +27,12 @@ module VideoEncoder
         '-t', format_time(duration + trailing_padding),
         '-map', "0:#{video_track.index}",
         '-map', "0:#{subtitle_track.index}",
-        '-c', 'copy',
-        '-avoid_negative_ts', 'make_zero',
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',
+        '-crf', '30',
+        '-c:s', 'copy',
+        '-muxdelay', '0',
+        '-muxpreload', '0',
         '-f', 'mpegts',
         output_path.to_s
       )

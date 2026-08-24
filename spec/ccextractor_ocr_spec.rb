@@ -22,6 +22,7 @@ RSpec.describe VideoEncoder::CcextractorOcr do
         '--streamtype', '6',
         '--ocrlang', 'fra',
         '--ocr-line-split',
+        '--ignoreptsjumps',
         '--out', 'srt',
         '/tmp/subtitle_segment.ts',
         '-o', '/tmp/subtitle_segment.srt'

@@ -57,6 +57,40 @@ RSpec.describe VideoEncoder::SrtNormalizer do
     )
   end
 
+  it 'clips subtitles at the beginning of their output segment' do
+    srt = <<~SRT
+      1
+      00:19:50,000 --> 00:19:51,000
+      Sous-titre antérieur.
+
+      2
+      00:19:58,000 --> 00:20:01,000
+      Sous-titre à cheval sur le raccord.
+
+      3
+      00:20:02,860 --> 00:20:06,299
+      Sous-titre dans le segment.
+
+    SRT
+
+    normalized = described_class.new.call(
+      srt,
+      offset: -1_200,
+      start_at: 0,
+      end_at: 60
+    )
+
+    expect(normalized).not_to include('Sous-titre antérieur.')
+
+    expect(normalized).to include(
+      '00:00:00,000 --> 00:00:01,000'
+    )
+
+    expect(normalized).to include(
+      '00:00:02,860 --> 00:00:06,299'
+    )
+  end
+
   it 'rejects subtitle entries with a non-positive duration' do
     srt = <<~SRT
       23

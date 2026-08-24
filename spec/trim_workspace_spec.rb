@@ -59,17 +59,6 @@ RSpec.describe VideoEncoder::TrimWorkspace do
     end
   end
 
-  describe '#subtitle_srt_path' do
-    it 'returns an SRT path identified by segment index' do
-      Dir.mktmpdir do |directory|
-        workspace = described_class.new(directory: directory)
-
-        expect(workspace.subtitle_srt_path(2)).to eq(
-          File.join(directory, 'subtitle_segment_2.srt')
-        )
-      end
-    end
-  end
   describe '#subtitle_path' do
     it 'returns the composed subtitle path' do
       Dir.mktmpdir do |directory|
@@ -93,6 +82,25 @@ RSpec.describe VideoEncoder::TrimWorkspace do
           File.read(File.join(directory, 'subtitles.srt'))
         ).to eq(
           "1\n00:00:01,000 --> 00:00:02,000\nTexte.\n"
+        )
+      end
+    end
+  end
+  describe 'subtitle project paths' do
+    it 'returns paths identified by the subtitle run index' do
+      Dir.mktmpdir do |directory|
+        workspace = described_class.new(directory: directory)
+
+        expect(workspace.subtitle_manifest_path(2)).to eq(
+          File.join(directory, 'subtitle_project_2.ffconcat')
+        )
+
+        expect(workspace.subtitle_project_transport_path(2)).to eq(
+          File.join(directory, 'subtitle_project_2.ts')
+        )
+
+        expect(workspace.subtitle_project_srt_path(2)).to eq(
+          File.join(directory, 'subtitle_project_2.srt')
         )
       end
     end

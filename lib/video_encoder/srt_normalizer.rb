@@ -7,14 +7,16 @@ module VideoEncoder
     TIMESTAMP = /\d{2,}:\d{2}:\d{2},\d{3}/
     TIMING_LINE = /(#{TIMESTAMP}) --> (#{TIMESTAMP})/
 
-    def call(srt, offset: 0, end_at: nil)
+    def call(srt, offset: 0, start_at: nil, end_at: nil)
       offset_in_milliseconds = (offset * 1_000).round
+      start_at_in_milliseconds = (start_at * 1_000).round if start_at
       end_at_in_milliseconds = (end_at * 1_000).round if end_at
 
       entries = srt.split(/\r?\n\r?\n/).filter_map do |entry|
         normalize_entry(
           entry,
           offset_in_milliseconds,
+          start_at_in_milliseconds,
           end_at_in_milliseconds
         )
       end
@@ -26,7 +28,7 @@ module VideoEncoder
 
     private
 
-    def normalize_entry(entry, offset, end_at)
+    def normalize_entry(entry, offset, start_at, end_at)
       normalized = entry.gsub(FONT_TAG, '')
       timing = TIMING_LINE.match(normalized)
 
@@ -34,6 +36,8 @@ module VideoEncoder
 
       start_time = parse_timestamp(timing[1]) + offset
       end_time = parse_timestamp(timing[2]) + offset
+
+      start_time = [start_time, start_at].max if start_at
       end_time = [end_time, end_at].min if end_at
 
       return if end_time <= start_time

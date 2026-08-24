@@ -20,6 +20,7 @@ module VideoEncoder
         '--streamtype', '6',
         '--ocrlang', language,
         '--ocr-line-split',
+        '--ignoreptsjumps',
         '--out', 'srt',
         input_path.to_s,
         '-o', output_path.to_s

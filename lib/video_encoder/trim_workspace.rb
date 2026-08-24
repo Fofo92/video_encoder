@@ -30,10 +30,24 @@ module VideoEncoder
       )
     end
 
-    def subtitle_srt_path(segment_index)
+    def subtitle_manifest_path(run_index)
       File.join(
         directory,
-        "subtitle_segment_#{segment_index}.srt"
+        "subtitle_project_#{run_index}.ffconcat"
+      )
+    end
+
+    def subtitle_project_transport_path(run_index)
+      File.join(
+        directory,
+        "subtitle_project_#{run_index}.ts"
+      )
+    end
+
+    def subtitle_project_srt_path(run_index)
+      File.join(
+        directory,
+        "subtitle_project_#{run_index}.srt"
       )
     end
 

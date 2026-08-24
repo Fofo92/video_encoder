@@ -39,9 +39,13 @@ module VideoEncoder
                 :synchronization_delay
 
     def build_subtitle_exporter(workspace)
-      processor = SubtitleSegmentProcessor.new(
+      processor = SubtitleProjectProcessor.new(
         extractor: FfmpegSubtitleSegmentExtractor.new(
           runner: runner
+        ),
+        concatenator: FfmpegSubtitleProjectConcatenator.new(
+          runner: runner,
+          writer: File
         ),
         ocr: CcextractorOcr.new(
           runner: runner,

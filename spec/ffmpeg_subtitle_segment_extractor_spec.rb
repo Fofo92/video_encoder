@@ -39,8 +39,12 @@ RSpec.describe VideoEncoder::FfmpegSubtitleSegmentExtractor do
         '-t', '62',
         '-map', '0:0',
         '-map', '0:5',
-        '-c', 'copy',
-        '-avoid_negative_ts', 'make_zero',
+        '-c:v', 'libx264',
+        '-preset', 'ultrafast',
+        '-crf', '30',
+        '-c:s', 'copy',
+        '-muxdelay', '0',
+        '-muxpreload', '0',
         '-f', 'mpegts',
         '/tmp/subtitle_segment.ts'
       )
