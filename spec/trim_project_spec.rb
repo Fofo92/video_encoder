@@ -202,6 +202,7 @@ RSpec.describe VideoEncoder::TrimProject do
       project.remove_segment(first)
 
       expect(project.segments).to eq([second])
+      expect(project.timeline).to eq([second])
     end
   end
 end

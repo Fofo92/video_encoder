@@ -25,6 +25,7 @@ module VideoEncoder
 
     def remove_segment(segment)
       @segments.delete(segment)
+      @timeline.delete(segment)
     end
 
     def add_gap(gap)

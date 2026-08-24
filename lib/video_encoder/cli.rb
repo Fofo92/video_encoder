@@ -1,52 +1,58 @@
 # frozen_string_literal: true
 
+require_relative 'cli/export_command'
+
 module VideoEncoder
   # CLI handles command-line interface for VideoEncoder.
+
+  COMMANDS = {
+    'version' => :print_version,
+    'enqueue' => :enqueue,
+    'list' => :list,
+    'status' => :status,
+    'failed' => :failed,
+    'run' => :run_worker,
+    'config' => :show_config,
+    'watch' => :watch,
+    'export' => :export_trim_project
+  }.freeze
+
+  # Provides the command-line interface for VideoEncoder.
   class CLI
+    # Provides the command-line interface for VideoEncoder.
     def self.start(argv)
       new(argv).run
     end
 
-    def initialize(argv, config: VideoEncoder::Config.load)
+    def initialize(argv, config: VideoEncoder::Config.load, trim_export_service: nil)
       @argv = argv
       @config = config
+      @trim_export_service = trim_export_service
     end
 
     def run
-      command = @argv.shift
+      handler = COMMANDS[@argv.shift]
 
-      case command
-      when 'version'
-        puts VideoEncoder::VERSION
-
-      when 'enqueue'
-        enqueue
-
-      when 'list'
-        list
-
-      when 'status'
-        status
-
-      when 'failed'
-        failed
-
-      when 'run'
-        run_worker
-
-      when 'config'
-        show_config
-
-      when 'watch'
-        watch
-
-      else
+      unless handler
         puts usage
         exit 1
       end
+
+      __send__(handler)
     end
 
     private
+
+    def print_version
+      puts VideoEncoder::VERSION
+    end
+
+    def export_trim_project
+      ExportCommand.new(
+        argv: @argv,
+        service: @trim_export_service
+      ).run
+    end
 
     def config
       @config
@@ -215,6 +221,9 @@ module VideoEncoder
           video_encoder run [--once]
           video_encoder list
           video_encoder status <job_id>
+          video_encoder config
+          video_encoder watch [--once]
+          video_encoder export <project.json> --output <movie.mkv>
           video_encoder failed
       TEXT
     end
