@@ -141,7 +141,7 @@ générique.
 
 ## État du projet
 
-Version actuelle : **0.1.0**
+Version actuelle : **0.2.0**
 
 Le pipeline d’encodage dispose d’une CLI. Le domaine de montage multi-source
 et son export sont fonctionnels, mais leur intégration dans une interface
