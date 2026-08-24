@@ -55,7 +55,7 @@ manquante et qu'un autre enregistrement permet ultérieurement de la remplacer.
 Chaque média reste une source indépendante. Les positions de montage sont
 exprimées dans le référentiel d'images propre à chaque source.
 
-À ce stade, aucun découpage n'est encore réalisé.L'utilisateur ouvre un ou plusieurs médias.
+À ce stade, aucun découpage n'est encore réalisé.
 
 ## 2. Explorer un média
 
@@ -161,7 +161,7 @@ et d'une portion sélectionnée dans un autre média, le nouveau montage peut de
 Sa durée est indépendante de celle du **Gap**. Il peut donc être plus court,  égal ou plus long que celui-ci. Dans ce dernier cas, les raccords peuvent également raccourcir les portions adjacentes du média d'origine.
 
 Les segments du nouveau `TrimProject` conservent chacun la référence au média source dont ils
-proviennent. Leurs positions en images sont définies dans le référentiel de cette source. 
+proviennent. Leurs positions en images sont définies dans le référentiel de cette source.
 
 Le **TrimProject** devient progressivement la représentation métier complète du montage.
 
