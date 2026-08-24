@@ -177,33 +177,87 @@ Cette étape permet de vérifier la cohérence du projet avant son export.
 
 ---
 
-## 6. Exporter le projet
+## 6. Enregistrer le projet
 
-Lorsque le montage est validé, le **TrimProject** est considéré comme terminé.
+Lorsque le montage est validé, ses décisions doivent pouvoir être conservées
+indépendamment d’un export.
 
-Son rôle s'arrête ici.
+`TrimProjectSerializer` transforme sa timeline en un document JSON versionné.
+Ce document contient :
 
-Le projet est alors confié à **TrimExporter**, chargé de produire le média final.
+- l’ordre des segments et des gaps ;
+- le chemin de chaque média source ;
+- les bornes inclusives de chaque segment en images ;
+- le nombre d’images de chaque gap.
 
-Le processus d'export (génération MLT, rendu, remultiplexage...) est volontairement indépendant du processus de construction du projet.
+Il ne contient pas les caractéristiques techniques dérivées des médias. La
+durée, la cadence et les pistes sont relues depuis les sources au prochain
+chargement.
+
+Le document devient ainsi le contrat d’échange entre :
+
+- le domaine de montage ;
+- la CLI ;
+- une future IHM ;
+- le worker chargé de l’export.
 
 ---
 
-# Principes d'architecture
+## 7. Exporter le projet
+
+L’export part d’un `TrimProject` en mémoire ou de sa représentation JSON.
+
+Dans le second cas, `ExportTrimProjectFile` :
+
+1. lit le document ;
+2. demande à `TrimProjectLoader` de reconstruire le projet ;
+3. sonde chaque source avec `MediaProbe` ;
+4. transmet le projet à `ExportTrimProject`.
+
+`ExportTrimProject` sélectionne les pistes nécessaires puis confie la
+production à `TrimExporter`.
+
+Le processus de construction du projet reste ainsi indépendant :
+
+- de la génération MLT ;
+- du rendu vidéo et audio ;
+- de la conversion OCR des sous-titres ;
+- du remultiplexage final.
+
+La CLI fournit actuellement cette entrée :
+
+```bash
+bin/video_encoder export projet.json --output montage.mkv
+```
+
+Une future interface Rails devra déclencher le même cas d’utilisation dans un
+worker asynchrone. La requête HTTP créera le travail d’export mais n’exécutera
+pas directement FFmpeg, MLT ou CCExtractor.
+
+---
+
+# Principes d’architecture
 
 Le workflow repose sur une séparation claire des responsabilités.
 
-| Élément         | Responsabilité                                   |
-| --------------- | ------------------------------------------------ |
-| Clip Monitor    | Naviguer dans un média source.                   |
-| TrimProject     | Décrire les portions des médias à conserver.     |
-| Project Monitor | Prévisualiser le montage.                        |
-| TrimExporter    | Produire le média final à partir du TrimProject. |
+| Élément               | Responsabilité                                |
+| --------------------- | --------------------------------------------- |
+| Clip Monitor          | Naviguer dans un média source.                |
+| TrimProject           | Décrire la chronologie du montage.            |
+| Project Monitor       | Prévisualiser le montage.                     |
+| TrimProjectSerializer | Enregistrer les décisions de montage.         |
+| TrimProjectLoader     | Reconstruire le projet et sonder ses sources. |
+| ExportTrimProject     | Orchestrer la sélection et l’export.          |
+| TrimExporter          | Produire les flux et le média final.          |
 
 Cette séparation permet de faire évoluer indépendamment :
 
-* l'interface utilisateur ;
-* les méthodes de sélection (manuelle ou automatique) ;
-* les mécanismes d'export.
+- l’interface utilisateur ;
+- le format persistant grâce à son numéro de version ;
+- les méthodes de sélection ;
+- les outils techniques d’export ;
+- le mode d’exécution synchrone ou asynchrone.
 
-Le **TrimProject** reste ainsi une représentation purement métier du montage, indépendante des outils techniques utilisés pour produire le média final.
+Le `TrimProject` reste une représentation métier pure du montage. Le document
+JSON en est la représentation persistante, tandis que les services
+applicatifs constituent la frontière commune entre la CLI et la future IHM.

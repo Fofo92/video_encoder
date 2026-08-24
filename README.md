@@ -107,6 +107,52 @@ continue à traiter la file jusqu’à son interruption.
 `watch --once` effectue un seul balayage du répertoire d’entrée. Sans
 `--once`, la surveillance reste active.
 
+### Exporter un projet de montage
+
+La commande `export` charge un projet persistant, sonde ses sources avec
+FFprobe, sélectionne les pistes disponibles puis exécute l’export complet :
+
+```bash
+bin/video_encoder export projet.json --output montage.mkv
+```
+
+Le workspace est créé à côté du fichier de sortie. Pour un fichier
+`montage.mkv`, son nom est `video_encoder_montage_workspace`.
+
+Le chemin de **CCExtractor** peut être fourni avec la variable d’environnement
+`CCEXTRACTOR_EXECUTABLE` :
+
+```bash
+CCEXTRACTOR_EXECUTABLE=/chemin/vers/ccextractor \
+  bin/video_encoder export projet.json --output montage.mkv
+```
+
+Le format persistant est un document JSON versionné :
+
+```json
+{
+  "format": "video_encoder.trim_project",
+  "version": 1,
+  "timeline": [
+    {
+      "type": "segment",
+      "source": "/commun/video/source.m2t",
+      "start_frame": 30000,
+      "end_frame": 31499
+    },
+    {
+      "type": "gap",
+      "frame_count": 25
+    }
+  ]
+}
+```
+
+Les bornes `start_frame` et `end_frame` sont inclusives. Les métadonnées
+techniques du média — durée, cadence et pistes — ne sont pas dupliquées dans
+le document : elles sont recalculées depuis chaque source lors du chargement.
+Une même source réutilisée dans plusieurs segments n’est sondée qu’une fois.
+
 ## Contrôle qualité
 
 Le contrôle standard vérifie les dépendances Ruby, RuboCop et les tests

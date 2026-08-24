@@ -1,247 +1,225 @@
-# Trim
+# Architecture du montage
 
 ## Objectif
 
-Le module `trim` a pour objectif de produire un nouveau média constitué de plusieurs  portions d'un enregistrement TNT, sans que l'utilisateur ait à connaître les détails de **FFmpeg** ou de **MLT**.
+Le sous-système de montage produit un média à partir d’une chronologie composée
+de portions provenant d’une ou plusieurs sources.
 
-Le résultat attendu est un fichier unique, prêt à être transmis au processus d'encodage.
-
-------
+Le domaine décrit le montage sans dépendre de FFmpeg, MLT, CCExtractor ni du
+format de sortie. Des services applicatifs et des adaptateurs techniques
+traduisent ensuite cette description en traitements exécutables.
 
 ## Modèle de domaine
 
 ### Segment
 
-Un `Segment` représente une portion du média source à conserver.
+Un `Segment` représente une portion d’un média source.
 
-Il est défini par :
+Pour un projet persistant et un export à l’image près, il est défini par :
 
-- une position de début (`start_time`) ;
-- une position de fin (`end_time`).
+- une source `Media` ;
+- une première image inclusive (`start_frame`) ;
+- une dernière image inclusive (`end_frame`).
 
-Invariants :
+Le nombre d’images est donc :
 
-- la fin est strictement postérieure au début.
+```text
+end_frame - start_frame + 1
+```
 
-Comportement :
+`Segment` accepte encore des bornes temporelles pour certains usages
+historiques, mais le format persistant exige des bornes en images afin d’éviter
+toute perte de précision.
 
-- il connaît sa durée.
+### Gap
 
-------
+Un `Gap` représente un intervalle volontaire dans la chronologie. Sa durée est
+exprimée par un nombre strictement positif d’images.
+
+Il permet notamment de matérialiser une portion manquante avant son éventuel
+remplacement par un segment provenant d’une autre source.
 
 ### TrimProject
 
-Un `TrimProject` représente un projet de découpage.
+`TrimProject` contient une chronologie ordonnée de `Segment` et de `Gap`.
 
-Il est constitué :
+Un segment conserve toujours la référence à sa propre source. Le projet n’est
+donc pas rattaché à un média unique.
 
-- d'un média source (`Media`) ;
-- d'une liste ordonnée de `Segment`.
+Pour deux segments successifs provenant de la même source, le domaine refuse
+les chevauchements et la contiguïté. Les segments provenant de sources
+différentes restent indépendants dans leurs référentiels d’images respectifs.
 
-Invariants :
+`TrimProject` ne connaît ni les pistes à exporter, ni les outils de rendu, ni
+le conteneur final.
 
-- les segments sont ajoutés dans l'ordre chronologique ;
-- deux segments ne peuvent ni se chevaucher ni être contigus.
+## Persistance
 
-Comportement :
+### Format versionné
 
-- il connaît sa durée totale.
+Un projet peut être sérialisé sous la forme d’un document JSON :
 
-Le `TrimProject` est indépendant de toute technologie de traitement vidéo.
-
-------
-
-## Architecture retenue
-
-Le découpage repose sur une architecture hybride.
-
-```
-                TrimProject
-                     │
-                     ▼
-              génération MLT
-                     │
-                     ▼
-             rendu vidéo/audio
-                     │
-                     ▼
-          remultiplexage FFmpeg
-                     │
-                     ▼
-              média découpé
+```json
+{
+  "format": "video_encoder.trim_project",
+  "version": 1,
+  "timeline": [
+    {
+      "type": "segment",
+      "source": "/commun/video/source-a.m2t",
+      "start_frame": 30000,
+      "end_frame": 31499
+    },
+    {
+      "type": "gap",
+      "frame_count": 25
+    }
+  ]
+}
 ```
 
-Les responsabilités sont réparties comme suit :
+`TrimProjectDocument` définit l’identité et la version du format.
 
-- **TrimProject** : description du découpage.
-- **MLT** : application de la *timeline*.
-- **FFmpeg** : assemblage final des flux.
+`TrimProjectSerializer` transforme le domaine en JSON. Il refuse les segments
+qui ne possèdent pas de bornes en images.
 
-------
+`TrimProjectLoader` valide le format et sa version, puis reconstruit le domaine.
+Il utilise `MediaProbe` pour recalculer les informations techniques de chaque
+source. Une source réutilisée dans plusieurs segments n’est sondée qu’une fois
+pendant un chargement.
 
-## Principes
+Le document ne duplique donc pas :
 
-Le modèle métier ne dépend ni de **FFmpeg** ni de **MLT**.
+- la durée des médias ;
+- leur cadence ;
+- leurs pistes ;
+- les résultats de la sélection des pistes.
 
-Les composants techniques sont responsables de la transformation du `TrimProject` en commandes de traitement.
-# Trim Pipeline
+Ces informations restent dérivées des fichiers source au moment de l’export.
 
-## Objectif
+## Services applicatifs
 
-Le pipeline de découpage est responsable de la production d'un nouveau média à partir d'un enregistrement existant et d'une sélection de segments.
+### ExportTrimProject
 
-Il repose sur une séparation stricte entre :
+`ExportTrimProject` constitue le point d’entrée applicatif d’un projet déjà
+chargé.
 
-* le modèle métier décrivant le découpage ;
-* la traduction de ce modèle vers les outils techniques ;
-* l'exécution des traitements de rendu.
+Il :
 
-Cette séparation permet de faire évoluer indépendamment les règles métier et les technologies utilisées pour réaliser le découpage.
+1. recueille les sources distinctes du projet ;
+2. demande à `TrackSelector` les pistes vidéo, audio et de sous-titres ;
+3. transmet le projet et ces sélections à `TrimExporter`.
 
----
+### ExportTrimProjectFile
 
-# Vue d'ensemble
+`ExportTrimProjectFile` adapte le cas d’utilisation précédent à un document
+persistant.
 
-Le pipeline est organisé comme suit :
+Il :
+
+1. lit le fichier JSON ;
+2. le charge avec `TrimProjectLoader` ;
+3. appelle `ExportTrimProject`.
+
+Ce service forme la frontière commune entre la CLI actuelle et une future
+interface Rails.
+
+### Fabriques
+
+`TrimExportFactory` assemble les composants nécessaires à l’export d’un
+`TrimProject`.
+
+`TrimProjectFileExportFactory` ajoute la lecture et le chargement d’un document
+persistant.
+
+Les dépendances techniques restent injectées afin de permettre leur
+remplacement dans les tests ou dans une autre interface.
+
+## Pipeline d’export
 
 ```text
-                TrimProject
-                     │
-                     ▼
-           MltProjectBuilder
-                     │
-                     ▼
-               projet MLT
-                     │
-                     ▼
-              MltRenderer
-               ├──────────────┐
-               ▼              ▼
-        vidéo temporaire   audio(s)
-               └──────┬───────┘
-                      ▼
-            FfmpegRemuxer
-                      │
-                      ▼
-              média découpé
+Document JSON
+    │
+    ▼
+TrimProjectLoader ──► MediaProbe
+    │
+    ▼
+TrimProject
+    │
+    ▼
+ExportTrimProject ──► TrackSelector
+    │
+    ▼
+TrimExporter
+    ├──► MltProjectBuilder
+    ├──► MltRenderer
+    ├──► TrimSubtitleExporter
+    └──► FfmpegRemuxer
+             │
+             ▼
+         média final
 ```
 
-Chaque composant possède une responsabilité unique.
+### Vidéo
 
----
+`MltProjectBuilder` traduit la chronologie en projet MLT.
 
-# Composants
+`MltRenderer` utilise `melt-7` pour produire une vidéo HEVC 1280 × 720,
+progressive à 25 images par seconde.
 
-## TrimProject
+### Audio
 
-`TrimProject` est le modèle métier du découpage.
+Les sorties audio sont construites par rôle fonctionnel, actuellement :
 
-Il décrit :
+- français ;
+- version originale.
 
-* le média source ;
-* les segments conservés ;
-* leur durée totale.
+Une piste n’est produite que si elle est disponible pour toutes les sources
+concernées. Les pistes sont rendues séparément puis remultiplexées dans le
+fichier final avec leurs métadonnées de langue.
 
-Il garantit également les règles de cohérence du découpage :
+### Sous-titres
 
-* aucun segment vide ;
-* aucun segment inversé ;
-* aucun chevauchement ;
-* au moins une image entre deux segments.
+La piste de sous-titres finale n’est produite que lorsqu’une sortie audio de
+version originale complète est disponible pour toutes les sources du projet.
 
-`TrimProject` ne connaît ni MLT, ni FFmpeg, ni le format de sortie.
+Les sous-titres DVB français standards sont convertis en SubRip afin de rester
+sélectionnables sur les lecteurs qui ne prennent pas correctement en charge le
+DVB dans Matroska.
 
----
+Pour chaque groupe continu de segments admissibles :
 
-## MltProjectBuilder
+1. `FfmpegSubtitleSegmentExtractor` produit un transport vidéo et DVB pour
+   chaque segment ;
+2. `FfmpegSubtitleProjectConcatenator` place ces transports sur la chronologie
+   du projet ;
+3. `CcextractorOcr` effectue une seule passe OCR sur le transport concaténé ;
+4. `SrtNormalizer` retire les balises de présentation et borne les événements ;
+5. `SrtComposer` rassemble et renumérote les résultats ;
+6. `FfmpegRemuxer` ajoute la piste SubRip française au média final.
 
-`MltProjectBuilder` traduit un `TrimProject` en un projet MLT minimal.
+Le traitement OCR sur la chronologie concaténée évite les dérives d’horloge
+observées lorsque chaque segment est interprété indépendamment.
 
-Sa responsabilité est exclusivement de produire la représentation XML de la timeline.
+## Interface en ligne de commande
 
-Il ne lance aucune commande externe.
+La CLI expose l’export d’un projet persistant :
 
----
+```bash
+bin/video_encoder export projet.json --output montage.mkv
+```
 
-## MltRenderer
+`VideoEncoder::CLI::ExportCommand` analyse les arguments, prépare le workspace
+et construit le service avec `TrimProjectFileExportFactory`.
 
-`MltRenderer` exécute `melt` afin d'appliquer la timeline décrite dans le projet MLT.
+La CLI reste une interface : elle ne porte aucune règle métier du montage.
 
-Il produit les flux élémentaires nécessaires au média final :
+## Principes d’architecture
 
-* une vidéo temporaire ;
-* une ou plusieurs pistes audio temporaires.
-
-Il ne réalise aucun remultiplexage.
-
----
-
-## FfmpegRemuxer
-
-`FfmpegRemuxer` assemble les différents flux produits par MLT.
-
-Il est responsable de :
-
-* la sélection des flux à conserver ;
-* leur remultiplexage ;
-* la restauration des métadonnées (langues des pistes, etc.) ;
-* la génération du média final.
-
-Il ne connaît pas les segments du découpage.
-
----
-
-# Répartition des responsabilités
-
-Le pipeline applique le principe de responsabilité unique.
-
-| Composant           | Responsabilité                                 |
-| ------------------- | ---------------------------------------------- |
-| `TrimProject`       | Décrire le découpage.                          |
-| `MltProjectBuilder` | Construire la timeline MLT.                    |
-| `MltRenderer`       | Produire les flux élémentaires.                |
-| `FfmpegRemuxer`     | Assembler les flux et produire le média final. |
-
-Aucun composant ne cumule plusieurs de ces responsabilités.
-
----
-
-# Principes d'architecture
-
-Le pipeline repose sur quelques principes simples.
-
-## Le domaine est indépendant des outils
-
-Le modèle métier ne dépend ni de MLT ni de FFmpeg.
-
-Les objets métier peuvent être manipulés, testés et validés sans exécuter de commande externe.
-
----
-
-## Les adaptateurs traduisent le domaine
-
-Les composants techniques traduisent le modèle métier vers les outils utilisés.
-
-Ils encapsulent les détails des formats, des commandes et des paramètres nécessaires au traitement.
-
----
-
-## Les services techniques sont spécialisés
-
-Chaque service technique réalise une seule opération :
-
-* construire un projet MLT ;
-* exécuter MLT ;
-* remultiplexer les flux.
-
-Cette spécialisation limite le couplage et facilite les évolutions futures.
-
----
-
-# Évolutions
-
-À ce stade, les différentes étapes du pipeline sont implémentées sous la forme de composants indépendants.
-
-Une étape ultérieure introduira un orchestrateur chargé de coordonner ces composants afin de produire un média découpé complet à partir d'un `TrimProject`.
-
-Cet orchestrateur ne portera aucune règle métier ; il assurera uniquement l'enchaînement des différentes étapes du pipeline.
+- Le domaine ne dépend d’aucun outil multimédia.
+- Le document persistant contient les décisions de montage, pas les
+  métadonnées dérivées.
+- Les services applicatifs orchestrent les cas d’utilisation.
+- Les adaptateurs encapsulent MLT, FFmpeg, FFprobe et CCExtractor.
+- La CLI et la future IHM Rails doivent appeler les mêmes services.
+- Les traitements longs devront être exécutés hors du cycle d’une requête HTTP.

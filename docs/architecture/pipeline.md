@@ -1,120 +1,172 @@
-# Pipeline de traitement# Pipeline de traitement
+# Pipelines de traitement
 
 ## Objectif
 
-Le pipeline décrit le traitement complet d'un enregistrement TNT, depuis le fichier brut jusqu'au média final prêt à être diffusé ou catalogué.
+`video_encoder` fournit deux pipelines complémentaires :
 
-Chaque étape possède une responsabilité unique et échange avec les suivantes au moyen d'objets métier plutôt que par des commandes **FFmpeg**.
+- l’encodage automatique d’un média placé dans une file de travaux ;
+- l’export d’un projet de montage persistant et potentiellement multi-source.
 
-## Vue d'ensemble
+Ils partagent certains composants, notamment `MediaProbe`, `TrackSelector` et
+les adaptateurs FFmpeg, mais répondent à deux cas d’utilisation distincts.
 
-```
-Enregistrement TNT
-        │
-        ▼
-      trim
-(découpage sans perte)
-        │
-        ▼
-   MediaProbe
-(analyse du média)
-        │
-        ▼
- TrackSelector
-(sélection des pistes)
-        │
-        ▼
-    Encoder
-(encodage vidéo)
-        │
-        ▼
-    Verifier
-(validation)
-        │
-        ▼
-  Workspace
-(finalisation)
-        │
-        ├──────────────► MiniDLNA
-        │
-        └──────────────► vidb
+## Encodage automatique
+
+### Vue d’ensemble
+
+```text
+Média entrant
+    │
+    ▼
+Watcher / CLI
+    │
+    ▼
+JobRepository
+    │
+    ▼
+Worker
+    ├──► MediaProbe
+    ├──► TrackSelector
+    ├──► Encoder
+    ├──► Verifier
+    └──► Workspace
+             │
+             ▼
+         média encodé
 ```
 
-## Étapes
+### Entrée dans la file
 
-### Trim
+`Watcher` détecte les médias du répertoire d’entrée. La commande `enqueue`
+permet également d’ajouter explicitement un fichier.
 
-Produit un nouveau média à partir des portions de l'enregistrement à conserver.
+Le travail est persisté dans `JobRepository`, actuellement adossé à SQLite.
 
-Cette étape est indépendante de l'encodage et repose sur un modèle métier (`TrimProject`) décrivant les segments conservés.
+### Worker
 
-Voir : `trim.md`
+`Worker` récupère un travail disponible et coordonne son traitement.
 
----
+Il ne contient pas les règles de sélection des pistes ni la construction des
+commandes FFmpeg.
+
+### Analyse et sélection
+
+`MediaProbe` décrit fidèlement le conteneur et toutes ses pistes à partir de
+FFprobe.
+
+`TrackSelector` applique ensuite les règles métier de sélection. Ces règles
+sont décrites dans `track_selection.md`.
+
+### Encodage
+
+L’encodeur configuré produit le média cible. Le profil fourni utilise FFmpeg,
+HEVC NVENC, un redimensionnement maximal en 1280 × 720, un désentrelacement et
+un audio AAC.
+
+### Vérification et finalisation
+
+`Verifier` contrôle le média produit.
+
+`Workspace` gère les déplacements entre les répertoires de travail,
+l’archivage de la source et la mise à disposition du résultat final.
+
+## Export d’un projet de montage
+
+### Vue d’ensemble
+
+```text
+Document JSON
+    │
+    ▼
+ExportTrimProjectFile
+    ├──► TrimProjectLoader ──► MediaProbe
+    │
+    ▼
+ExportTrimProject
+    ├──► TrackSelector
+    │
+    ▼
+TrimExporter
+    ├──► rendu vidéo MLT
+    ├──► rendus audio MLT
+    ├──► conversion OCR des sous-titres DVB
+    └──► remultiplexage FFmpeg
+             │
+             ▼
+         média monté
+```
+
+### Chargement
+
+Le document JSON conserve uniquement les décisions de montage :
+
+- ordre de la chronologie ;
+- chemins des sources ;
+- bornes inclusives en images ;
+- éventuels gaps.
+
+`TrimProjectLoader` valide le format, sonde les sources et reconstruit le
+`TrimProject`.
+
+### Sélection multi-source
+
+`ExportTrimProject` recueille les sources distinctes puis demande à
+`TrackSelector` :
+
+- une piste vidéo par source ;
+- les sorties audio disponibles pour toutes les sources ;
+- une piste de sous-titres français standards par source lorsqu’elle existe.
+
+### Rendu
+
+`TrimExporter` orchestre les adaptateurs techniques :
+
+- `MltProjectBuilder` construit les projets MLT ;
+- `MltRenderer` produit séparément la vidéo et les pistes audio ;
+- `TrimSubtitleExporter` produit une piste SubRip française ;
+- `FfmpegRemuxer` assemble les flux dans le conteneur final.
+
+L’architecture détaillée est décrite dans `trim.md`.
+
+### Interface
+
+La CLI fournit actuellement l’entrée générique :
+
+```bash
+bin/video_encoder export projet.json --output montage.mkv
+```
+
+Une future IHM doit appeler les mêmes services applicatifs dans un worker
+asynchrone, sans exécuter les outils multimédias pendant une requête HTTP.
+
+## Composants partagés
 
 ### MediaProbe
 
-Analyse le média obtenu et construit un objet `Media`.
+`MediaProbe` transforme les données FFprobe en objets `Media` et `Track`.
 
-Aucun choix n'est effectué à cette étape : toutes les pistes sont décrites fidèlement.
-
----
+Il décrit les médias, mais ne décide jamais quelles pistes doivent être
+conservées.
 
 ### TrackSelector
 
-Applique les règles métier de sélection des pistes.
+`TrackSelector` porte les règles de sélection, indépendamment de FFmpeg, MLT et
+de l’interface appelante.
 
-Il détermine :
+### CommandRunner
 
-- la piste vidéo à conserver ;
-- les pistes audio ;
-- les sous-titres éventuels.
+`CommandRunner` exécute des commandes sous forme de tableaux d’arguments, sans
+passer par un shell.
 
-Les règles de sélection sont décrites dans :
-
-`docs/domain/track_selection.md`
-
----
-
-### Encoder
-
-Construit et exécute la commande d'encodage à partir :
-
-- du média analysé ;
-- des pistes sélectionnées ;
-- des paramètres d'encodage.
-
-Voir : `encoding.md`
-
----
-
-### Verifier
-
-Contrôle le média produit.
-
-Il vérifie notamment :
-
-- la présence des pistes attendues ;
-- les caractéristiques générales du média.
-
----
-
-### Workspace
-
-Finalise le traitement.
-
-Cette étape est responsable :
-
-- du renommage du fichier temporaire ;
-- du nettoyage des fichiers intermédiaires ;
-- de la mise à disposition du média final.
+Les adaptateurs spécialisés construisent leurs commandes ; le runner se limite
+à leur exécution.
 
 ## Principes
 
-Le pipeline sépare clairement :
-
-- les règles métier ;
-- la description des médias ;
-- les traitements techniques.
-
-Chaque étape ne possède qu'une seule responsabilité.
+- Un objet métier ne construit pas de commande externe.
+- Les règles de sélection restent séparées des adaptateurs multimédias.
+- Les pipelines automatiques et de montage partagent des composants sans être
+  confondus.
+- La CLI, un worker et une future IHM utilisent les mêmes services
+  applicatifs.
+- Les fichiers temporaires sont isolés dans des workspaces dédiés.
