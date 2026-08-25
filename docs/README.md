@@ -9,6 +9,7 @@ d’architecture et les règles du domaine.
 - [Architecture du montage](architecture/trim.md)
 - [Sélection des pistes](architecture/track_selection.md)
 - [Encodage](architecture/encoding.md)
+- [Architecture de déploiement](architecture/deployment.md)
 
 ## Domaine
 

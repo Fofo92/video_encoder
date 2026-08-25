@@ -66,8 +66,9 @@ La conversion facultative des sous-titres DVB nécessite également :
 - Tesseract ;
 - les données linguistiques françaises de Tesseract.
 
-L’exécutable CCExtractor peut être installé sur le système ou fourni par un
-adaptateur, par exemple un lanceur utilisant une image Docker.
+L’exécutable CCExtractor peut être installé sur le système ou fourni par un adaptateur, par exemple un lanceur utilisant une image Docker.
+
+L’installation actuelle et les possibilités de déploiement futur sont décrites dans la [documentation d’architecture](docs/architecture/deployment.md).
 
 ## Installation
 
