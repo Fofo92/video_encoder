@@ -160,25 +160,3 @@ L’ordre des décorateurs devient significatif si d’autres comportements sont
  ajoutés ultérieurement, par exemple la journalisation ou la mesure de durée.
 
 La composition devra donc rester explicite dans la Factory afin que le cycle d’exécution soit facile à comprendre.
-
-```
-
-Puis complète le fichier d’index.
-
-### Fichier : `docs/design/patterns/index.md`
-
-Après le paragraphe introductif existant, ajoute :
-
-```markdown
-## Patterns documentés
-
-- [Decorator](decorator.md) — nettoyage du workspace après un export réussi ;
-- [Factory](factory.md) — construction des collaborateurs techniques ;
-- [Repository](repository.md) — persistance des travaux d’encodage.
-```
-
-```ruby
-exporter.call(
-  trim_project: trim_project,
-  output_path: output_path
-)

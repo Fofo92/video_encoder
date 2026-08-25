@@ -6,9 +6,10 @@ module VideoEncoder
   class CLI
     # Exports a persisted trim project from command-line arguments.
     class ExportCommand
-      def initialize(argv:, service: nil)
+      def initialize(argv:, dependency_checker:, service: nil)
         @argv = argv
         @service = service
+        @dependency_checker = dependency_checker
       end
 
       def run
@@ -17,6 +18,7 @@ module VideoEncoder
         output_path = argv.shift
 
         validate_arguments(project_path, option, output_path)
+        check_dependencies
 
         service_for(output_path).call(
           project_path: project_path,
@@ -26,7 +28,7 @@ module VideoEncoder
 
       private
 
-      attr_reader :argv
+      attr_reader :argv, :dependency_checker
 
       def validate_arguments(project_path, option, output_path)
         return if project_path && option == '--output' && output_path
@@ -47,8 +49,7 @@ module VideoEncoder
           runner: CommandRunner.new,
           media_probe: MediaProbe.new,
           reader: File,
-          ccextractor_executable:
-            ENV.fetch('CCEXTRACTOR_EXECUTABLE', 'ccextractor'),
+          ccextractor_executable: ccextractor_executable,
           synchronization_delay: 0
         ).build(
           workspace_directory: workspace_directory
@@ -66,6 +67,19 @@ module VideoEncoder
           File.dirname(expanded_output),
           "video_encoder_#{basename}_workspace"
         )
+      end
+
+      def check_dependencies
+        dependency_checker.call(
+          'ffmpeg',
+          'ffprobe',
+          'melt-7',
+          ccextractor_executable
+        )
+      end
+
+      def ccextractor_executable
+        ENV.fetch('CCEXTRACTOR_EXECUTABLE', 'ccextractor')
       end
     end
   end

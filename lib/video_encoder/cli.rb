@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'cli/export_command'
+require_relative 'cli/config_command'
 
 module VideoEncoder
   # CLI handles command-line interface for VideoEncoder.
@@ -20,14 +21,24 @@ module VideoEncoder
   # Provides the command-line interface for VideoEncoder.
   class CLI
     # Provides the command-line interface for VideoEncoder.
-    def self.start(argv)
-      new(argv).run
+
+    def self.start(argv, **)
+      new(argv, **).run
+    rescue MissingExternalDependenciesError => e
+      warn e.message
+      exit 1
     end
 
-    def initialize(argv, config: VideoEncoder::Config.load, trim_export_service: nil)
+    def initialize(
+      argv,
+      config: VideoEncoder::Config.load,
+      trim_export_service: nil,
+      dependency_checker: ExternalDependencyChecker.new
+    )
       @argv = argv
       @config = config
       @trim_export_service = trim_export_service
+      @dependency_checker = dependency_checker
     end
 
     def run
@@ -43,6 +54,8 @@ module VideoEncoder
 
     private
 
+    attr_reader :dependency_checker
+
     def print_version
       puts VideoEncoder::VERSION
     end
@@ -50,7 +63,8 @@ module VideoEncoder
     def export_trim_project
       ExportCommand.new(
         argv: @argv,
-        service: @trim_export_service
+        service: @trim_export_service,
+        dependency_checker: @dependency_checker
       ).run
     end
 
@@ -151,6 +165,8 @@ module VideoEncoder
     end
 
     def run_worker
+      check_encoding_dependencies
+
       mode = @argv.shift
 
       puts 'Starting worker...'
@@ -161,6 +177,15 @@ module VideoEncoder
         puts 'Running in loop (CTRL+C to stop)'
         worker.run
       end
+    end
+
+    def check_encoding_dependencies
+      return unless config.encoder == 'ffmpeg'
+
+      dependency_checker.call(
+        'ffmpeg',
+        'ffprobe'
+      )
     end
 
     def worker
@@ -174,26 +199,7 @@ module VideoEncoder
     end
 
     def show_config
-      puts "Database: #{config.database}"
-      puts "Encoder:  #{config.encoder}"
-      puts
-
-      puts 'Directories'
-      puts '-----------'
-      puts "Incoming: #{config.directories.incoming}"
-      puts "Queue:    #{config.directories.queue}"
-      puts "Encoded:  #{config.directories.encoded}"
-      puts "Archive:  #{config.directories.archive}"
-      puts
-      puts 'FFmpeg'
-      puts '-------'
-      puts "Container:   #{config.ffmpeg.container}"
-      puts "Video codec: #{config.ffmpeg.video_codec}"
-      puts "Preset:      #{config.ffmpeg.preset}"
-      puts "Tune:        #{config.ffmpeg.tune}"
-      puts "RC:          #{config.ffmpeg.rc}"
-      puts "CQ:          #{config.ffmpeg.cq}"
-      puts "Audio codec: #{config.ffmpeg.audio_codec}"
+      ConfigCommand.new(config: config).run
     end
 
     def watch

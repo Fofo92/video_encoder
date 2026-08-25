@@ -5,6 +5,14 @@ require 'fileutils'
 
 RSpec.describe VideoEncoder::CLI do
   describe 'export' do
+    let(:dependency_checker) do
+      instance_double(VideoEncoder::ExternalDependencyChecker)
+    end
+
+    before do
+      allow(dependency_checker).to receive(:call)
+    end
+
     it 'exports a persisted trim project' do
       service = instance_double(VideoEncoder::ExportTrimProjectFile)
 
@@ -17,7 +25,8 @@ RSpec.describe VideoEncoder::CLI do
           '--output',
           '/exports/movie.mkv'
         ],
-        trim_export_service: service
+        trim_export_service: service,
+        dependency_checker: dependency_checker
       )
 
       cli.run
@@ -54,7 +63,8 @@ RSpec.describe VideoEncoder::CLI do
           '/projects/movie.json',
           '--output',
           '/exports/movie.mkv'
-        ]
+        ],
+        dependency_checker: dependency_checker
       )
 
       cli.run
@@ -67,6 +77,66 @@ RSpec.describe VideoEncoder::CLI do
         project_path: '/projects/movie.json',
         output_path: '/exports/movie.mkv'
       )
+    end
+    it 'checks the external dependencies required for export' do
+      service = instance_double(VideoEncoder::ExportTrimProjectFile)
+
+      allow(service).to receive(:call)
+
+      cli = described_class.new(
+        [
+          'export',
+          '/projects/movie.json',
+          '--output',
+          '/exports/movie.mkv'
+        ],
+        trim_export_service: service,
+        dependency_checker: dependency_checker
+      )
+
+      cli.run
+
+      expect(dependency_checker).to have_received(:call).with(
+        'ffmpeg',
+        'ffprobe',
+        'melt-7',
+        'ccextractor'
+      )
+    end
+
+    it 'checks the configured CCExtractor executable' do
+      previous_executable = ENV.fetch('CCEXTRACTOR_EXECUTABLE', nil)
+      ENV['CCEXTRACTOR_EXECUTABLE'] = '/tmp/video_encoder_ccextractor'
+
+      service = instance_double(VideoEncoder::ExportTrimProjectFile)
+
+      allow(service).to receive(:call)
+
+      cli = described_class.new(
+        [
+          'export',
+          '/projects/movie.json',
+          '--output',
+          '/exports/movie.mkv'
+        ],
+        trim_export_service: service,
+        dependency_checker: dependency_checker
+      )
+
+      cli.run
+
+      expect(dependency_checker).to have_received(:call).with(
+        'ffmpeg',
+        'ffprobe',
+        'melt-7',
+        '/tmp/video_encoder_ccextractor'
+      )
+    ensure
+      if previous_executable
+        ENV['CCEXTRACTOR_EXECUTABLE'] = previous_executable
+      else
+        ENV.delete('CCEXTRACTOR_EXECUTABLE')
+      end
     end
   end
 end

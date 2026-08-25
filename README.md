@@ -127,6 +127,18 @@ CCEXTRACTOR_EXECUTABLE=/chemin/vers/ccextractor \
   bin/video_encoder export projet.json --output montage.mkv
 ```
 
+Avant de démarrer un traitement, la CLI vérifie les dépendances externes
+nécessaires à la commande :
+
+- `run` vérifie la présence de `ffmpeg` et `ffprobe` lorsque l’encodeur FFmpeg
+  est configuré ;
+- `export` vérifie `ffmpeg`, `ffprobe`, `melt-7` et l’exécutable CCExtractor
+  configuré.
+
+Si une dépendance manque, la commande s’arrête avec un code de sortie non nul
+avant de créer le workspace ou de lancer un traitement externe. Les commandes
+qui n’utilisent pas ces outils, telles que `version`, restent disponibles.
+
 Le format persistant est un document JSON versionné :
 
 ```json
