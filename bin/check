@@ -19,6 +19,15 @@ run_step() {
   fi
 }
 
+check_shell_syntax() {
+  bash -n \
+    bin/check \
+    bin/build_ccextractor_image
+
+  sh -n \
+    bin/video_encoder_ccextractor
+}
+
 run_integration_checks() {
   if ! command -v melt-7 >/dev/null 2>&1; then
     printf '\n⚠️  Tests d’intégration ignorés : melt-7 est introuvable.\n'

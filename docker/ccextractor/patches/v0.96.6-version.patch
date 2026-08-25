@@ -1,0 +1,25 @@
+diff --git a/linux/configure.ac b/linux/configure.ac
+--- a/linux/configure.ac
++++ b/linux/configure.ac
+@@ -1,7 +1,7 @@
+ #                                               -*- Autoconf -*-
+ # Process this file with autoconf to produce a configure script.
+
+ AC_PREREQ([2.71])
+-AC_INIT([CCExtractor], [0.96.5], [carlos@ccextractor.org])
++AC_INIT([CCExtractor], [0.96.6], [carlos@ccextractor.org])
+ AC_CONFIG_AUX_DIR([build-conf])
+ AC_CONFIG_SRCDIR([../src/ccextractor.c])
+ AM_INIT_AUTOMAKE([foreign subdir-objects])
+diff --git a/src/lib_ccx/lib_ccx.h b/src/lib_ccx/lib_ccx.h
+--- a/src/lib_ccx/lib_ccx.h
++++ b/src/lib_ccx/lib_ccx.h
+@@ -1,7 +1,7 @@
+ #ifndef CCX_CCEXTRACTOR_H
+ #define CCX_CCEXTRACTOR_H
+
+-#define VERSION "0.96.5"
++#define VERSION "0.96.6"
+
+ // Load common includes and constants for library usage
+ #include "ccx_common_platform.h"

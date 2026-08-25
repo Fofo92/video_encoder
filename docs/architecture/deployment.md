@@ -65,85 +65,125 @@ Cette chaîne a une influence directe sur :
 
 Sa distribution doit donc permettre d’identifier précisément l’environnement ayant produit un résultat validé.
 
-### Installation locale
+### Décision retenue
 
-À court terme, CCExtractor avec OCR français sera installé localement sur le poste Debian dans un emplacement propre à `video_encoder`. L’installation devra être :
+CCExtractor avec OCR français est distribué dans une image Docker dédiée.
+Cette conteneurisation reste limitée à CCExtractor et à ses dépendances :
 
-* versionnée ;
-* indépendante d’un remplacement implicite dans `/usr/local/bin` ;
-* accompagnée de sa recette de construction ;
-* accompagnée de la liste de ses dépendances ;
-* associée au modèle linguistique français validé ;
-* vérifiée par un test d’acceptation représentatif.
+- CCExtractor ;
+- Tesseract ;
+- Leptonica ;
+- GPAC ;
+- le modèle linguistique français de Tesseract ;
+- les bibliothèques nécessaires à leur exécution.
 
+Le reste de `video_encoder` demeure exécuté directement sur le poste Debian.
+FFmpeg, FFprobe, MLT et l’accès aux médias ne sont pas déplacés dans le conteneur.
 
+Cette solution a été retenue après examen de l’installation native sous Debian 13.
+CCExtractor n’est pas fourni par les dépôts utilisés et sa
+construction nécessite notamment GPAC, qui n’y est pas disponible sous la
+forme d’un paquet de développement. Une installation locale aurait donc
+également nécessité le maintien d’une chaîne de construction spécifique.
 
-Une organisation possible est :
+L’image Docker offre ici une frontière de distribution plus explicite et
+permet de conserver ensemble les composants de la chaîne OCR validée.
 
-```text
-/opt/video_encoder/ccextractor/
-├── 0.96.5/
-└── 0.96.6/
-```
+### Construction des images
 
-
-
-Chaque version devra pouvoir être sélectionnée explicitement avec la variable d’environnement `CCEXTRACTOR_EXECUTABLE` :
+Le script `bin/build_ccextractor_image` construit une image à partir d’une
+version explicitement prise en charge :
 
 ```shell
-CCEXTRACTOR_EXECUTABLE=\
-/opt/video_encoder/ccextractor/0.96.6/bin/ccextractor \
+bin/build_ccextractor_image 0.96.6
+```
+
+Les versions actuellement reconnues sont :
+
+- `0.96.5`, associée au commit `477307e438a6089314f3c1d7fe083943220e90fa` ;
+- `0.96.6`, associée au commit `185631dcb0217b4ad09d43009cb69f0593996a5d`.
+
+Le script :
+
+1. clone le tag correspondant depuis le dépôt officiel de CCExtractor ;
+2. vérifie que son commit correspond à la valeur attendue ;
+3. construit l’image OCR fournie par le projet amont à partir des sources locales vérifiées ;
+4. ajoute les données linguistiques françaises de Tesseract ;
+5. produit une image portant un tag versionné.
+
+L’image courante est :
+
+```text
+video-encoder-ccextractor:0.96.6-ocr-fra
+```
+
+La version 0.96.6 nécessite un correctif d’empaquetage local, conservé dans :
+
+```shell
+docker/ccextractor/patches/v0.96.6-version.patch
+```
+
+Ce correctif ne modifie pas le traitement des sous-titres. Il corrige uniquement le numéro de version encore déclaré comme `0.96.5` dans les sources du tag `v0.96.6`.
+
+### Exécution
+
+Le lanceur `bin/video_encoder_ccextractor` adapte l’interface de l’exécutable conteneurisé à celle attendue par `video_encoder`.
+
+Il exécute un conteneur éphémère :
+
+- sans accès réseau ;
+- avec l’identité de l’utilisateur courant ;
+- avec le seul workspace nécessaire monté dans le conteneur ;
+- avec suppression automatique du conteneur après son exécution.
+
+La CLI peut utiliser ce lanceur grâce à la variable  `CCEXTRACTOR_EXECUTABLE` :
+
+```shell
+CCEXTRACTOR_EXECUTABLE="$PWD/bin/video_encoder_ccextractor" \
   bin/video_encoder export projet.json --output montage.mkv
 ```
 
+Le chemin du workspace est normalement déduit de l’argument de sortie transmis à CCExtractor.
+La variable `VIDEO_ENCODER_WORKSPACE` reste acceptée pour les  usages qui doivent le fournir explicitement.
 
+### Changement de version et retour arrière
 
-Une mise à jour ne devra pas écraser immédiatement la version précédemment validée.
+L’image utilisée par le lanceur peut être remplacée sans modifier le code :
 
-La nouvelle version sera d’abord considérée comme candidate, puis comparée à la version de référence
-au moyen du projet d’acceptation multi-source.
+```shell
+VIDEO_ENCODER_CCEXTRACTOR_IMAGE=\
+video-encoder-ccextractor:0.96.5-ocr-fra-reference \
+CCEXTRACTOR_EXECUTABLE="$PWD/bin/video_encoder_ccextractor" \
+  bin/video_encoder export projet.json --output montage.mkv
+```
 
-La documentation de l’installation devra au minimum préciser :
+Cette possibilité permet :
 
-- la version ou le commit de CCExtractor ;
+- de comparer deux versions ;
+- de diagnostiquer une éventuelle régression ;
+- de revenir temporairement à une chaîne OCR déjà validée ;
+- de tester une image candidate avant de modifier l’image par défaut.
 
-- la version de Tesseract ;
-- les options de compilation ;
-- les paquets Debian nécessaires ;
-- l’origine et l’emplacement de fra.traineddata ;
-- les éventuelles variables d’environnement ;
-- les empreintes des principaux artefacts ;
-- les commandes de vérification et d’acceptation.
+### Validation
 
-### Image de référence
+Les images 0.96.5 et 0.96.6 ont été comparées sur le transport de sous-titres du projet d’acceptation multi-source.
 
-L’image conteneurisée déjà validée est conservée comme environnement de référence et
-comme solution de secours.
+Les fichiers SRT produits sont identiques octet par octet et possèdent l’empreinte SHA-256 suivante :
 
-Elle ne constitue pas une dépendance obligatoire pour l’exécution courante de video_encoder.
+```text
+dee936a98d53710fa5af98c0832df4c32f6373a6b3682d6bd8c7986dec0ed7eb
+```
 
-Elle pourra notamment servir à :
+L’export complet réalisé avec l’image 0.96.6 a également été vérifié :
 
-- reproduire l’environnement OCR validé ;
+- vidéo HEVC ;
+- piste audio française ;
+- piste audio en version originale ;
+- sous-titres français au format SubRip ;
+- workspace supprimé après le succès ;
+- résultat validé par visionnage.
 
-- comparer le résultat d’une installation locale candidate ;
-- diagnostiquer une régression après une mise à jour ;
-- préparer un éventuel déploiement sur une autre machine ;
-- revenir temporairement à une chaîne connue.
-
-La conservation de l’image ne dispense pas de documenter :
-
-- son image de base ;
-
-- les versions des logiciels intégrés ;
-- les fichiers linguistiques utilisés ;
-- sa recette de construction ;
-- son empreinte immuable ;
-- le test d’acceptation associé.
-
-Le résultat attendu de l’installation locale et celui de l’image de référence doivent être fonctionnellement équivalents.
-
-Les différences éventuelles devront être examinées avant qu’une nouvelle version ne remplace la référence.
+Une nouvelle image ne doit remplacer la version courante qu’après ces mêmes contrôles
 
 ## Principes de conception
 
@@ -159,20 +199,37 @@ Cette proximité limite les transferts réseau et évite de rendre le pipeline d
 
 La construction d’un projet, la demande d’un export et l’exécution du traitement constituent des responsabilités distinctes.
 
-À terme, `vidb` pourra demander un export sans devoir exécuter directement FFmpeg, MLT ou CCExtractor.  Le worker de `video_encoder` restera responsable des traitements audiovisuels.
+À terme, `vidb` pourra demander un export sans devoir exécuter directement
+FFmpeg, MLT ou CCExtractor. Le worker de `video_encoder` restera responsable
+des traitements audiovisuels.
 
 ### Dépendances explicites
+Les chemins des exécutables externes et les paramètres propres à
+l’environnement doivent rester configurables.
 
-Les chemins des exécutables externes et les paramètres propres à l’environnement doivent rester configurables. `video_encoder` ne doit pas présumer :
+Le cœur de `video_encoder` ne dépend pas directement de Docker : il appelle
+l’exécutable défini par `CCEXTRACTOR_EXECUTABLE`. Le lanceur fourni par le
+projet utilise Docker, mais un autre adaptateur respectant la même interface
+pourrait lui être substitué.
 
-* que CCExtractor est installé dans un emplacement système particulier ;
-* que l’application qui demande l’export réside sur la même machine ;
-* que les médias sont accessibles par le même chemin sur toutes les machines ;
-* qu’un moteur de conteneurs est disponible.
+`video_encoder` ne doit pas présumer :
+
+- que CCExtractor est installé dans un emplacement système particulier ;
+- que l’application qui demande l’export réside sur la même machine ;
+- que les médias sont accessibles par le même chemin sur toutes les machines.
+
+Lorsque `bin/video_encoder_ccextractor` est utilisé, Docker et l’image
+CCExtractor configurée deviennent des dépendances explicites de cet adaptateur.
 
 ### Déploiement local par défaut
 
-L’architecture locale constitue le mode de fonctionnement de référence tant qu’une distribution des services n’apporte pas un bénéfice démontré.
+L’architecture exécutée sur une seule machine constitue le mode de
+fonctionnement de référence tant qu’une distribution des services n’apporte
+pas un bénéfice démontré.
+
+Ce choix reste compatible avec l’utilisation d’un conteneur local et éphémère
+pour CCExtractor : il ne crée ni worker distant ni transfert réseau des
+médias.
 
 Une évolution vers plusieurs machines devra répondre à un besoin concret, par exemple :
 
@@ -201,7 +258,7 @@ L’architecture permet plusieurs évolutions sans les imposer dès maintenant.
 
 ### Intégration avec `vidb`
 
- `vidb` pourra devenir le point d’entrée permettant :
+`vidb` pourra devenir le point d’entrée permettant :
 
 * de construire ou sélectionner un projet de montage ;
 * de demander son export ;
@@ -238,7 +295,15 @@ Son choix technologique reste indépendant de l’architecture interne de `video
 
 ### Conteneurisation
 
-Les composants pourront être conteneurisés si leur déplacement ou leur isolement le justifie. La conteneurisation demeure un moyen de distribution possible et non un principe imposé à toute l’architecture.
+La conteneurisation de CCExtractor est désormais retenue comme mode de
+distribution de référence pour la chaîne OCR française.
+
+Cette décision ne s’étend pas automatiquement aux autres composants.
+`video_encoder`, FFmpeg, MLT et l’accès aux médias restent exécutés directement
+sur le poste de traitement.
+
+D’autres composants pourront être conteneurisés ultérieurement si leur
+déplacement, leur isolation ou leur déploiement le justifie.
 
 ## Décisions différées
 
@@ -249,9 +314,8 @@ Les décisions suivantes sont volontairement reportées :
 * le protocole entre `vidb` et un worker distant ;
 * l’utilisation éventuelle du Synology pour des services applicatifs ;
 * le choix d’un futur serveur vidéo ;
-* la technologie du poste de lecture ;
-* le format définitif de distribution de CCExtractor ;
-* la conteneurisation éventuelle des différents composants.
+* la technologie du poste de lecture,
+* la conteneurisation éventuelle de composants autres que CCExtractor.
 
 Ces décisions seront prises à partir de besoins observés et de tests sur les machines réellement ciblées.
 

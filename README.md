@@ -60,15 +60,18 @@ graphique sans dépendre des scripts expérimentaux.
 - `melt-7` pour les exports de montage ;
 - une prise en charge NVENC pour le profil d’encodage fourni.
 
-La conversion facultative des sous-titres DVB nécessite également :
+La conversion facultative des sous-titres DVB nécessite également Docker.
+Le projet fournit une image dédiée contenant :
 
 - CCExtractor avec prise en charge OCR ;
 - Tesseract ;
 - les données linguistiques françaises de Tesseract.
 
-L’exécutable CCExtractor peut être installé sur le système ou fourni par un adaptateur, par exemple un lanceur utilisant une image Docker.
+Seul CCExtractor est exécuté dans ce conteneur. FFmpeg, FFprobe, MLT et
+`video_encoder` restent exécutés directement sur la machine hôte.
 
-L’installation actuelle et les possibilités de déploiement futur sont décrites dans la [documentation d’architecture](docs/architecture/deployment.md).
+La construction et les possibilités de déploiement futur sont décrites dans
+la [documentation d’architecture](docs/architecture/deployment.md).
 
 ## Installation
 
@@ -78,12 +81,18 @@ cd video_encoder
 bundle install
 ```
 
-Adapte ensuite `config/video_encoder.yml` à ton environnement, notamment :
+Pour activer la conversion des sous-titres DVB, construis l’image CCExtractor
+validée :
 
-- le chemin de la base SQLite ;
-- la racine de la médiathèque ;
-- les répertoires de travail ;
-- le profil FFmpeg.
+```bash
+bin/build_ccextractor_image 0.96.6
+```
+
+Cette commande produit l’image locale :
+
+```text
+video-encoder-ccextractor:0.96.6-ocr-fra
+```
 
 ## Utilisation de la CLI
 
@@ -111,22 +120,40 @@ continue à traiter la file jusqu’à son interruption.
 ### Exporter un projet de montage
 
 La commande `export` charge un projet persistant, sonde ses sources avec
-FFprobe, sélectionne les pistes disponibles puis exécute l’export complet :
+FFprobe, sélectionne les pistes disponibles puis exécute l’export complet.
+
+Pour utiliser l’image CCExtractor fournie par le projet :
 
 ```bash
-bin/video_encoder export projet.json --output montage.mkv
+CCEXTRACTOR_EXECUTABLE="$PWD/bin/video_encoder_ccextractor" \
+  bin/video_encoder export projet.json --output montage.mkv
 ```
 
 Le workspace est créé à côté du fichier de sortie. Pour un fichier
-`montage.mkv`, son nom est `video_encoder_montage_workspace`.
+`montage.mkv`, son nom est `video_encoder_montage_workspace`. Il est supprimé
+après un export réussi et conservé lorsqu’une erreur interrompt le traitement.
 
-Le chemin de **CCExtractor** peut être fourni avec la variable d’environnement
-`CCEXTRACTOR_EXECUTABLE` :
+Le lanceur CCExtractor démarre un conteneur éphémère sans accès réseau, monte
+uniquement le workspace nécessaire et le supprime à la fin du traitement.
+
+Pour comparer les résultats avec la version précédente ou effectuer un retour
+arrière, construis d’abord cette version :
 
 ```bash
-CCEXTRACTOR_EXECUTABLE=/chemin/vers/ccextractor \
+bin/build_ccextractor_image 0.96.5
+```
+
+puis sélectionne son image explicitement :
+
+```bash
+VIDEO_ENCODER_CCEXTRACTOR_IMAGE=\
+video-encoder-ccextractor:0.96.5-ocr-fra \
+CCEXTRACTOR_EXECUTABLE="$PWD/bin/video_encoder_ccextractor" \
   bin/video_encoder export projet.json --output montage.mkv
 ```
+
+Un autre exécutable compatible peut également être fourni directement avec
+`CCEXTRACTOR_EXECUTABLE`.
 
 Avant de démarrer un traitement, la CLI vérifie les dépendances externes
 nécessaires à la commande :
@@ -168,8 +195,8 @@ Une même source réutilisée dans plusieurs segments n’est sondée qu’une f
 
 ## Contrôle qualité
 
-Le contrôle standard vérifie les dépendances Ruby, RuboCop et les tests
-unitaires :
+Le contrôle standard vérifie les dépendances Ruby, la syntaxe des scripts
+shell, RuboCop et les tests unitaires :
 
 ```bash
 bin/check
@@ -208,6 +235,9 @@ utilisateur reste à réaliser.
 
 Deux précisions importantes :
 
-- la phrase sur l’OCR « facultatif » décrit la capacité technique ; l’encodage historique peut fonctionner sans CCExtractor ;
-
-- Docker n’est pas présenté comme une dépendance d’exécution obligatoire : il constitue actuellement un moyen pratique de fournir CCExtractor avec Tesseract français.
+- l’OCR est nécessaire aux exports qui convertissent des sous-titres DVB,
+  tandis que le pipeline historique d’encodage peut fonctionner sans
+  CCExtractor ;
+- Docker est requis lorsque le lanceur `bin/video_encoder_ccextractor` est
+  utilisé, mais le cœur de l’application continue d’accepter tout exécutable
+  compatible configuré avec `CCEXTRACTOR_EXECUTABLE`.

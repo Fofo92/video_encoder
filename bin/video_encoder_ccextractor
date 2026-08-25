@@ -1,0 +1,59 @@
+#!/bin/sh
+
+set -eu
+
+readonly DEFAULT_IMAGE='video-encoder-ccextractor:0.96.6-ocr-fra'
+
+image=${VIDEO_ENCODER_CCEXTRACTOR_IMAGE:-$DEFAULT_IMAGE}
+workspace=${VIDEO_ENCODER_WORKSPACE:-}
+
+if [ -z "$workspace" ]; then
+  output_expected=false
+
+  for argument do
+    if [ "$output_expected" = true ]; then
+      workspace=$(dirname "$argument")
+      break
+    fi
+
+    if [ "$argument" = '-o' ]; then
+      output_expected=true
+    fi
+  done
+fi
+
+if [ -z "$workspace" ]; then
+  exec docker run \
+    --rm \
+    --network none \
+    "$image" \
+    "$@"
+fi
+
+case "$workspace" in
+/*)
+  ;;
+*)
+  printf \
+    'CCExtractor workspace must be an absolute path: %s\n' \
+    "$workspace" \
+    >&2
+  exit 2
+  ;;
+esac
+
+if [ ! -d "$workspace" ]; then
+  printf \
+    'CCExtractor workspace does not exist: %s\n' \
+    "$workspace" \
+    >&2
+  exit 2
+fi
+
+exec docker run \
+  --rm \
+  --network none \
+  --user "$(id -u):$(id -g)" \
+  --volume "$workspace:$workspace" \
+  "$image" \
+  "$@"
