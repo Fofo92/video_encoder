@@ -5,3 +5,4 @@
 *.mka
 !spec/fixtures/**/*.mkv
 !spec/fixtures/**/*.mka
+/video_encoder.db

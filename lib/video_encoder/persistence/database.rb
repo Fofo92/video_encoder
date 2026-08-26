@@ -2,12 +2,23 @@
 
 require 'sequel'
 
+Sequel.extension :migration
+
 module VideoEncoder
   module Persistence
-    # Database persistence adapter using Sequel and SQLite.
+    # Opens the database and applies pending schema migrations.
     class Database
+      MIGRATIONS_PATH = File.expand_path(
+        '../../../db/migrations',
+        __dir__
+      ).freeze
+
       def self.connect(path = 'video_encoder.db')
-        @connection ||= Sequel.sqlite(path)
+        database = Sequel.sqlite(path)
+
+        Sequel::Migrator.run(database, MIGRATIONS_PATH)
+
+        database
       end
     end
   end

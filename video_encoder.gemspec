@@ -8,7 +8,8 @@ Gem::Specification.new do |spec|
   spec.summary       = 'Video encoding pipeline'
   spec.authors       = ['Pascal Fodiman']
 
-  spec.files         = Dir['lib/**/*.rb'] + ['bin/video_encoder']
+  spec.files = Dir['lib/**/*.rb', 'db/migrations/**/*.rb'] + ['bin/video_encoder']
+
   spec.bindir        = 'bin'
   spec.executables   = ['video_encoder']
 
