@@ -34,6 +34,7 @@ require_relative 'video_encoder/watcher'
 require_relative 'video_encoder/verifier'
 require_relative 'video_encoder/workspace'
 require_relative 'video_encoder/external_dependency_checker'
+require_relative 'video_encoder/external_command_probe'
 
 require_relative 'video_encoder/media'
 require_relative 'video_encoder/track'

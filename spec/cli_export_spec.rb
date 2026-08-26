@@ -9,8 +9,13 @@ RSpec.describe VideoEncoder::CLI do
       instance_double(VideoEncoder::ExternalDependencyChecker)
     end
 
+    let(:command_probe) do
+      instance_double(VideoEncoder::ExternalCommandProbe)
+    end
+
     before do
       allow(dependency_checker).to receive(:call)
+      allow(command_probe).to receive(:call)
     end
 
     it 'exports a persisted trim project' do
@@ -26,7 +31,8 @@ RSpec.describe VideoEncoder::CLI do
           '/exports/movie.mkv'
         ],
         trim_export_service: service,
-        dependency_checker: dependency_checker
+        dependency_checker: dependency_checker,
+        command_probe: command_probe
       )
 
       cli.run
@@ -64,7 +70,8 @@ RSpec.describe VideoEncoder::CLI do
           '--output',
           '/exports/movie.mkv'
         ],
-        dependency_checker: dependency_checker
+        dependency_checker: dependency_checker,
+        command_probe: command_probe
       )
 
       cli.run
@@ -91,7 +98,8 @@ RSpec.describe VideoEncoder::CLI do
           '/exports/movie.mkv'
         ],
         trim_export_service: service,
-        dependency_checker: dependency_checker
+        dependency_checker: dependency_checker,
+        command_probe: command_probe
       )
 
       cli.run
@@ -101,6 +109,10 @@ RSpec.describe VideoEncoder::CLI do
         'ffprobe',
         'melt-7',
         'ccextractor'
+      )
+      expect(command_probe).to have_received(:call).with(
+        'ccextractor',
+        '--version'
       )
     end
 
@@ -120,7 +132,8 @@ RSpec.describe VideoEncoder::CLI do
           '/exports/movie.mkv'
         ],
         trim_export_service: service,
-        dependency_checker: dependency_checker
+        dependency_checker: dependency_checker,
+        command_probe: command_probe
       )
 
       cli.run
@@ -131,12 +144,47 @@ RSpec.describe VideoEncoder::CLI do
         'melt-7',
         '/tmp/video_encoder_ccextractor'
       )
+      expect(command_probe).to have_received(:call).with(
+        '/tmp/video_encoder_ccextractor',
+        '--version'
+      )
     ensure
       if previous_executable
         ENV['CCEXTRACTOR_EXECUTABLE'] = previous_executable
       else
         ENV.delete('CCEXTRACTOR_EXECUTABLE')
       end
+    end
+
+    it 'does not create the workspace when CCExtractor is unavailable' do
+      allow(command_probe).to receive(:call)
+        .with('ccextractor', '--version')
+        .and_raise(
+          VideoEncoder::MissingExternalDependenciesError,
+          'external dependency unavailable: ccextractor'
+        )
+
+      allow(FileUtils).to receive(:mkdir_p)
+
+      cli = described_class.new(
+        [
+          'export',
+          '/projects/movie.json',
+          '--output',
+          '/exports/movie.mkv'
+        ],
+        dependency_checker: dependency_checker,
+        command_probe: command_probe
+      )
+
+      expect do
+        cli.run
+      end.to raise_error(
+        VideoEncoder::MissingExternalDependenciesError,
+        'external dependency unavailable: ccextractor'
+      )
+
+      expect(FileUtils).not_to have_received(:mkdir_p)
     end
   end
 end

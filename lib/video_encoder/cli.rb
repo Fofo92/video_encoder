@@ -33,28 +33,28 @@ module VideoEncoder
       argv,
       config: VideoEncoder::Config.load,
       trim_export_service: nil,
-      dependency_checker: ExternalDependencyChecker.new
+      dependency_checker: ExternalDependencyChecker.new,
+      command_probe: ExternalCommandProbe.new
     )
       @argv = argv
       @config = config
       @trim_export_service = trim_export_service
       @dependency_checker = dependency_checker
+      @command_probe = command_probe
     end
 
     def run
       handler = COMMANDS[@argv.shift]
 
-      unless handler
-        puts usage
-        exit 1
-      end
+      return __send__(handler) if handler
 
-      __send__(handler)
+      puts usage
+      exit 1
     end
 
     private
 
-    attr_reader :dependency_checker
+    attr_reader :dependency_checker, :command_probe
 
     def print_version
       puts VideoEncoder::VERSION
@@ -64,7 +64,8 @@ module VideoEncoder
       ExportCommand.new(
         argv: @argv,
         service: @trim_export_service,
-        dependency_checker: @dependency_checker
+        dependency_checker: @dependency_checker,
+        command_probe: command_probe
       ).run
     end
 

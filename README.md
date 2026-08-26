@@ -133,8 +133,15 @@ Le workspace est créé à côté du fichier de sortie. Pour un fichier
 `montage.mkv`, son nom est `video_encoder_montage_workspace`. Il est supprimé
 après un export réussi et conservé lorsqu’une erreur interrompt le traitement.
 
-Le lanceur CCExtractor démarre un conteneur éphémère sans accès réseau, monte
-uniquement le workspace nécessaire et le supprime à la fin du traitement.
+Avant de créer le workspace, la CLI exécute CCExtractor avec `--version`. Avec
+le lanceur fourni, cette sonde vérifie que Docker fonctionne et que l’image
+configurée peut démarrer. En cas d’échec, l’export s’arrête sans créer de média
+ni de workspace.
+
+Le lanceur CCExtractor démarre ensuite un conteneur éphémère sans accès réseau,
+monte uniquement le workspace nécessaire et le supprime à la fin du traitement.
+L’option Docker `--pull never` interdit le téléchargement implicite d’une image
+absente.
 
 Pour comparer les résultats avec la version précédente ou effectuer un retour
 arrière, construis d’abord cette version :
@@ -160,8 +167,8 @@ nécessaires à la commande :
 
 - `run` vérifie la présence de `ffmpeg` et `ffprobe` lorsque l’encodeur FFmpeg
   est configuré ;
-- `export` vérifie `ffmpeg`, `ffprobe`, `melt-7` et l’exécutable CCExtractor
-  configuré.
+- ``export` vérifie `ffmpeg`, `ffprobe`, `melt-7` et l’exécutable CCExtractor
+    configuré, puis s’assure que ce dernier peut être exécuté avec `--version`.
 
 Si une dépendance manque, la commande s’arrête avec un code de sortie non nul
 avant de créer le workspace ou de lancer un traitement externe. Les commandes

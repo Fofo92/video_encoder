@@ -25,6 +25,7 @@ fi
 if [ -z "$workspace" ]; then
   exec docker run \
     --rm \
+    --pull never \
     --network none \
     "$image" \
     "$@"
@@ -52,6 +53,7 @@ fi
 
 exec docker run \
   --rm \
+  --pull never \
   --network none \
   --user "$(id -u):$(id -g)" \
   --volume "$workspace:$workspace" \

@@ -23,6 +23,8 @@ RSpec.describe 'bin/video_encoder_ccextractor' do
         [
           'run',
           '--rm',
+          '--pull',
+          'never',
           '--network',
           'none',
           'video-encoder-ccextractor:0.96.6-ocr-fra',
@@ -56,6 +58,8 @@ RSpec.describe 'bin/video_encoder_ccextractor' do
         [
           'run',
           '--rm',
+          '--pull',
+          'never',
           '--network',
           'none',
           '--user',
@@ -91,6 +95,22 @@ RSpec.describe 'bin/video_encoder_ccextractor' do
     end
   end
 
+  it 'propagates a Docker failure' do
+    with_fake_docker do |environment, _arguments_path|
+      environment['DOCKER_EXIT_STATUS'] = '125'
+      environment['DOCKER_ERROR'] = 'docker: image not found'
+
+      _stdout, stderr, status = Open3.capture3(
+        environment,
+        launcher,
+        '--version'
+      )
+
+      expect(status.exitstatus).to eq(125)
+      expect(stderr).to eq("docker: image not found\n")
+    end
+  end
+
   def with_fake_docker
     Dir.mktmpdir do |directory|
       arguments_path = File.join(directory, 'docker_arguments')
@@ -101,6 +121,11 @@ RSpec.describe 'bin/video_encoder_ccextractor' do
         <<~SH
           #!/bin/sh
           printf '%s\\n' "$@" > "$DOCKER_ARGUMENTS_PATH"
+          if [ -n "${DOCKER_ERROR:-}" ]; then
+            printf '%s\n' "$DOCKER_ERROR" >&2
+          fi
+
+          exit "${DOCKER_EXIT_STATUS:-0}"
         SH
       )
       File.chmod(0o755, docker_path)

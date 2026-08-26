@@ -132,19 +132,27 @@ Le lanceur `bin/video_encoder_ccextractor` adapte l’interface de l’exécutab
 Il exécute un conteneur éphémère :
 
 - sans accès réseau ;
+- sans téléchargement implicite d’image grâce à `--pull never` ;
 - avec l’identité de l’utilisateur courant ;
 - avec le seul workspace nécessaire monté dans le conteneur ;
 - avec suppression automatique du conteneur après son exécution.
 
-La CLI peut utiliser ce lanceur grâce à la variable  `CCEXTRACTOR_EXECUTABLE` :
+La CLI peut utiliser ce lanceur grâce à la variable `CCEXTRACTOR_EXECUTABLE` :
 
 ```shell
 CCEXTRACTOR_EXECUTABLE="$PWD/bin/video_encoder_ccextractor" \
   bin/video_encoder export projet.json --output montage.mkv
 ```
 
+Avant toute création du workspace, la CLI exécute l’exécutable configuré avec
+`--version`. Lorsque le lanceur Docker est utilisé, cette sonde vérifie à la
+fois la disponibilité du moteur Docker et la présence locale de l’image.
+
+Un échec produit un message explicite et un code de sortie non nul. Aucun média
+ni workspace n’est alors créé.
+
 Le chemin du workspace est normalement déduit de l’argument de sortie transmis à CCExtractor.
-La variable `VIDEO_ENCODER_WORKSPACE` reste acceptée pour les  usages qui doivent le fournir explicitement.
+La variable `VIDEO_ENCODER_WORKSPACE` reste acceptée pour les usages qui doivent le fournir explicitement.
 
 ### Changement de version et retour arrière
 
@@ -152,7 +160,7 @@ L’image utilisée par le lanceur peut être remplacée sans modifier le code :
 
 ```shell
 VIDEO_ENCODER_CCEXTRACTOR_IMAGE=\
-video-encoder-ccextractor:0.96.5-ocr-fra-reference \
+video-encoder-ccextractor:0.96.5-ocr-fra \
 CCEXTRACTOR_EXECUTABLE="$PWD/bin/video_encoder_ccextractor" \
   bin/video_encoder export projet.json --output montage.mkv
 ```

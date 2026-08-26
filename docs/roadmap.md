@@ -15,7 +15,10 @@ Les éléments suivants sont réalisés :
 - correction du numéro de version déclaré par le tag 0.96.6 ;
 - production d’images Docker versionnées ;
 - fourniture d’un lanceur compatible avec `CCEXTRACTOR_EXECUTABLE` ;
-- exécution du conteneur sans réseau et avec un montage limité au workspace ;
+- exécution du conteneur sans réseau, sans téléchargement implicite d’image et
+  avec un montage limité au workspace ;
+- vérification de Docker et de l’image configurée avant toute création de média
+  ou de workspace ;
 - possibilité de sélectionner une autre image pour les comparaisons et les
   retours arrière ;
 - tests automatisés du lanceur sans dépendre d’un démon Docker ;
@@ -28,8 +31,7 @@ L’image utilisée par défaut est :
 video-encoder-ccextractor:0.96.6-ocr-fra
 ```
 
-La version 0.96.5 reste disponible comme point de comparaison et solution de
- retour arrière.
+La version 0.96.5 reste disponible comme point de comparaison et solution de retour arrière.
 
 ## Évolutions possibles
 
