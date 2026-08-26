@@ -177,6 +177,10 @@ RSpec.describe VideoEncoder::CLI do
   describe 'run' do
     let(:worker) { instance_double(VideoEncoder::Worker) }
 
+    let(:dependency_checker) do
+      instance_double(VideoEncoder::ExternalDependencyChecker)
+    end
+
     before do
       allow(VideoEncoder::Worker)
         .to receive(:new)
@@ -184,10 +188,11 @@ RSpec.describe VideoEncoder::CLI do
 
       allow(worker).to receive(:run_once)
       allow(worker).to receive(:run)
+      allow(dependency_checker).to receive(:call)
     end
 
     it 'runs the worker once' do
-      cli = described_class.new(['run', '--once'])
+      cli = described_class.new(['run', '--once'], dependency_checker: dependency_checker)
 
       cli.run
 
@@ -196,7 +201,7 @@ RSpec.describe VideoEncoder::CLI do
     end
 
     it 'runs the worker in loop mode by default' do
-      cli = described_class.new(['run'])
+      cli = described_class.new(['run'], dependency_checker: dependency_checker)
 
       cli.run
 
