@@ -59,6 +59,12 @@ graphique sans dépendre des scripts expérimentaux.
 - SQLite 3 ;
 - `melt-7` pour les exports de montage ;
 - une prise en charge NVENC pour le profil d’encodage fourni.
+- Le moniteur graphique expérimental nécessite également :
+
+  - Python 3 ;
+  - les bindings Python de MLT ;
+  - PySide6 pour Qt 6 ;
+  - `python3-evdev` pour le ShuttleXpress.
 
 La conversion facultative des sous-titres DVB nécessite également Docker.
 Le projet fournit une image dédiée contenant :
@@ -81,8 +87,36 @@ cd video_encoder
 bundle install
 ```
 
-Pour activer la conversion des sous-titres DVB, construis l’image CCExtractor
-validée :
+Pour installer les dépendances de l’IHM sur Debian 13 :
+
+```bash
+sudo apt install \
+  python3-mlt \
+  python3-pyside6.qtcore \
+  python3-pyside6.qtgui \
+  python3-pyside6.qtwidgets \
+  python3-evdev
+```
+
+L’utilisation du ShuttleXpress nécessite une règle `udev` ciblée :
+
+```udev
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{idVendor}=="0b33", ATTRS{idProduct}=="0020", GROUP="plugdev", MODE="0660"
+```
+
+Cette règle peut être enregistrée dans :
+
+```text
+/etc/udev/rules.d/70-contour-shuttlexpress.rules
+```
+
+Recharger ensuite les règles, puis débrancher et rebrancher le périphérique :
+
+```bash
+sudo udevadm control --reload-rules
+```
+
+Pour activer la conversion des sous-titres DVB, construis l’image CCExtractor validée :
 
 ```bash
 bin/build_ccextractor_image 0.96.6
@@ -93,6 +127,42 @@ Cette commande produit l’image locale :
 ```text
 video-encoder-ccextractor:0.96.6-ocr-fra
 ```
+
+## Moniteur graphique expérimental
+
+Le moniteur Qt permet actuellement d’ouvrir un média depuis la ligne de commande :
+
+```bash
+bin/video_encoder_ui /chemin/vers/un-media.m2t
+```
+
+Il fournit :
+
+- une prévisualisation redimensionnable conservant le ratio de l’image ;
+- un slider cliquable avec scrubbing continu ;
+- un affichage du numéro d’image et du timecode ;
+- une navigation à la souris avec accélération ;
+- une navigation image par image avec la molette centrale du ShuttleXpress ;
+- une lecture avant sonore à vitesse normale ;
+- des lectures avant et arrière muettes jusqu’à ×50 ;
+- une pause lorsque la couronne du ShuttleXpress revient au centre.
+
+Le ShuttleXpress est réservé exclusivement par le moniteur pendant son
+exécution afin que sa couronne ne fasse pas défiler les autres applications.
+Il est libéré à la fermeture.
+
+Le premier mouvement de la molette centrale initialise son compteur circulaire
+et ne déplace pas encore l’image. Les mouvements suivants sont comptabilisés
+exactement, y compris lors d’une rotation rapide.
+
+Cette interface constitue encore un socle expérimental. La sélection graphique
+du fichier, les repères IN/OUT, la liste des segments conservés et le lancement
+de l’export seront ajoutés lors des prochaines étapes. Le moteur Ruby existant
+restera responsable de `Media`, `Segment`, `TrimProject` et de l’export final.
+
+Certaines sources MPEG-TS peuvent produire dans le terminal des avertissements
+de décodage H.264 concernant des images de référence manquantes. Ils proviennent
+de MLT/libavcodec et ne sont pas bloquants lorsque l’image et le son restent corrects.
 
 ## Utilisation de la CLI
 

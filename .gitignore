@@ -6,3 +6,5 @@
 !spec/fixtures/**/*.mkv
 !spec/fixtures/**/*.mka
 /video_encoder.db
+__pycache__/
+*.py[cod]

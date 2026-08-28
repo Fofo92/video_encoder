@@ -25,7 +25,14 @@ check_shell_syntax() {
     bin/build_ccextractor_image
 
   sh -n \
-    bin/video_encoder_ccextractor
+    bin/video_encoder_ccextractor \
+    bin/video_encoder_ui
+}
+
+check_python_syntax() {
+  python3 -m compileall \
+    -q \
+    ui/video_encoder_ui
 }
 
 run_integration_checks() {
@@ -44,6 +51,14 @@ printf '🐷  Rubychon inspecte video_encoder…\n'
 run_step \
   "Dépendances Ruby" \
   bundle check
+
+run_step \
+  "Syntaxe des scripts shell" \
+  check_shell_syntax
+
+run_step \
+  "Syntaxe de l’IHM Python" \
+  check_python_syntax
 
 run_step \
   "Analyse RuboCop" \

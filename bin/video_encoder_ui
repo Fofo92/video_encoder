@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+script_directory=$(
+  CDPATH= cd -- "$(dirname -- "$0")" &&
+    pwd
+)
+project_directory=$(
+  dirname -- "$script_directory"
+)
+
+if [ -n "${PYTHONPATH:-}" ]; then
+  application_python_path="\
+${project_directory}/ui:${PYTHONPATH}"
+else
+  application_python_path="${project_directory}/ui"
+fi
+
+export PYTHONPATH="$application_python_path"
+
+exec /usr/bin/python3 \
+  -m video_encoder_ui.application \
+  "$@"
