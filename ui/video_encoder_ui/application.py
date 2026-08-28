@@ -14,6 +14,7 @@ from .trim_session import (
     SourceReference,
     TrimSession,
 )
+from .segment_list import SegmentListWidget
 
 PREVIEW_WIDTH = 640
 PREVIEW_HEIGHT = 360
@@ -479,12 +480,22 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.position_label,
             stretch=0
         )
+        self.segment_list = SegmentListWidget()
+        self.segment_list.segment_selected.connect(
+            self.select_segment
+        )
+        self.segment_list.delete_requested.connect(
+            self.delete_segment
+        )
+        self.segment_list.setVisible(False)
+
 
         central_widget = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(central_widget)
         layout.addWidget(self.video_label, stretch=1)
         layout.addWidget(self.position_slider)
         layout.addLayout(controls_layout)
+        layout.addWidget(self.segment_list)
 
         self.setCentralWidget(central_widget)
 
@@ -822,6 +833,92 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             f"/{self.frame_source.length - 1}"
         )
 
+    def select_segment(self, index):
+        segments = self.trim_session.segments
+
+        if not 0 <= index < len(segments):
+            return
+
+        segment = segments[index]
+
+        if segment.source_id != self.source_id:
+            return
+
+        self.show_frame(
+            segment.start_frame
+        )
+
+    def delete_segment(self, index):
+        segments = self.trim_session.segments
+
+        if not 0 <= index < len(segments):
+            return
+
+        segment = segments[index]
+
+        answer = QtWidgets.QMessageBox.question(
+            self,
+            "Supprimer le segment",
+            "Supprimer le segment "
+            f"{index + 1} du montage ?",
+            (
+                QtWidgets.QMessageBox.StandardButton.Yes
+                | QtWidgets.QMessageBox.StandardButton.No
+            ),
+            QtWidgets.QMessageBox.StandardButton.No
+        )
+
+        if (
+            answer
+            != QtWidgets.QMessageBox.StandardButton.Yes
+        ):
+            return
+
+        self.trim_session.remove_segment(
+            segment
+        )
+        self.refresh_segment_list()
+
+    def refresh_segment_list(self):
+        segments = self.trim_session.segments
+
+        rows = [
+            (
+                index + 1,
+                segment.source_id,
+                self.timecode_for(
+                    segment.start_frame
+                ),
+                self.timecode_for(
+                    segment.end_frame
+                ),
+                self.timecode_for(
+                    segment.end_frame
+                    - segment.start_frame
+                    + 1
+                )
+            )
+            for index, segment in enumerate(segments)
+        ]
+
+        self.segment_list.set_rows(rows)
+        self.segment_list.setVisible(
+            bool(segments)
+        )
+
+        visible_segments = [
+            (
+                segment.start_frame,
+                segment.end_frame
+            )
+            for segment in segments
+            if segment.source_id == self.source_id
+        ]
+
+        self.position_slider.set_segments(
+            visible_segments
+        )
+
     def clear_active_markers(self):
         self.in_position = None
         self.out_position = None
@@ -873,18 +970,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             )
             return
 
-        visible_segments = [
-            (
-                item.start_frame,
-                item.end_frame
-            )
-            for item in self.trim_session.segments
-            if item.source_id == self.source_id
-        ]
-
-        self.position_slider.set_segments(
-            visible_segments
-        )
+        self.refresh_segment_list()
         self.clear_active_markers()
 
     def set_in_marker(self):
