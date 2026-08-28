@@ -1,0 +1,28 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'json'
+require_relative '../lib/video_encoder'
+
+begin
+  loader = VideoEncoder::TrimSessionLoader.new(
+    media_probe: VideoEncoder::MediaProbe.new
+  )
+
+  converter = VideoEncoder::ConvertTrimSession.new(
+    loader: loader,
+    serializer: VideoEncoder::TrimProjectSerializer.new
+  )
+
+  puts converter.call($stdin.read)
+rescue StandardError => e
+  warn(
+    JSON.generate(
+      error: {
+        type: e.class.name,
+        message: e.message
+      }
+    )
+  )
+  exit 1
+end
