@@ -50,6 +50,10 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
 
         self.current_position = 0
         self.pending_position = 0
+
+        self.in_position = None
+        self.out_position = None
+
         self.previous_wheel_event_timestamp = None
         self.pending_wheel_position = 0
         self.horizontal_wheel_remainder = 0
@@ -161,6 +165,49 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.forward_button = QtWidgets.QPushButton()
         self.forward_button.clicked.connect(
             self.accelerate_forward
+        )
+
+        self.in_button = QtWidgets.QPushButton("IN")
+        self.in_button.clicked.connect(
+            self.set_in_marker
+        )
+        self.in_button.setToolTip(
+            "Poser le repère IN sur l’image courante (I)"
+        )
+        self.in_button.setFixedSize(36, 30)
+
+        self.out_button = QtWidgets.QPushButton("OUT")
+        self.out_button.clicked.connect(
+            self.set_out_marker
+        )
+        self.out_button.setToolTip(
+            "Poser le repère OUT sur l’image courante (O)"
+        )
+        self.out_button.setFixedSize(42, 30)
+
+        marker_button_stylesheet = """
+            QPushButton {
+                border: 1px solid palette(mid);
+                border-radius: 6px;
+                background: palette(button);
+                font-weight: 600;
+                padding: 0 4px;
+            }
+
+            QPushButton:hover {
+                background: palette(light);
+            }
+
+            QPushButton:pressed {
+                background: palette(midlight);
+            }
+        """
+
+        self.in_button.setStyleSheet(
+            marker_button_stylesheet
+        )
+        self.out_button.setStyleSheet(
+            marker_button_stylesheet
         )
 
         def configure_icon_button(
@@ -318,9 +365,51 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         markers_separator = create_vertical_separator()
         information_separator = create_vertical_separator()
 
-        markers_placeholder = QtWidgets.QWidget()
-        markers_placeholder.setMinimumWidth(140)
-        markers_placeholder.setSizePolicy(
+        def create_marker_label(tooltip):
+            label = QtWidgets.QLabel("--:--:--:--")
+            label.setAlignment(
+                QtCore.Qt.AlignmentFlag.AlignCenter
+            )
+            label.setFixedSize(94, 30)
+            label.setToolTip(tooltip)
+            label.setStyleSheet(
+                """
+                QLabel {
+                    border-top: 1px solid palette(dark);
+                    border-left: 1px solid palette(dark);
+                    border-right: 1px solid palette(light);
+                    border-bottom: 1px solid palette(light);
+                    border-radius: 6px;
+                    background: palette(alternate-base);
+                    color: palette(text);
+                    font-family: monospace;
+                    padding: 0 4px;
+                }
+                """
+            )
+            return label
+
+
+        self.in_marker_label = create_marker_label(
+            "Repère IN non défini"
+        )
+        self.out_marker_label = create_marker_label(
+            "Repère OUT non défini"
+        )
+
+        markers_widget = QtWidgets.QWidget()
+        markers_layout = QtWidgets.QHBoxLayout(
+            markers_widget
+        )
+        markers_layout.setContentsMargins(0, 0, 0, 0)
+        markers_layout.setSpacing(4)
+        markers_layout.addWidget(self.in_button)
+        markers_layout.addWidget(self.in_marker_label)
+        markers_layout.addSpacing(6)
+        markers_layout.addWidget(self.out_button)
+        markers_layout.addWidget(self.out_marker_label)
+
+        markers_widget.setSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding,
             QtWidgets.QSizePolicy.Policy.Preferred
         )
@@ -346,8 +435,8 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             markers_separator
         )
         controls_layout.addWidget(
-            markers_placeholder,
-            stretch=1
+            markers_widget,
+            stretch=0
         )
 
         controls_layout.addWidget(
@@ -700,12 +789,69 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             f"/{self.frame_source.length - 1}"
         )
 
+    def set_in_marker(self):
+        position = self.current_position
+
+        if (
+            self.out_position is not None
+            and position > self.out_position
+        ):
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Repère IN invalide",
+                "Le repère IN ne peut pas être "
+                "placé après le repère OUT."
+            )
+            return
+
+        self.in_position = position
+        self.position_slider.set_markers(
+            self.in_position,
+            self.out_position
+        )
+        timecode = self.timecode_for(position)
+
+        self.in_marker_label.setText(timecode)
+        self.in_marker_label.setToolTip(
+            f"IN : image {position}"
+        )
+
+    def set_out_marker(self):
+        position = self.current_position
+
+        if (
+            self.in_position is not None
+            and position < self.in_position
+        ):
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Repère OUT invalide",
+                "Le repère OUT ne peut pas être "
+                "placé avant le repère IN."
+            )
+            return
+
+        self.out_position = position
+        self.position_slider.set_markers(
+            self.in_position,
+            self.out_position
+        )
+
+        timecode = self.timecode_for(position)
+
+        self.out_marker_label.setText(timecode)
+        self.out_marker_label.setToolTip(
+            f"OUT : image {position}"
+        )
+
     def keyPressEvent(self, event):
         if event.isAutoRepeat():
             event.accept()
             return
 
         actions = {
+            QtCore.Qt.Key.Key_I: self.set_in_marker,
+            QtCore.Qt.Key.Key_O: self.set_out_marker,
             QtCore.Qt.Key.Key_J: self.accelerate_backward,
             QtCore.Qt.Key.Key_K: self.pause_transport,
             QtCore.Qt.Key.Key_L: self.accelerate_forward
