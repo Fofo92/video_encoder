@@ -47,12 +47,17 @@ class ClickableSlider(QtWidgets.QSlider):
         self.jump_drag_active = False
         self.in_position = None
         self.out_position = None
+        self.segments = ()
         self.setMinimumHeight(34)
 
 
     def set_markers(self, in_position, out_position):
         self.in_position = in_position
         self.out_position = out_position
+        self.update()
+
+    def set_segments(self, segments):
+        self.segments = tuple(segments)
         self.update()
 
     def pixel_for_value(self, value):
@@ -71,7 +76,8 @@ class ClickableSlider(QtWidgets.QSlider):
         super().paintEvent(event)
 
         if (
-            self.in_position is None
+            not self.segments
+            and self.in_position is None
             and self.out_position is None
         ):
             return
@@ -91,55 +97,80 @@ class ClickableSlider(QtWidgets.QSlider):
             QtGui.QPainter.RenderHint.Antialiasing
         )
 
-        if (
-            self.in_position is not None
-            and self.out_position is not None
+        def draw_range(
+            start_position,
+            end_position,
+            color
         ):
-            in_x = self.pixel_for_value(
-                self.in_position
+            start_x = self.pixel_for_value(
+                start_position
             )
-            out_x = self.pixel_for_value(
-                self.out_position
-            )
-
-            selection_color = QtGui.QColor(
-                46,
-                160,
-                67,
-                150
+            end_x = self.pixel_for_value(
+                end_position
             )
 
             selection_rectangle = QtCore.QRectF(
-                min(in_x, out_x),
+                min(start_x, end_x),
                 groove.center().y() - 4,
-                max(2, abs(out_x - in_x)),
+                max(2, abs(end_x - start_x)),
                 8
             )
 
-            painter.setPen(QtCore.Qt.PenStyle.NoPen)
-            painter.setBrush(selection_color)
+            painter.setPen(
+                QtCore.Qt.PenStyle.NoPen
+            )
+            painter.setBrush(color)
             painter.drawRoundedRect(
                 selection_rectangle,
                 3,
                 3
             )
 
-        def draw_marker(position, color):
+        for start_position, end_position in self.segments:
+            draw_range(
+                start_position,
+                end_position,
+                QtGui.QColor(
+                    46,
+                    160,
+                    67,
+                    190
+                )
+            )
+
+        if (
+            self.in_position is not None
+            and self.out_position is not None
+        ):
+            draw_range(
+                self.in_position,
+                self.out_position,
+                QtGui.QColor(
+                    46,
+                    160,
+                    67,
+                    100
+                )
+            )
+
+        def draw_marker(position):
             if position is None:
                 return
 
-            marker_x = self.pixel_for_value(position)
+            marker_x = self.pixel_for_value(
+                position
+            )
             marker_tip_y = groove.top()
             marker_base_y = marker_tip_y - 12
 
             triangle = QtGui.QPolygonF(
                 [
                     QtCore.QPointF(
-                        marker_x - 6,
+                        marker_x - 9,
                         marker_base_y
                     ),
                     QtCore.QPointF(
-                        marker_x + 6,
+                        marker_x + 9,
                         marker_base_y
                     ),
                     QtCore.QPointF(
@@ -149,25 +180,20 @@ class ClickableSlider(QtWidgets.QSlider):
                 ]
             )
 
-            painter.setPen(
-                QtGui.QPen(color, 1)
+            marker_color = QtGui.QColor(
+                210,
+                70,
+                60
             )
-            painter.setBrush(color)
-            painter.drawPolygon(triangle)
-        marker_color = QtGui.QColor(
-            210,
-            70,
-            60
-        )
 
-        draw_marker(
-            self.in_position,
-            marker_color
-        )
-        draw_marker(
-            self.out_position,
-            marker_color
-        )
+            painter.setPen(
+                QtGui.QPen(marker_color, 1)
+            )
+            painter.setBrush(marker_color)
+            painter.drawPolygon(triangle)
+
+        draw_marker(self.in_position)
+        draw_marker(self.out_position)
 
         handle_option = QtWidgets.QStyleOptionSlider()
         self.initStyleOption(handle_option)

@@ -9,6 +9,11 @@ from .shuttle_xpress import ShuttleXpressReader
 from .widgets import ClickableSlider, VideoLabel
 from .mlt_frame_source import MltFrameSource
 from .mlt_audio_player import MltAudioPlayer
+from .trim_session import (
+    SegmentSelection,
+    SourceReference,
+    TrimSession,
+)
 
 PREVIEW_WIDTH = 640
 PREVIEW_HEIGHT = 360
@@ -34,6 +39,15 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         super().__init__()
 
         self.source_path = source_path
+
+        self.source_id = "source"
+        self.trim_session = TrimSession()
+        self.trim_session.add_source(
+            SourceReference(
+                identifier=self.source_id,
+                path=source_path
+            )
+        )
 
         self.frame_source = MltFrameSource(
             source_path,
@@ -185,6 +199,16 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
         self.out_button.setFixedSize(42, 30)
 
+        self.add_segment_button = QtWidgets.QPushButton("+")
+        self.add_segment_button.clicked.connect(
+            self.add_current_segment
+        )
+        self.add_segment_button.setToolTip(
+            "Ajouter la plage IN/OUT au montage (Entrée)"
+        )
+        self.add_segment_button.setFixedSize(32, 30)
+
+
         marker_button_stylesheet = """
             QPushButton {
                 border: 1px solid palette(mid);
@@ -207,6 +231,10 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             marker_button_stylesheet
         )
         self.out_button.setStyleSheet(
+            marker_button_stylesheet
+        )
+
+        self.add_segment_button.setStyleSheet(
             marker_button_stylesheet
         )
 
@@ -408,9 +436,13 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         markers_layout.addSpacing(6)
         markers_layout.addWidget(self.out_button)
         markers_layout.addWidget(self.out_marker_label)
+        markers_layout.addSpacing(6)
+        markers_layout.addWidget(
+            self.add_segment_button
+        )
 
         markers_widget.setSizePolicy(
-            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Fixed,
             QtWidgets.QSizePolicy.Policy.Preferred
         )
 
@@ -438,6 +470,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             markers_widget,
             stretch=0
         )
+        controls_layout.addStretch(1)
 
         controls_layout.addWidget(
             information_separator
@@ -789,6 +822,71 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             f"/{self.frame_source.length - 1}"
         )
 
+    def clear_active_markers(self):
+        self.in_position = None
+        self.out_position = None
+
+        self.in_marker_label.setText(
+            "--:--:--:--"
+        )
+        self.in_marker_label.setToolTip(
+            "Repère IN non défini"
+        )
+
+        self.out_marker_label.setText(
+            "--:--:--:--"
+        )
+        self.out_marker_label.setToolTip(
+            "Repère OUT non défini"
+        )
+
+        self.position_slider.set_markers(
+            None,
+            None
+        )
+
+    def add_current_segment(self):
+        if (
+            self.in_position is None
+            or self.out_position is None
+        ):
+            QtWidgets.QMessageBox.information(
+                self,
+                "Segment incomplet",
+                "Pose les repères IN et OUT "
+                "avant d’ajouter le segment."
+            )
+            return
+
+        try:
+            segment = SegmentSelection(
+                source_id=self.source_id,
+                start_frame=self.in_position,
+                end_frame=self.out_position
+            )
+            self.trim_session.add_segment(segment)
+        except ValueError as error:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Segment invalide",
+                str(error)
+            )
+            return
+
+        visible_segments = [
+            (
+                item.start_frame,
+                item.end_frame
+            )
+            for item in self.trim_session.segments
+            if item.source_id == self.source_id
+        ]
+
+        self.position_slider.set_segments(
+            visible_segments
+        )
+        self.clear_active_markers()
+
     def set_in_marker(self):
         position = self.current_position
 
@@ -852,6 +950,8 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         actions = {
             QtCore.Qt.Key.Key_I: self.set_in_marker,
             QtCore.Qt.Key.Key_O: self.set_out_marker,
+            QtCore.Qt.Key.Key_Return: self.add_current_segment,
+            QtCore.Qt.Key.Key_Enter: self.add_current_segment,
             QtCore.Qt.Key.Key_J: self.accelerate_backward,
             QtCore.Qt.Key.Key_K: self.pause_transport,
             QtCore.Qt.Key.Key_L: self.accelerate_forward

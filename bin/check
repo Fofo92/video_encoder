@@ -35,6 +35,13 @@ check_python_syntax() {
     ui/video_encoder_ui
 }
 
+run_python_unit_tests() {
+  PYTHONPATH="$PROJECT_ROOT/ui" \
+    python3 -m unittest discover \
+      -s ui/tests \
+      -p 'test_*.py'
+}
+
 run_integration_checks() {
   if ! command -v melt-7 >/dev/null 2>&1; then
     printf '\n⚠️  Tests d’intégration ignorés : melt-7 est introuvable.\n'
@@ -61,11 +68,15 @@ run_step \
   check_python_syntax
 
 run_step \
+  "Tests unitaires Python" \
+  run_python_unit_tests
+
+run_step \
   "Analyse RuboCop" \
   bundle exec rubocop
 
 run_step \
-  "Tests unitaires" \
+  "Tests unitaires Ruby" \
   bundle exec rspec --tag '~integration'
 
 case "${1:-}" in
