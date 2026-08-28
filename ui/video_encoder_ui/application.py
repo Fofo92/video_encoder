@@ -68,6 +68,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.show_pending_frame
         )
 
+        self.transport_position = 0
         self.transport_speed = 0.0
         self.transport_frame_remainder = 0.0
 
@@ -110,41 +111,258 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
 
         self.position_label = QtWidgets.QLabel()
         self.position_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
+            QtCore.Qt.AlignmentFlag.AlignVCenter
+            | QtCore.Qt.AlignmentFlag.AlignRight
         )
-
-        self.shuttle_label = QtWidgets.QLabel(
-            "Transport : pause"
+        self.position_label.setMinimumWidth(300)
+        self.position_label.setFixedHeight(30)
+        self.position_label.setStyleSheet(
+            """
+            QLabel {
+                border-top: 1px solid palette(dark);
+                border-left: 1px solid palette(dark);
+                border-right: 1px solid palette(light);
+                border-bottom: 1px solid palette(light);
+                border-radius: 6px;
+                background: palette(alternate-base);
+                color: palette(text);
+                font-family: monospace;
+                padding: 0 8px;
+            }
+            """
         )
+        self.shuttle_label = QtWidgets.QLabel()
         self.shuttle_label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignCenter
         )
+        self.shuttle_label.setFixedSize(88, 30)
+        self.update_transport_indicator(0.0)
 
-        self.previous_button = QtWidgets.QPushButton(
-            "Image précédente"
-        )
+        self.previous_button = QtWidgets.QPushButton()
         self.previous_button.clicked.connect(
             self.show_previous_frame
         )
 
-        self.next_button = QtWidgets.QPushButton(
-            "Image suivante"
-        )
+        self.next_button = QtWidgets.QPushButton()
         self.next_button.clicked.connect(
             self.show_next_frame
         )
 
-        navigation_layout = QtWidgets.QHBoxLayout()
-        navigation_layout.addWidget(self.previous_button)
-        navigation_layout.addWidget(self.next_button)
+        self.backward_button = QtWidgets.QPushButton()
+        self.backward_button.clicked.connect(
+            self.accelerate_backward
+        )
+
+        self.pause_button = QtWidgets.QPushButton()
+        self.pause_button.clicked.connect(
+            self.pause_transport
+        )
+
+        self.forward_button = QtWidgets.QPushButton()
+        self.forward_button.clicked.connect(
+            self.accelerate_forward
+        )
+
+        def configure_icon_button(
+            button,
+            standard_icon,
+            tooltip
+        ):
+            button.setText("")
+            button.setIcon(
+                self.style().standardIcon(
+                    standard_icon
+                )
+            )
+            button.setIconSize(
+                QtCore.QSize(22, 22)
+            )
+            button.setFixedSize(36, 36)
+
+            button.setToolTip(tooltip)
+            button.setToolTipDuration(5_000)
+            button.setAttribute(
+                QtCore.Qt.WidgetAttribute.WA_AlwaysShowToolTips,
+                True
+            )
+            button.setAccessibleName(tooltip)
+
+            button.setStyleSheet(
+                """
+                QPushButton {
+                    border: 1px solid palette(mid);
+                    border-radius: 18px;
+                    background: palette(button);
+                    padding: 0;
+                }
+
+                QPushButton:hover {
+                    background: palette(light);
+                }
+
+                QPushButton:pressed {
+                    background: palette(midlight);
+                }
+                """
+            )
+
+        configure_icon_button(
+            self.backward_button,
+            QtWidgets.QStyle.StandardPixmap.SP_MediaSeekBackward,
+            "Réduire la vitesse ou lire en arrière (J)"
+        )
+
+        configure_icon_button(
+            self.pause_button,
+            QtWidgets.QStyle.StandardPixmap.SP_MediaPause,
+            "Mettre la lecture en pause (K)"
+        )
+
+        configure_icon_button(
+            self.forward_button,
+            QtWidgets.QStyle.StandardPixmap.SP_MediaSeekForward,
+            "Augmenter la vitesse ou lire en avant (L)"
+        )
+
+        configure_icon_button(
+            self.previous_button,
+            QtWidgets.QStyle.StandardPixmap.SP_MediaSkipBackward,
+            "Afficher l’image précédente"
+        )
+
+        configure_icon_button(
+            self.next_button,
+            QtWidgets.QStyle.StandardPixmap.SP_MediaSkipForward,
+            "Afficher l’image suivante"
+        )
+
+        def create_button_group(*buttons):
+            group = QtWidgets.QWidget()
+            group_layout = QtWidgets.QHBoxLayout(group)
+            group_layout.setContentsMargins(0, 0, 0, 0)
+            group_layout.setSpacing(0)
+
+            stylesheet = """
+                QPushButton {
+                    border: 1px solid palette(mid);
+                    border-radius: 0;
+                    background: palette(button);
+                    padding: 0;
+                }
+
+                QPushButton[groupPosition="first"] {
+                    border-top-left-radius: 6px;
+                    border-bottom-left-radius: 6px;
+                }
+
+                QPushButton[groupPosition="middle"],
+                QPushButton[groupPosition="last"] {
+                    border-left: 0;
+                }
+
+                QPushButton[groupPosition="last"] {
+                    border-top-right-radius: 6px;
+                    border-bottom-right-radius: 6px;
+                }
+
+                QPushButton:hover {
+                    background: palette(light);
+                }
+
+                QPushButton:pressed {
+                    background: palette(midlight);
+                }
+            """
+
+            for index, button in enumerate(buttons):
+                if index == 0:
+                    position = "first"
+                elif index == len(buttons) - 1:
+                    position = "last"
+                else:
+                    position = "middle"
+
+                button.setProperty(
+                    "groupPosition",
+                    position
+                )
+                button.setStyleSheet(stylesheet)
+                group_layout.addWidget(button)
+
+            return group
+
+
+        def create_vertical_separator():
+            separator = QtWidgets.QFrame()
+            separator.setFrameShape(
+                QtWidgets.QFrame.Shape.VLine
+            )
+            separator.setFrameShadow(
+                QtWidgets.QFrame.Shadow.Sunken
+            )
+            return separator
+
+
+        transport_button_group = create_button_group(
+            self.backward_button,
+            self.pause_button,
+            self.forward_button
+        )
+
+        frame_button_group = create_button_group(
+            self.previous_button,
+            self.next_button
+        )
+
+        transport_separator = create_vertical_separator()
+        markers_separator = create_vertical_separator()
+        information_separator = create_vertical_separator()
+
+        markers_placeholder = QtWidgets.QWidget()
+        markers_placeholder.setMinimumWidth(140)
+        markers_placeholder.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Preferred
+        )
+
+        controls_layout = QtWidgets.QHBoxLayout()
+
+        controls_layout.addWidget(
+            transport_button_group
+        )
+        controls_layout.addSpacing(8)
+        controls_layout.addWidget(
+            frame_button_group
+        )
+
+        controls_layout.addWidget(
+            transport_separator
+        )
+        controls_layout.addWidget(
+            self.shuttle_label
+        )
+
+        controls_layout.addWidget(
+            markers_separator
+        )
+        controls_layout.addWidget(
+            markers_placeholder,
+            stretch=1
+        )
+
+        controls_layout.addWidget(
+            information_separator
+        )
+        controls_layout.addWidget(
+            self.position_label,
+            stretch=0
+        )
 
         central_widget = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(central_widget)
         layout.addWidget(self.video_label, stretch=1)
         layout.addWidget(self.position_slider)
-        layout.addWidget(self.position_label)
-        layout.addWidget(self.shuttle_label)
-        layout.addLayout(navigation_layout)
+        layout.addLayout(controls_layout)
 
         self.setCentralWidget(central_widget)
 
@@ -155,17 +373,18 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
                 SHUTTLE_DEVICE_PATH
             )
         except OSError:
-            self.shuttle_label.setText(
-                "Transport : pause "
-                "— ShuttleXpress indisponible"
-            )
+          self.shuttle_label.setText("⏸")
+          self.shuttle_label.setToolTip(
+              "Transport en pause — "
+              "ShuttleXpress indisponible"
+          )
         else:
             self.shuttle_reader.jogged.connect(
                 self.schedule_wheel_move
             )
-            self.shuttle_reader.shuttle_changed.connect(
-                self.show_shuttle_position
-            )
+        self.shuttle_reader.shuttle_changed.connect(
+            self.set_transport_position
+        )
 
     def schedule_scrub(self, position):
         self.pending_position = position
@@ -205,7 +424,44 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         ):
             self.show_frame(audio_position)
 
-    def show_shuttle_position(self, position):
+    def update_transport_indicator(self, speed):
+        if speed == 0:
+            text = "⏸"
+            tooltip = "Transport en pause"
+        else:
+            if speed < 0:
+                symbol = "◀"
+                direction = "arrière"
+            else:
+                symbol = "▶"
+                direction = "avant"
+
+            text = f"{symbol}  ×{abs(speed):g}"
+            tooltip = (
+                f"Lecture {direction} "
+                f"à vitesse ×{abs(speed):g}"
+            )
+
+        self.shuttle_label.setText(text)
+        self.shuttle_label.setToolTip(tooltip)
+        self.shuttle_label.setStyleSheet(
+            """
+            QLabel {
+                border-top: 1px solid palette(dark);
+                border-left: 1px solid palette(dark);
+                border-right: 1px solid palette(light);
+                border-bottom: 1px solid palette(light);
+                border-radius: 6px;
+                background: palette(alternate-base);
+                color: palette(text);
+                font-weight: 600;
+                padding: 0 8px;
+            }
+            """
+        )
+
+    def set_transport_position(self, position):
+        self.transport_position = position
         if position == 0:
             self.transport_timer.stop()
             self.stop_audio_playback()
@@ -213,8 +469,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.transport_speed = 0.0
             self.transport_frame_remainder = 0.0
 
-            self.shuttle_label.setText(
-                "Transport : pause"
+            self.shuttle_label.setText("⏸")
+            self.shuttle_label.setToolTip(
+                "Transport en pause"
             )
             return
 
@@ -241,17 +498,27 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         if not self.transport_timer.isActive():
             self.transport_timer.start()
 
-        direction = (
-            "arrière"
-            if speed < 0
-            else "avant"
+        self.update_transport_indicator(speed)
+
+    def accelerate_transport(self, direction):
+        position = max(
+            -max(SHUTTLE_SPEED_BY_POSITION),
+            min(
+                max(SHUTTLE_SPEED_BY_POSITION),
+                self.transport_position + direction
+            )
         )
 
-        self.shuttle_label.setText(
-            f"Transport : "
-            f"{direction} "
-            f"×{abs(speed):g}"
-        )
+        self.set_transport_position(position)
+
+    def accelerate_backward(self):
+        self.accelerate_transport(-1)
+
+    def pause_transport(self):
+        self.set_transport_position(0)
+
+    def accelerate_forward(self):
+        self.accelerate_transport(1)
 
     def advance_transport(self):
         if self.transport_speed == 0:
@@ -415,7 +682,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         (
             image,
             actual_position,
-            decode_duration_ms
+            _decode_duration_ms
         ) = self.frame_source.frame_at(position)
 
         self.current_position = actual_position
@@ -428,14 +695,30 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.video_label.set_image(image)
 
         self.position_label.setText(
-            f"Timecode : "
-            f"{self.timecode_for(actual_position)}"
-            f"    —    "
-            f"Image : {actual_position} "
-            f"/ {self.frame_source.length - 1}"
-            f"    —    "
-            f"Décodage : {decode_duration_ms} ms"
+            f"Timecode {self.timecode_for(actual_position)}"
+            f"  —  Image {actual_position}"
+            f"/{self.frame_source.length - 1}"
         )
+
+    def keyPressEvent(self, event):
+        if event.isAutoRepeat():
+            event.accept()
+            return
+
+        actions = {
+            QtCore.Qt.Key.Key_J: self.accelerate_backward,
+            QtCore.Qt.Key.Key_K: self.pause_transport,
+            QtCore.Qt.Key.Key_L: self.accelerate_forward
+        }
+
+        action = actions.get(event.key())
+
+        if action is None:
+            super().keyPressEvent(event)
+            return
+
+        action()
+        event.accept()
 
     def wheelEvent(self, event):
         angle = event.angleDelta()
