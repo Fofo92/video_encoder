@@ -22,6 +22,9 @@ from .trim_project_bridge import (
 from .trim_project_file_writer import (
     TrimProjectFileWriter,
 )
+from .trim_project_exporter import (
+    TrimProjectExporter,
+)
 
 PREVIEW_WIDTH = 640
 PREVIEW_HEIGHT = 360
@@ -54,6 +57,20 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             TrimProjectBridge()
         )
         self.project_path = None
+
+        self.trim_project_exporter = (
+            TrimProjectExporter()
+        )
+        self.trim_project_exporter.status_changed.connect(
+            self.export_status_changed
+        )
+        self.trim_project_exporter.succeeded.connect(
+            self.export_succeeded
+        )
+        self.trim_project_exporter.failed.connect(
+            self.export_failed
+        )
+
         self.trim_session.add_source(
             SourceReference(
                 identifier=self.source_id,
@@ -521,9 +538,25 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.save_project
         )
 
+        self.export_project_action = QtGui.QAction(
+            "Exporter le montage…",
+            self
+        )
+        self.export_project_action.setShortcut(
+            QtGui.QKeySequence("Ctrl+E")
+        )
+        self.export_project_action.triggered.connect(
+            self.export_project
+        )
+
         file_menu = self.menuBar().addMenu("&Fichier")
         file_menu.addAction(
             self.save_project_action
+        )
+
+        file_menu.addSeparator()
+        file_menu.addAction(
+            self.export_project_action
         )
 
         self.shuttle_reader = None
@@ -1056,32 +1089,37 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
     def save_project(self):
-        if self.project_path is None:
+        destination = self.project_path
+
+        if destination is None:
             suggested_path = Path(
                 self.source_path
             ).with_suffix(".json")
-        else:
-            suggested_path = self.project_path
 
-        selected_path, _selected_filter = (
-            QtWidgets.QFileDialog.getSaveFileName(
-                self,
-                "Enregistrer le projet",
-                str(suggested_path),
-                (
-                    "Projet video_encoder (*.json);;"
-                    "Tous les fichiers (*)"
+            selected_path, _selected_filter = (
+                QtWidgets.QFileDialog.getSaveFileName(
+                    self,
+                    "Enregistrer le projet",
+                    str(suggested_path),
+                    (
+                        "Projet video_encoder (*.json);;"
+                        "Tous les fichiers (*)"
+                    )
                 )
             )
-        )
 
-        if not selected_path:
-            return
+            if not selected_path:
+                return None
 
+            destination = selected_path
+
+        return self.write_project(destination)
+
+    def write_project(self, destination):
         try:
             destination = self.trim_project_writer.save(
                 self.trim_session,
-                selected_path
+                destination
             )
         except (
             OSError,
@@ -1093,12 +1131,109 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
                 "Échec de l’enregistrement",
                 str(error)
             )
-            return
+            return None
 
         self.project_path = destination
         self.statusBar().showMessage(
             f"Projet enregistré : {destination}",
             5_000
+        )
+
+        return destination
+
+    def export_project(self):
+        if self.trim_project_exporter.is_running:
+            return
+
+        if not self.trim_session.segments:
+            QtWidgets.QMessageBox.information(
+                self,
+                "Montage vide",
+                "Ajoute au moins un segment avant "
+                "de lancer l’export."
+            )
+            return
+
+        suggested_output = Path(
+            self.source_path
+        ).with_suffix(".mkv")
+
+        output_path, _selected_filter = (
+            QtWidgets.QFileDialog.getSaveFileName(
+                self,
+                "Exporter le montage",
+                str(suggested_output),
+                (
+                    "Vidéo Matroska (*.mkv);;"
+                    "Tous les fichiers (*)"
+                )
+            )
+        )
+
+        if not output_path:
+            return
+
+        project_path = self.project_path
+
+        if project_path is None:
+            project_path = Path(
+                output_path
+            ).with_suffix(".json")
+
+        project_path = self.write_project(
+            project_path
+        )
+
+        if project_path is None:
+            return
+
+        try:
+            self.trim_project_exporter.start(
+                project_path,
+                output_path
+            )
+        except RuntimeError as error:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Export indisponible",
+                str(error)
+            )
+
+    def export_status_changed(self, status):
+        running = status == "running"
+
+        self.export_project_action.setEnabled(
+            not running
+        )
+        self.save_project_action.setEnabled(
+            not running
+        )
+
+        messages = {
+            "running": "Export en cours…",
+            "succeeded": "Export terminé",
+            "failed": "Échec de l’export"
+        }
+
+        self.statusBar().showMessage(
+            messages.get(status, status)
+        )
+
+    def export_succeeded(self, output_path):
+        QtWidgets.QMessageBox.information(
+            self,
+            "Export terminé",
+            (
+                "Le fichier a été créé :\n"
+                f"{output_path}"
+            )
+        )
+
+    def export_failed(self, message):
+        QtWidgets.QMessageBox.critical(
+            self,
+            "Échec de l’export",
+            message
         )
 
     def keyPressEvent(self, event):
@@ -1176,8 +1311,8 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.transport_timer.stop()
 
         if self.shuttle_reader is not None:
-                self.shuttle_reader.close()
-                self.shuttle_reader = None
+            self.shuttle_reader.close()
+            self.shuttle_reader = None
 
         self.stop_audio_playback(
             synchronize=False
@@ -1192,6 +1327,19 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.frame_source = None
 
     def closeEvent(self, event):
+        if self.trim_project_exporter.is_running:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Export en cours",
+                (
+                    "L’export est toujours en cours.\n"
+                    "Attends sa fin avant de fermer "
+                    "l’application."
+                )
+            )
+            event.ignore()
+            return
+
         self.shutdown()
         super().closeEvent(event)
 
