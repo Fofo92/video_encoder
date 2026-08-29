@@ -1,12 +1,20 @@
 import unittest
 from pathlib import Path
 
-from PySide6 import QtCore
+try:
+    from PySide6 import QtCore
+except ModuleNotFoundError:
+    QtCore = None
 
-from video_encoder_ui.trim_project_exporter import (
-    TrimProjectExporter,
+if QtCore is not None:
+    from video_encoder_ui.trim_project_exporter import (
+        TrimProjectExporter,
+    )
+
+@unittest.skipIf(
+    QtCore is None,
+    "PySide6 is unavailable"
 )
-
 
 class TrimProjectExporterTest(unittest.TestCase):
     @classmethod
