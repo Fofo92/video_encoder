@@ -35,6 +35,11 @@ check_python_syntax() {
     ui/video_encoder_ui
 }
 
+check_git_whitespace() {
+  git diff --check
+  git diff --cached --check
+}
+
 run_python_unit_tests() {
   PYTHONPATH="$PROJECT_ROOT/ui" \
     python3 -m unittest discover \
@@ -66,6 +71,10 @@ run_step \
 run_step \
   "Syntaxe de l’IHM Python" \
   check_python_syntax
+
+run_step \
+  "Blancs indésirables dans les modifications Git" \
+  check_git_whitespace
 
 run_step \
   "Tests unitaires Python" \
