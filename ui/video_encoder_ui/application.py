@@ -566,6 +566,16 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
 
         self.setCentralWidget(central_widget)
 
+        def themed_icon(name, fallback):
+            icon = QtGui.QIcon.fromTheme(name)
+
+            if icon.isNull():
+                icon = self.style().standardIcon(
+                    fallback
+                )
+
+            return icon
+
         self.save_project_action = QtGui.QAction(
             "Enregistrer le projet…",
             self
@@ -575,6 +585,153 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
         self.save_project_action.triggered.connect(
             self.save_project
+        )
+
+        def export_video_icon():
+            icon_size = QtCore.QSize(32, 32)
+
+            export_icon = themed_icon(
+                "document-export",
+                QtWidgets.QStyle.StandardPixmap.SP_DialogApplyButton
+            )
+            video_icon = themed_icon(
+                "video-x-generic",
+                QtWidgets.QStyle.StandardPixmap.SP_MediaPlay
+            )
+
+            pixmap = export_icon.pixmap(
+                icon_size
+            )
+
+            painter = QtGui.QPainter(
+                pixmap
+            )
+            painter.setRenderHint(
+                QtGui.QPainter.RenderHint.Antialiasing,
+                True
+            )
+
+            video_pixmap = video_icon.pixmap(
+                QtCore.QSize(10, 10)
+            )
+            video_pixmap = video_pixmap.scaled(
+                10,
+                13,
+                QtCore.Qt.AspectRatioMode.IgnoreAspectRatio,
+                QtCore.Qt.TransformationMode.SmoothTransformation
+            )
+
+            tint_painter = QtGui.QPainter(
+                video_pixmap
+            )
+            tint_painter.setCompositionMode(
+                QtGui.QPainter.CompositionMode.CompositionMode_SourceIn
+            )
+            tint_painter.fillRect(
+                video_pixmap.rect(),
+                self.palette().color(
+                    QtGui.QPalette.ColorRole.WindowText
+                )
+            )
+            tint_painter.end()
+
+            painter.drawPixmap(
+                QtCore.QRect(
+                    7,
+                    11,
+                    10,
+                    13
+                ),
+                video_pixmap
+            )
+
+            painter.end()
+
+            return QtGui.QIcon(
+                pixmap
+            )
+
+        def save_json_icon():
+            icon_size = QtCore.QSize(32, 32)
+
+            document_icon = themed_icon(
+                "document-export",
+                QtWidgets.QStyle.StandardPixmap.SP_DialogApplyButton
+            )
+
+            pixmap = document_icon.pixmap(
+                icon_size
+            )
+
+            painter = QtGui.QPainter(
+                pixmap
+            )
+            painter.setRenderHint(
+                QtGui.QPainter.RenderHint.Antialiasing,
+                True
+            )
+
+            symbol_rectangle = QtCore.QRectF(
+                6,
+                10,
+                15,
+                13
+            )
+
+            font = QtGui.QFontDatabase.systemFont(
+                QtGui.QFontDatabase.SystemFont.FixedFont
+            )
+            font.setBold(True)
+            font.setPixelSize(9)
+
+            painter.setFont(font)
+
+            painter.setPen(
+                self.palette().color(
+                    QtGui.QPalette.ColorRole.Base
+                )
+            )
+
+            for horizontal_offset, vertical_offset in (
+                (-1, 0),
+                (1, 0),
+                (0, -1),
+                (0, 1)
+            ):
+                painter.drawText(
+                    symbol_rectangle.translated(
+                        horizontal_offset,
+                        vertical_offset
+                    ),
+                    QtCore.Qt.AlignmentFlag.AlignCenter,
+                    "{}"
+                )
+
+            painter.setPen(
+                self.palette().color(
+                    QtGui.QPalette.ColorRole.WindowText
+                )
+            )
+            painter.drawText(
+                symbol_rectangle,
+                QtCore.Qt.AlignmentFlag.AlignCenter,
+                "{}"
+            )
+
+            painter.end()
+
+            return QtGui.QIcon(
+                pixmap
+            )
+
+        self.save_project_action.setIcon(
+            save_json_icon()
+        )
+        self.save_project_action.setToolTip(
+            "Enregistrer le projet JSON (Ctrl+S)"
+        )
+        self.save_project_action.setStatusTip(
+            "Enregistrer le projet de montage au format JSON"
         )
 
         self.export_project_action = QtGui.QAction(
@@ -588,6 +745,37 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.export_project
         )
 
+        self.export_project_action.setIcon(
+            export_video_icon()
+        )
+        self.export_project_action.setToolTip(
+            "Encoder le montage (Ctrl+E)"
+        )
+        self.export_project_action.setStatusTip(
+            "Encoder le montage dans un fichier MKV"
+        )
+
+        self.cancel_export_action = QtGui.QAction(
+            "Annuler l’export",
+            self
+        )
+        self.cancel_export_action.setIcon(
+            themed_icon(
+                "process-stop",
+                QtWidgets.QStyle.StandardPixmap.SP_BrowserStop
+            )
+        )
+        self.cancel_export_action.setToolTip(
+            "Annuler l’encodage en cours"
+        )
+        self.cancel_export_action.setStatusTip(
+            "Interrompre le processus d’encodage en cours"
+        )
+        self.cancel_export_action.setEnabled(False)
+        self.cancel_export_action.triggered.connect(
+            lambda _checked=False: self.cancel_export()
+        )
+
         file_menu = self.menuBar().addMenu("&Fichier")
         file_menu.addAction(
             self.save_project_action
@@ -597,6 +785,56 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         file_menu.addAction(
             self.export_project_action
         )
+
+        file_menu.addAction(
+            self.cancel_export_action
+        )
+
+        main_toolbar = self.addToolBar(
+            "Actions principales"
+        )
+        main_toolbar.setObjectName(
+            "main_toolbar"
+        )
+        main_toolbar.setMovable(False)
+        main_toolbar.setToolButtonStyle(
+            QtCore.Qt.ToolButtonStyle.ToolButtonIconOnly
+        )
+        main_toolbar.setIconSize(
+            QtCore.QSize(24, 24)
+        )
+
+        main_toolbar.addAction(
+            self.save_project_action
+        )
+        main_toolbar.addAction(
+            self.export_project_action
+        )
+
+        main_toolbar.addSeparator()
+        main_toolbar.addAction(
+            self.cancel_export_action
+        )
+
+        for action in (
+            self.save_project_action,
+            self.export_project_action,
+            self.cancel_export_action
+        ):
+            tool_button = main_toolbar.widgetForAction(
+                action
+            )
+
+            if tool_button is None:
+                continue
+
+            tool_button.setToolTip(
+                action.toolTip()
+            )
+            tool_button.setAttribute(
+                QtCore.Qt.WidgetAttribute.WA_AlwaysShowToolTips,
+                True
+            )
 
         self.shuttle_reader = None
 
@@ -1249,6 +1487,10 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             not running
         )
 
+        self.cancel_export_action.setEnabled(
+            running
+        )
+
         self.in_button.setEnabled(
             not running
         )
@@ -1550,44 +1792,59 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.frame_source.close()
             self.frame_source = None
 
+    def cancel_export(self, quitting=False):
+        if not self.trim_project_exporter.is_running:
+            return True
+
+        if quitting:
+            question = (
+                "Un export est toujours en cours.\n"
+                "Veux-tu l’interrompre et quitter ?"
+            )
+        else:
+            question = (
+                "Un export est toujours en cours.\n"
+                "Veux-tu réellement l’interrompre ?"
+            )
+
+        answer = QtWidgets.QMessageBox.question(
+            self,
+            "Interrompre l’export ?",
+            question,
+            (
+                QtWidgets.QMessageBox.StandardButton.Yes
+                | QtWidgets.QMessageBox.StandardButton.No
+            ),
+            QtWidgets.QMessageBox.StandardButton.No
+        )
+
+        if (
+            answer
+            != QtWidgets.QMessageBox.StandardButton.Yes
+        ):
+            return False
+
+        self.statusBar().showMessage(
+            "Annulation de l’export…"
+        )
+
+        if self.trim_project_exporter.cancel():
+            return True
+
+        QtWidgets.QMessageBox.critical(
+            self,
+            "Annulation impossible",
+            (
+                "Le processus d’export n’a pas "
+                "pu être arrêté."
+            )
+        )
+        return False
+
     def closeEvent(self, event):
-        if self.trim_project_exporter.is_running:
-            answer = QtWidgets.QMessageBox.question(
-                self,
-                "Interrompre l’export ?",
-                (
-                    "Un export est toujours en cours.\n"
-                    "Veux-tu l’interrompre et quitter ?"
-                ),
-                (
-                    QtWidgets.QMessageBox.StandardButton.Yes
-                    | QtWidgets.QMessageBox.StandardButton.No
-                ),
-                QtWidgets.QMessageBox.StandardButton.No
-            )
-
-            if (
-                answer
-                != QtWidgets.QMessageBox.StandardButton.Yes
-            ):
-                event.ignore()
-                return
-
-            self.statusBar().showMessage(
-                "Annulation de l’export…"
-            )
-
-            if not self.trim_project_exporter.cancel():
-                QtWidgets.QMessageBox.critical(
-                    self,
-                    "Annulation impossible",
-                    (
-                        "Le processus d’export n’a pas "
-                        "pu être arrêté."
-                    )
-                )
-                event.ignore()
-                return
+        if not self.cancel_export(quitting=True):
+            event.ignore()
+            return
 
         self.shutdown()
         super().closeEvent(event)
