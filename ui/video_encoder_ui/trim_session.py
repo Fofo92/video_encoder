@@ -44,6 +44,9 @@ class SegmentSelection:
 
 
 class TrimSession:
+    FORMAT = "video_encoder.trim_session"
+    VERSION = 1
+
     def __init__(self):
         self._sources = {}
         self._segments = []
@@ -75,3 +78,24 @@ class TrimSession:
 
     def remove_segment(self, segment):
         self._segments.remove(segment)
+
+    def to_document(self):
+        return {
+            "format": self.FORMAT,
+            "version": self.VERSION,
+            "sources": [
+                {
+                    "id": source.identifier,
+                    "path": str(source.path)
+                }
+                for source in self.sources
+            ],
+            "timeline": [
+                {
+                    "source_id": segment.source_id,
+                    "start_frame": segment.start_frame,
+                    "end_frame": segment.end_frame
+                }
+                for segment in self.segments
+            ]
+        }

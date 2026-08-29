@@ -73,6 +73,52 @@ class TrimSessionTest(unittest.TestCase):
                 end_frame=100
             )
 
+    def test_builds_the_trim_session_document(self):
+        self.session.add_segment(
+            SegmentSelection(
+                source_id="A",
+                start_frame=0,
+                end_frame=1499
+            )
+        )
+        self.session.add_segment(
+            SegmentSelection(
+                source_id="C",
+                start_frame=3000,
+                end_frame=4499
+            )
+        )
+
+        self.assertEqual(
+            self.session.to_document(),
+            {
+                "format": "video_encoder.trim_session",
+                "version": 1,
+                "sources": [
+                    {
+                        "id": "A",
+                        "path": "/commun/source-a.m2t"
+                    },
+                    {
+                        "id": "C",
+                        "path": "/commun/source-c.m2t"
+                    }
+                ],
+                "timeline": [
+                    {
+                        "source_id": "A",
+                        "start_frame": 0,
+                        "end_frame": 1499
+                    },
+                    {
+                        "source_id": "C",
+                        "start_frame": 3000,
+                        "end_frame": 4499
+                    }
+                ]
+            }
+        )
+
     def test_removes_a_segment(self):
         segment = SegmentSelection(
             source_id="A",
