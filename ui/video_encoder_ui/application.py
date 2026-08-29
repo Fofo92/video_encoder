@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 import mlt7 as mlt
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 from .shuttle_xpress import ShuttleXpressReader
 from .widgets import ClickableSlider, VideoLabel
 from .mlt_frame_source import MltFrameSource
@@ -15,6 +15,13 @@ from .trim_session import (
     TrimSession,
 )
 from .segment_list import SegmentListWidget
+from .trim_project_bridge import (
+    TrimProjectBridge,
+    TrimProjectBridgeError,
+)
+from .trim_project_file_writer import (
+    TrimProjectFileWriter,
+)
 
 PREVIEW_WIDTH = 640
 PREVIEW_HEIGHT = 360
@@ -43,6 +50,10 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
 
         self.source_id = "source"
         self.trim_session = TrimSession()
+        self.trim_project_writer = TrimProjectFileWriter(
+            TrimProjectBridge()
+        )
+        self.project_path = None
         self.trim_session.add_source(
             SourceReference(
                 identifier=self.source_id,
@@ -498,6 +509,22 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         layout.addWidget(self.segment_list)
 
         self.setCentralWidget(central_widget)
+
+        self.save_project_action = QtGui.QAction(
+            "Enregistrer le projet…",
+            self
+        )
+        self.save_project_action.setShortcut(
+            QtGui.QKeySequence.StandardKey.Save
+        )
+        self.save_project_action.triggered.connect(
+            self.save_project
+        )
+
+        file_menu = self.menuBar().addMenu("&Fichier")
+        file_menu.addAction(
+            self.save_project_action
+        )
 
         self.shuttle_reader = None
 
@@ -1026,6 +1053,52 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.out_marker_label.setText(timecode)
         self.out_marker_label.setToolTip(
             f"OUT : image {position}"
+        )
+
+    def save_project(self):
+        if self.project_path is None:
+            suggested_path = Path(
+                self.source_path
+            ).with_suffix(".json")
+        else:
+            suggested_path = self.project_path
+
+        selected_path, _selected_filter = (
+            QtWidgets.QFileDialog.getSaveFileName(
+                self,
+                "Enregistrer le projet",
+                str(suggested_path),
+                (
+                    "Projet video_encoder (*.json);;"
+                    "Tous les fichiers (*)"
+                )
+            )
+        )
+
+        if not selected_path:
+            return
+
+        try:
+            destination = self.trim_project_writer.save(
+                self.trim_session,
+                selected_path
+            )
+        except (
+            OSError,
+            ValueError,
+            TrimProjectBridgeError
+        ) as error:
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Échec de l’enregistrement",
+                str(error)
+            )
+            return
+
+        self.project_path = destination
+        self.statusBar().showMessage(
+            f"Projet enregistré : {destination}",
+            5_000
         )
 
     def keyPressEvent(self, event):
