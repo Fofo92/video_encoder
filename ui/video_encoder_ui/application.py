@@ -71,6 +71,15 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.export_failed
         )
 
+        self.export_status = "idle"
+        self.export_elapsed_clock = QtCore.QElapsedTimer()
+
+        self.export_elapsed_timer = QtCore.QTimer(self)
+        self.export_elapsed_timer.setInterval(1_000)
+        self.export_elapsed_timer.timeout.connect(
+            self.update_export_elapsed
+        )
+
         self.trim_session.add_source(
             SourceReference(
                 identifier=self.source_id,
@@ -1200,6 +1209,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             )
 
     def export_status_changed(self, status):
+        self.export_status = status
         running = status == "running"
 
         self.export_project_action.setEnabled(
@@ -1209,15 +1219,73 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             not running
         )
 
+        self.in_button.setEnabled(
+            not running
+        )
+        self.out_button.setEnabled(
+            not running
+        )
+        self.add_segment_button.setEnabled(
+            not running
+        )
+        self.segment_list.setEnabled(
+            not running
+        )
+
+        if running:
+            self.export_elapsed_clock.start()
+            self.export_elapsed_timer.start()
+            self.update_export_elapsed()
+            return
+
+        self.export_elapsed_timer.stop()
+
         messages = {
-            "running": "Export en cours…",
             "succeeded": "Export terminé",
             "failed": "Échec de l’export",
             "cancelled": "Export annulé"
         }
 
+        message = messages.get(status, status)
+
+        if self.export_elapsed_clock.isValid():
+            message = (
+                f"{message} — "
+                f"{self.format_elapsed_time()}"
+            )
+
+        self.statusBar().showMessage(message)
+
+    def update_export_elapsed(self):
+        if self.export_status != "running":
+            return
+
         self.statusBar().showMessage(
-            messages.get(status, status)
+            (
+                "Export en cours — "
+                f"{self.format_elapsed_time()}"
+            )
+        )
+
+    def format_elapsed_time(self):
+        elapsed_seconds = (
+            self.export_elapsed_clock.elapsed()
+            // 1_000
+        )
+
+        hours, remainder = divmod(
+            elapsed_seconds,
+            3_600
+        )
+        minutes, seconds = divmod(
+            remainder,
+            60
+        )
+
+        return (
+            f"{hours:02d}:"
+            f"{minutes:02d}:"
+            f"{seconds:02d}"
         )
 
     def export_succeeded(self, output_path):
@@ -1239,6 +1307,20 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
 
     def keyPressEvent(self, event):
         if event.isAutoRepeat():
+            event.accept()
+            return
+
+        editing_keys = {
+            QtCore.Qt.Key.Key_I,
+            QtCore.Qt.Key.Key_O,
+            QtCore.Qt.Key.Key_Return,
+            QtCore.Qt.Key.Key_Enter
+        }
+
+        if (
+            self.trim_project_exporter.is_running
+            and event.key() in editing_keys
+        ):
             event.accept()
             return
 
@@ -1310,6 +1392,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.scrub_timer.stop()
         self.wheel_timer.stop()
         self.transport_timer.stop()
+        self.export_elapsed_timer.stop()
 
         if self.shuttle_reader is not None:
             self.shuttle_reader.close()
