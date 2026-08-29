@@ -144,6 +144,6 @@ class TrimProjectExporterTest(unittest.TestCase):
             ["running", "cancelled"]
         )
         self.assertFalse(exporter.is_running)
-        
+
 if __name__ == "__main__":
     unittest.main()
