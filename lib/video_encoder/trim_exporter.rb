@@ -3,12 +3,20 @@
 module VideoEncoder
   # Orchestrates the production of a trimmed media file.
   class TrimExporter
-    def initialize(builder:, renderer:, remuxer:, workspace:, subtitle_exporter: nil)
+    def initialize(
+      builder:,
+      renderer:,
+      remuxer:,
+      workspace:,
+      subtitle_exporter: nil,
+      progress_reporter: nil
+    )
       @builder = builder
       @renderer = renderer
       @remuxer = remuxer
       @workspace = workspace
       @subtitle_exporter = subtitle_exporter
+      @progress_reporter = progress_reporter
     end
 
     def call(
@@ -19,6 +27,64 @@ module VideoEncoder
       subtitle_tracks_by_source: {}
     )
       sources = trim_project.segments.map(&:source).uniq
+
+      selected_audio_tracks = audio_output_tracks.select do |output_track|
+        output_track.complete_for?(sources)
+      end
+
+      total_steps = total_steps_for(selected_audio_tracks)
+
+      render_video(
+        trim_project,
+        video_tracks_by_source,
+        total_steps
+      )
+
+      audio_inputs = render_audio_tracks(
+        trim_project,
+        sources,
+        selected_audio_tracks,
+        video_tracks_by_source,
+        total_steps
+      )
+
+      subtitle_path = render_subtitles(
+        trim_project,
+        video_tracks_by_source,
+        subtitle_tracks_by_source,
+        selected_audio_tracks.length,
+        total_steps
+      )
+
+      remux(
+        audio_inputs,
+        subtitle_path,
+        output_path,
+        total_steps
+      )
+    end
+
+    private
+
+    attr_reader :builder,
+                :renderer,
+                :remuxer,
+                :workspace,
+                :subtitle_exporter,
+                :progress_reporter
+
+    def total_steps_for(audio_tracks)
+      subtitle_steps = subtitle_exporter ? 1 : 0
+
+      audio_tracks.length + subtitle_steps + 2
+    end
+
+    def render_video(trim_project, video_tracks_by_source, total_steps)
+      report_progress(
+        :video,
+        step: 1,
+        total: total_steps
+      )
 
       video_xml = builder.build(
         trim_project,
@@ -32,55 +98,117 @@ module VideoEncoder
         project_path: workspace.mlt_path,
         output_path: workspace.video_path
       )
+    end
 
-      audio_inputs = audio_output_tracks
-                     .select { |output_track| output_track.complete_for?(sources) }
-                     .map do |output_track|
-        tracks_by_source = sources.to_h do |source|
-          [source, output_track.track_for(source)]
-        end
-
-        audio_xml = builder.build(
+    def render_audio_tracks(
+      trim_project,
+      sources,
+      audio_tracks,
+      video_tracks_by_source,
+      total_steps
+    )
+      audio_tracks.each_with_index.map do |output_track, index|
+        render_audio_track(
           trim_project,
-          video_index: -1,
-          audio_tracks_by_source: tracks_by_source,
-          video_tracks_by_source: video_tracks_by_source
+          sources,
+          output_track,
+          video_tracks_by_source,
+          index,
+          audio_tracks.length,
+          total_steps
         )
+      end
+    end
 
-        workspace.write_mlt(audio_xml)
+    def render_audio_track(
+      trim_project,
+      sources,
+      output_track,
+      video_tracks_by_source,
+      index,
+      track_count,
+      total_steps
+    )
+      report_progress(
+        :audio,
+        step: index + 2,
+        total: total_steps,
+        track: index + 1,
+        tracks: track_count,
+        role: output_track.role
+      )
 
-        audio_path = workspace.audio_path(output_track)
-
-        renderer.render_audio(
-          project_path: workspace.mlt_path,
-          output_path: audio_path
-        )
-
-        {
-          path: audio_path,
-          output_track: output_track
-        }
+      tracks_by_source = sources.to_h do |source|
+        [source, output_track.track_for(source)]
       end
 
-      subtitle_path = subtitle_exporter&.call(
+      audio_xml = builder.build(
+        trim_project,
+        video_index: -1,
+        audio_tracks_by_source: tracks_by_source,
+        video_tracks_by_source: video_tracks_by_source
+      )
+
+      workspace.write_mlt(audio_xml)
+
+      audio_path = workspace.audio_path(output_track)
+
+      renderer.render_audio(
+        project_path: workspace.mlt_path,
+        output_path: audio_path
+      )
+
+      {
+        path: audio_path,
+        output_track: output_track
+      }
+    end
+
+    def render_subtitles(
+      trim_project,
+      video_tracks_by_source,
+      subtitle_tracks_by_source,
+      audio_track_count,
+      total_steps
+    )
+      return unless subtitle_exporter
+
+      report_progress(
+        :subtitles,
+        step: audio_track_count + 2,
+        total: total_steps
+      )
+
+      subtitle_exporter.call(
         trim_project: trim_project,
         video_tracks_by_source: video_tracks_by_source,
         subtitle_tracks_by_source: subtitle_tracks_by_source
       )
+    end
 
-      remux_arguments = {
+    def remux(audio_inputs, subtitle_path, output_path, total_steps)
+      report_progress(
+        :remux,
+        step: total_steps,
+        total: total_steps
+      )
+
+      arguments = {
         video_path: workspace.video_path,
         audio_inputs: audio_inputs,
         output_path: output_path
       }
 
-      remux_arguments[:subtitle_path] = subtitle_path if subtitle_path
+      arguments[:subtitle_path] = subtitle_path if subtitle_path
 
-      remuxer.remux(**remux_arguments)
+      remuxer.remux(**arguments)
     end
 
-    private
-
-    attr_reader :builder, :renderer, :remuxer, :workspace, :subtitle_exporter
+    def report_progress(stage, **details)
+      progress_reporter&.call(
+        stage: stage,
+        **details
+      )
+    end
   end
 end

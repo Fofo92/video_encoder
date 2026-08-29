@@ -8,20 +8,23 @@ module VideoEncoder
       media_probe:,
       reader:,
       ccextractor_executable:,
-      synchronization_delay:
+      synchronization_delay:,
+      progress_reporter: nil
     )
       @runner = runner
       @media_probe = media_probe
       @reader = reader
       @ccextractor_executable = ccextractor_executable
       @synchronization_delay = synchronization_delay
+      @progress_reporter = progress_reporter
     end
 
     def build(workspace_directory:)
       exporter = TrimExportFactory.new(
         runner: runner,
         ccextractor_executable: ccextractor_executable,
-        synchronization_delay: synchronization_delay
+        synchronization_delay: synchronization_delay,
+        progress_reporter: progress_reporter
       ).build(
         workspace_directory: workspace_directory
       )
@@ -39,6 +42,7 @@ module VideoEncoder
                 :media_probe,
                 :reader,
                 :ccextractor_executable,
-                :synchronization_delay
+                :synchronization_delay,
+                :progress_reporter
   end
 end

@@ -6,11 +6,13 @@ module VideoEncoder
     def initialize(
       runner:,
       ccextractor_executable:,
-      synchronization_delay:
+      synchronization_delay:,
+      progress_reporter: nil
     )
       @runner = runner
       @ccextractor_executable = ccextractor_executable
       @synchronization_delay = synchronization_delay
+      @progress_reporter = progress_reporter
     end
 
     def build(workspace_directory:)
@@ -23,7 +25,8 @@ module VideoEncoder
         renderer: MltRenderer.new(runner: runner),
         remuxer: FfmpegRemuxer.new(runner: runner),
         workspace: workspace,
-        subtitle_exporter: build_subtitle_exporter(workspace)
+        subtitle_exporter: build_subtitle_exporter(workspace),
+        progress_reporter: progress_reporter
       )
 
       exporter = WorkspaceCleaningExporter.new(
@@ -41,7 +44,8 @@ module VideoEncoder
 
     attr_reader :runner,
                 :ccextractor_executable,
-                :synchronization_delay
+                :synchronization_delay,
+                :progress_reporter
 
     def build_subtitle_exporter(workspace)
       processor = SubtitleProjectProcessor.new(

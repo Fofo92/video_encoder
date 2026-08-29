@@ -51,7 +51,10 @@ module VideoEncoder
           media_probe: MediaProbe.new,
           reader: File,
           ccextractor_executable: ccextractor_executable,
-          synchronization_delay: 0
+          synchronization_delay: 0,
+          progress_reporter: ExportProgressReporter.new(
+            output: $stdout
+          )
         ).build(
           workspace_directory: workspace_directory
         )

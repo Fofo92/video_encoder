@@ -2,11 +2,16 @@ import os
 import signal
 from pathlib import Path
 from PySide6 import QtCore
-
+from .mlt_progress_parser import MltProgressParser
+from .export_event_parser import ExportEventParser
 
 class TrimProjectExporter(QtCore.QObject):
     status_changed = QtCore.Signal(str)
     output_received = QtCore.Signal(str)
+    progress_changed = QtCore.Signal(int)
+    stage_changed = QtCore.Signal(object)
+    succeeded = QtCore.Signal(str)
+    failed = QtCore.Signal(str)
     succeeded = QtCore.Signal(str)
     failed = QtCore.Signal(str)
 
@@ -33,6 +38,8 @@ class TrimProjectExporter(QtCore.QObject):
 
         self.output_path = None
         self.standard_error = ""
+        self.progress_parser = MltProgressParser()
+        self.event_parser = ExportEventParser()
         self.completed = False
         self.cancel_requested = False
 
@@ -79,6 +86,8 @@ class TrimProjectExporter(QtCore.QObject):
 
         self.output_path = Path(output_path)
         self.standard_error = ""
+        self.progress_parser = MltProgressParser()
+        self.event_parser = ExportEventParser()
         self.completed = False
         self.cancel_requested = False
 
@@ -115,17 +124,65 @@ class TrimProjectExporter(QtCore.QObject):
             self.process.readAllStandardOutput()
         ).decode(errors="replace")
 
-        if output:
-            self.output_received.emit(output)
+        if not output:
+            return
+
+        events, diagnostics = (
+            self.event_parser.feed(output)
+        )
+
+        self.record_event_output(
+            events,
+            diagnostics
+        )
+
+    def record_event_output(
+        self,
+        events,
+        diagnostics
+    ):
+        for event in events:
+            self.stage_changed.emit(event)
+
+        if diagnostics:
+            self.output_received.emit(
+                "\n".join(diagnostics)
+                + "\n"
+            )
 
     def read_standard_error(self):
         output = bytes(
             self.process.readAllStandardError()
         ).decode(errors="replace")
 
-        if output:
-            self.standard_error += output
-            self.output_received.emit(output)
+        if not output:
+            return
+
+        percentages, diagnostics = (
+            self.progress_parser.feed(output)
+        )
+
+        self.record_progress_output(
+            percentages,
+            diagnostics
+        )
+        self.output_received.emit(output)
+
+    def record_progress_output(
+        self,
+        percentages,
+        diagnostics
+    ):
+        for percentage in percentages:
+            self.progress_changed.emit(
+                percentage
+            )
+
+        if diagnostics:
+            self.standard_error += (
+                "\n".join(diagnostics)
+                + "\n"
+            )
 
     def cancel(self, timeout=3_000):
         if not self.is_running:
@@ -173,6 +230,22 @@ class TrimProjectExporter(QtCore.QObject):
     def process_finished(self, exit_code, exit_status):
         self.read_standard_output()
         self.read_standard_error()
+
+        events, output_diagnostics = (
+            self.event_parser.finish()
+        )
+        self.record_event_output(
+            events,
+            output_diagnostics
+        )
+
+        percentages, diagnostics = (
+            self.progress_parser.finish()
+        )
+        self.record_progress_output(
+            percentages,
+            diagnostics
+        )
 
         if self.cancel_requested:
             self.completed = True

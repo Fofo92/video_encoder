@@ -10,6 +10,7 @@ module VideoEncoder
     def render_video(project_path:, output_path:)
       runner.run(
         'melt-7',
+        '-progress2',
         project_path,
         '-consumer',
         "avformat:#{output_path}",
@@ -21,6 +22,7 @@ module VideoEncoder
     def render_audio(project_path:, output_path:)
       runner.run(
         'melt-7',
+        '-progress2',
         project_path,
         '-consumer',
         "avformat:#{output_path}",

@@ -18,6 +18,7 @@ RSpec.describe VideoEncoder::MltRenderer do
 
       expect(runner).to have_received(:run).with(
         'melt-7',
+        '-progress2',
         'tmp/project.mlt',
         '-consumer',
         'avformat:tmp/video.mkv',
@@ -38,6 +39,7 @@ RSpec.describe VideoEncoder::MltRenderer do
 
       expect(runner).to have_received(:run).with(
         'melt-7',
+        '-progress2',
         'tmp/project.mlt',
         '-consumer',
         'avformat:tmp/audio.mka',

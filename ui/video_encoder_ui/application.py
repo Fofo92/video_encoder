@@ -70,8 +70,21 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.trim_project_exporter.failed.connect(
             self.export_failed
         )
+        self.trim_project_exporter.progress_changed.connect(
+            self.export_progress_changed
+        )
+
+        self.trim_project_exporter.stage_changed.connect(
+            self.export_stage_changed
+        )
 
         self.export_status = "idle"
+
+        self.export_stage = None
+        self.export_step = 0
+        self.export_total_steps = 0
+        self.export_stage_label = ""
+
         self.export_elapsed_clock = QtCore.QElapsedTimer()
 
         self.export_elapsed_timer = QtCore.QTimer(self)
@@ -526,6 +539,19 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
         self.segment_list.setVisible(False)
 
+        self.export_progress_bar = (
+            QtWidgets.QProgressBar()
+        )
+        self.export_progress_bar.setRange(
+            0,
+            100
+        )
+        self.export_progress_bar.setValue(0)
+        self.export_progress_bar.setFormat(
+            "Encodage — %p %"
+        )
+        self.export_progress_bar.setVisible(False)
+
 
         central_widget = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout(central_widget)
@@ -533,6 +559,10 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         layout.addWidget(self.position_slider)
         layout.addLayout(controls_layout)
         layout.addWidget(self.segment_list)
+
+        layout.addWidget(
+            self.export_progress_bar
+        )
 
         self.setCentralWidget(central_widget)
 
@@ -1233,12 +1263,41 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
         if running:
+            self.export_stage = None
+            self.export_step = 0
+            self.export_total_steps = 0
+            self.export_stage_label = ""
+
+            self.export_progress_bar.setRange(
+                0,
+                100
+            )
+            self.export_progress_bar.setValue(0)
+            self.export_progress_bar.setFormat(
+                "Export : préparation…"
+            )
+            self.export_progress_bar.setVisible(True)
+
             self.export_elapsed_clock.start()
             self.export_elapsed_timer.start()
             self.update_export_elapsed()
             return
 
         self.export_elapsed_timer.stop()
+
+        if status == "succeeded":
+            self.export_progress_bar.setValue(100)
+            self.export_progress_bar.setFormat(
+                "Export terminé — %p %"
+            )
+        elif status == "failed":
+            self.export_progress_bar.setFormat(
+                "Échec de l’export — %p %"
+            )
+        elif status == "cancelled":
+            self.export_progress_bar.setFormat(
+                "Export annulé — %p %"
+            )
 
         messages = {
             "succeeded": "Export terminé",
@@ -1256,13 +1315,94 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
 
         self.statusBar().showMessage(message)
 
+    def export_stage_changed(self, event):
+        self.export_stage = event["stage"]
+        self.export_step = event["step"]
+        self.export_total_steps = event["total"]
+        self.export_stage_label = (
+            self.export_stage_name(event)
+        )
+
+        self.export_progress_bar.setRange(
+            0,
+            100
+        )
+        self.export_progress_bar.setValue(0)
+        self.update_export_progress_format()
+        self.update_export_elapsed()
+
+    def export_stage_name(self, event):
+        stage = event["stage"]
+
+        if stage == "video":
+            return "Vidéo"
+
+        if stage == "audio":
+            roles = {
+                "french": "Audio français",
+                "original": "Audio original"
+            }
+
+            return roles.get(
+                event.get("role"),
+                "Audio"
+            )
+
+        if stage == "subtitles":
+            return "Sous-titres"
+
+        if stage == "remux":
+            return "Remuxage final"
+
+        return stage
+
+    def export_progress_changed(self, percentage):
+        if self.export_stage not in {
+            "video",
+            "audio"
+        }:
+            return
+
+        self.export_progress_bar.setValue(
+            percentage
+        )
+        self.update_export_progress_format()
+
+    def update_export_progress_format(self):
+        prefix = (
+            f"Export : Étape "
+            f"{self.export_step}/"
+            f"{self.export_total_steps} — "
+            f"{self.export_stage_label}"
+        )
+
+        if self.export_stage in {
+            "video",
+            "audio"
+        }:
+            text = f"{prefix} — %p %"
+        else:
+            text = f"{prefix}…"
+
+        self.export_progress_bar.setFormat(text)
+
     def update_export_elapsed(self):
         if self.export_status != "running":
             return
 
+        if self.export_step:
+            message = (
+                f"Export : Étape "
+                f"{self.export_step}/"
+                f"{self.export_total_steps} — "
+                f"{self.export_stage_label}"
+            )
+        else:
+            message = "Export : préparation"
+
         self.statusBar().showMessage(
             (
-                "Export en cours — "
+                f"{message} — "
                 f"{self.format_elapsed_time()}"
             )
         )

@@ -31,6 +31,49 @@ class TrimProjectExporterTest(unittest.TestCase):
         )
         self.application.processEvents()
 
+
+    def test_reports_mlt_progress(self):
+        percentages = []
+
+        with tempfile.TemporaryDirectory() as directory:
+            executable = (
+                Path(directory)
+                / "progress_export"
+            )
+            executable.write_text(
+                "#!/bin/sh\n"
+                "printf '%s\\n' "
+                "'Current Frame: 1, percentage: 1' "
+                "'Current Frame: 2, percentage: 1' "
+                "'Current Frame: 42, percentage: 42' "
+                "'Current Frame: 100, percentage: 100' "
+                ">&2\n",
+                encoding="utf-8"
+            )
+            executable.chmod(0o755)
+
+            exporter = TrimProjectExporter(
+                executable=executable
+            )
+            exporter.progress_changed.connect(
+                percentages.append
+            )
+
+            exporter.start(
+                "project.json",
+                "movie.mkv"
+            )
+            self.wait_for_export(exporter)
+
+        self.assertEqual(
+            percentages,
+            [1, 42, 100]
+        )
+        self.assertEqual(
+            exporter.standard_error,
+            ""
+        )
+
     def test_reports_a_successful_export(self):
         statuses = []
         output_paths = []
@@ -144,6 +187,48 @@ class TrimProjectExporterTest(unittest.TestCase):
             ["running", "cancelled"]
         )
         self.assertFalse(exporter.is_running)
+
+    def test_reports_structured_export_stages(self):
+        stages = []
+
+        with tempfile.TemporaryDirectory() as directory:
+            executable = (
+                Path(directory)
+                / "staged_export"
+            )
+            executable.write_text(
+                "#!/bin/sh\n"
+                "printf '%s\\n' "
+                "'VIDEO_ENCODER_EXPORT_EVENT "
+                "{\"stage\":\"video\","
+                "\"step\":1,\"total\":4}'\n",
+                encoding="utf-8"
+            )
+            executable.chmod(0o755)
+
+            exporter = TrimProjectExporter(
+                executable=executable
+            )
+            exporter.stage_changed.connect(
+                stages.append
+            )
+
+            exporter.start(
+                "project.json",
+                "movie.mkv"
+            )
+            self.wait_for_export(exporter)
+
+        self.assertEqual(
+            stages,
+            [
+                {
+                    "stage": "video",
+                    "step": 1,
+                    "total": 4
+                }
+            ]
+        )
 
 if __name__ == "__main__":
     unittest.main()
