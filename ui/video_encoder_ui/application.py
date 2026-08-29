@@ -1212,7 +1212,8 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         messages = {
             "running": "Export en cours…",
             "succeeded": "Export terminé",
-            "failed": "Échec de l’export"
+            "failed": "Échec de l’export",
+            "cancelled": "Export annulé"
         }
 
         self.statusBar().showMessage(
@@ -1328,21 +1329,45 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
 
     def closeEvent(self, event):
         if self.trim_project_exporter.is_running:
-            QtWidgets.QMessageBox.warning(
+            answer = QtWidgets.QMessageBox.question(
                 self,
-                "Export en cours",
+                "Interrompre l’export ?",
                 (
-                    "L’export est toujours en cours.\n"
-                    "Attends sa fin avant de fermer "
-                    "l’application."
-                )
+                    "Un export est toujours en cours.\n"
+                    "Veux-tu l’interrompre et quitter ?"
+                ),
+                (
+                    QtWidgets.QMessageBox.StandardButton.Yes
+                    | QtWidgets.QMessageBox.StandardButton.No
+                ),
+                QtWidgets.QMessageBox.StandardButton.No
             )
-            event.ignore()
-            return
+
+            if (
+                answer
+                != QtWidgets.QMessageBox.StandardButton.Yes
+            ):
+                event.ignore()
+                return
+
+            self.statusBar().showMessage(
+                "Annulation de l’export…"
+            )
+
+            if not self.trim_project_exporter.cancel():
+                QtWidgets.QMessageBox.critical(
+                    self,
+                    "Annulation impossible",
+                    (
+                        "Le processus d’export n’a pas "
+                        "pu être arrêté."
+                    )
+                )
+                event.ignore()
+                return
 
         self.shutdown()
         super().closeEvent(event)
-
 
 def main():
     if len(sys.argv) != 2:

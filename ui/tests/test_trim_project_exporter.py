@@ -1,4 +1,5 @@
 import unittest
+import tempfile
 from pathlib import Path
 
 try:
@@ -102,6 +103,47 @@ class TrimProjectExporterTest(unittest.TestCase):
         )
         self.assertFalse(exporter.is_running)
 
+    def test_cancels_the_export_process_group(self):
+        statuses = []
 
+        with tempfile.TemporaryDirectory() as directory:
+            executable = (
+                Path(directory)
+                / "slow_export"
+            )
+            executable.write_text(
+                "#!/bin/sh\n"
+                "sleep 30\n",
+                encoding="utf-8"
+            )
+            executable.chmod(0o755)
+
+            exporter = TrimProjectExporter(
+                executable=executable
+            )
+            exporter.status_changed.connect(
+                statuses.append
+            )
+
+            exporter.start(
+                "project.json",
+                "movie.mkv"
+            )
+
+            self.assertTrue(
+                exporter.process.waitForStarted(2_000)
+            )
+            self.assertTrue(
+                exporter.cancel()
+            )
+
+            self.application.processEvents()
+
+        self.assertEqual(
+            statuses,
+            ["running", "cancelled"]
+        )
+        self.assertFalse(exporter.is_running)
+        
 if __name__ == "__main__":
     unittest.main()
