@@ -42,6 +42,8 @@ RSpec.describe VideoEncoder::FfmpegRemuxer do
 
       expect(runner).to have_received(:run).with(
         'ffmpeg',
+        '-nostdin',
+        '-n',
         '-i', 'tmp/video.mkv',
         '-i', 'tmp/audio_french.mka',
         '-i', 'tmp/audio_original.mka',
@@ -72,6 +74,8 @@ RSpec.describe VideoEncoder::FfmpegRemuxer do
 
       expect(runner).to have_received(:run).with(
         'ffmpeg',
+        '-nostdin',
+        '-n',
         '-i', 'tmp/video.mkv',
         '-i', 'tmp/audio_french.mka',
         '-i', 'tmp/subtitles.srt',

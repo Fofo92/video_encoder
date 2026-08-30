@@ -17,6 +17,8 @@ module VideoEncoder
     )
       command = [
         'ffmpeg',
+        '-nostdin',
+        '-n',
         '-i', video_path
       ]
 
