@@ -142,7 +142,7 @@ RSpec.describe VideoEncoder::MltProjectBuilder do
       )
 
       expect(xml).to include(
-        '<entry in="01:09:55.000" out="01:10:55.000" producer="source"/>'
+        '<entry in="01:09:55.000" out="01:10:55.000" producer="source_1"/>'
       )
     end
 
@@ -209,7 +209,7 @@ RSpec.describe VideoEncoder::MltProjectBuilder do
       expect(chain.elements['property[@name="audio_index"]'].text).to eq('-1')
     end
 
-    it 'reuses the producer when a media source appears again' do
+    it 'creates a separate producer for each occurrence of a media source' do
       media_a = instance_double(VideoEncoder::Media, path: Pathname('/media/a.mkv'))
       media_c = instance_double(VideoEncoder::Media, path: Pathname('/media/c.m2t'))
       project = VideoEncoder::TrimProject.new
@@ -241,12 +241,19 @@ RSpec.describe VideoEncoder::MltProjectBuilder do
 
       resource = '<property name="resource">/media/a.mkv</property>'
 
-      expect(xml.scan(resource).size).to eq(1)
+      expect(xml.scan(resource).size).to eq(2)
+
+      document = REXML::Document.new(xml)
+      chains = document.get_elements('mlt/chain')
+
+      expect(chains.map { |chain| chain.attributes['id'] }).to eq(
+        %w[source source_1 source_2]
+      )
 
       expect(xml).to include(
         '<entry in="00:00:00.000" out="00:00:10.000" producer="source"/>',
         '<entry in="00:01:00.000" out="00:01:10.000" producer="source_1"/>',
-        '<entry in="00:02:00.000" out="00:02:10.000" producer="source"/>'
+        '<entry in="00:02:00.000" out="00:02:10.000" producer="source_2"/>'
       )
     end
   end

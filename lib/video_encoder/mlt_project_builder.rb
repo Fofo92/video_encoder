@@ -12,14 +12,9 @@ module VideoEncoder
       video_index: 0, audio_index: 0,
       audio_tracks_by_source: nil, video_tracks_by_source: nil
     )
-      sources = project.segments.map(&:source).uniq
-      source_ids = sources.each_with_index.to_h do |source, index|
+      chains = project.segments.each_with_index.map do |segment, index|
+        source = segment.source
         source_id = index.zero? ? 'source' : "source_#{index}"
-        [source, source_id]
-      end
-
-      chains = sources.map do |source|
-        source_id = source_ids.fetch(source)
         selected_video_index = track_index(
           video_tracks_by_source,
           source,
@@ -41,8 +36,8 @@ module VideoEncoder
         CHAIN
       end.join("\n")
 
-      entries = project.segments.map do |segment|
-        source_id = source_ids.fetch(segment.source)
+      entries = project.segments.each_with_index.map do |segment, index|
+        source_id = index.zero? ? 'source' : "source_#{index}"
         start_position, end_position = segment_boundaries(
           segment,
           video_tracks_by_source
