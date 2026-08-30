@@ -7,11 +7,10 @@ from .export_event_parser import ExportEventParser
 
 class TrimProjectExporter(QtCore.QObject):
     status_changed = QtCore.Signal(str)
+    warning_received = QtCore.Signal(object)
     output_received = QtCore.Signal(str)
     progress_changed = QtCore.Signal(int)
     stage_changed = QtCore.Signal(object)
-    succeeded = QtCore.Signal(str)
-    failed = QtCore.Signal(str)
     succeeded = QtCore.Signal(str)
     failed = QtCore.Signal(str)
 
@@ -142,7 +141,10 @@ class TrimProjectExporter(QtCore.QObject):
         diagnostics
     ):
         for event in events:
-            self.stage_changed.emit(event)
+            if event.get("type") == "warning":
+                self.warning_received.emit(event)
+            else:
+                self.stage_changed.emit(event)
 
         if diagnostics:
             self.output_received.emit(

@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import sys
+import tempfile
 from pathlib import Path
 
 import mlt7 as mlt
@@ -63,6 +64,22 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
         self.trim_project_exporter.status_changed.connect(
             self.export_status_changed
+        )
+
+        self.export_warnings = []
+
+        self.export_warning_label = QtWidgets.QLabel(self)
+        self.export_warning_label.setTextFormat(
+            QtCore.Qt.TextFormat.PlainText
+        )
+        self.export_warning_label.setVisible(False)
+
+        self.statusBar().addPermanentWidget(
+            self.export_warning_label
+        )
+
+        self.trim_project_exporter.warning_received.connect(
+            self.export_warning_received
         )
         self.trim_project_exporter.succeeded.connect(
             self.export_succeeded
@@ -1505,6 +1522,11 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
         if running:
+            self.export_warnings.clear()
+            self.export_warning_label.clear()
+            self.export_warning_label.setToolTip("")
+            self.export_warning_label.setVisible(False)
+
             self.export_stage = None
             self.export_step = 0
             self.export_total_steps = 0
@@ -1556,6 +1578,26 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             )
 
         self.statusBar().showMessage(message)
+
+    def export_warning_received(self, event):
+        self.export_warnings.append(dict(event))
+
+        count = len(self.export_warnings)
+        suffix = "s" if count > 1 else ""
+
+        self.export_warning_label.setText(
+            f"⚠ {count} avertissement{suffix}"
+        )
+
+        messages = [
+            str(item.get("message", "Avertissement d’export"))
+            for item in self.export_warnings
+        ]
+
+        self.export_warning_label.setToolTip(
+            "\n\n".join(messages)
+        )
+        self.export_warning_label.setVisible(True)
 
     def export_stage_changed(self, event):
         self.export_stage = event["stage"]
@@ -1671,21 +1713,92 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
     def export_succeeded(self, output_path):
+        title = "Export terminé"
+        message = (
+            "Le fichier a été créé :\n"
+            f"{output_path}"
+        )
+
+        if self.export_warnings:
+            title = "Export terminé avec avertissements"
+            message += (
+                "\n\nDes avertissements ont été signalés.\n"
+                "Consulte leur détail en survolant "
+                "la zone d’avertissement de la barre d’état."
+            )
+
         QtWidgets.QMessageBox.information(
             self,
-            "Export terminé",
-            (
-                "Le fichier a été créé :\n"
-                f"{output_path}"
-            )
+            title,
+            message
         )
 
     def export_failed(self, message):
-        QtWidgets.QMessageBox.critical(
-            self,
-            "Échec de l’export",
-            message
+        self.last_export_error = message
+
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                prefix="video_encoder_export_error_",
+                suffix=".log",
+                delete=False
+            ) as error_log:
+                error_log.write(message)
+                log_path = error_log.name
+
+            log_information = (
+                "Le diagnostic complet a été conservé dans :\n"
+                f"{log_path}"
+            )
+        except OSError as error:
+            log_information = (
+                "Le journal n’a pas pu être enregistré :\n"
+                f"{error}\n\n"
+                "Le diagnostic reste disponible en mémoire "
+                "jusqu’à la fermeture de l’application."
+            )
+
+        details = message[-6_000:]
+
+        if len(message) > 6_000:
+            details = (
+                "[Extrait : fin du diagnostic uniquement]\n\n"
+                + details
+            )
+
+        dialog = QtWidgets.QMessageBox(self)
+        dialog.setWindowTitle(
+            "Échec de l’export"
         )
+        dialog.setIcon(
+            QtWidgets.QMessageBox.Icon.Critical
+        )
+        dialog.setTextFormat(
+            QtCore.Qt.TextFormat.PlainText
+        )
+        dialog.setText(
+            "L’export n’a pas abouti."
+        )
+        dialog.setInformativeText(
+            "Le workspace est conservé pour le diagnostic.\n\n"
+            + log_information
+        )
+        dialog.setDetailedText(details)
+        dialog.setStandardButtons(
+            QtWidgets.QMessageBox.StandardButton.Ok
+        )
+        dialog.setWindowModality(
+            QtCore.Qt.WindowModality.NonModal
+        )
+        dialog.setAttribute(
+            QtCore.Qt.WidgetAttribute.WA_DeleteOnClose,
+            True
+        )
+
+        self.export_error_dialog = dialog
+        dialog.show()
+        dialog.raise_()
 
     def keyPressEvent(self, event):
         if event.isAutoRepeat():

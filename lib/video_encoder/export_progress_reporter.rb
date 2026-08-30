@@ -24,6 +24,19 @@ module VideoEncoder
       output.flush
     end
 
+    def warning(code:, message:, **details)
+      event = details.merge(
+        type: 'warning',
+        code: code,
+        message: message
+      )
+
+      output.puts(
+        "#{PREFIX}#{JSON.generate(event)}"
+      )
+      output.flush
+    end
+
     private
 
     attr_reader :output

@@ -184,6 +184,21 @@ module VideoEncoder
         video_tracks_by_source: video_tracks_by_source,
         subtitle_tracks_by_source: subtitle_tracks_by_source
       )
+    rescue TrimSubtitleExporter::IncompleteSubtitles => e
+      report_missing_subtitles(e.missing_groups)
+      raise
+    end
+
+    def report_missing_subtitles(groups)
+      return unless progress_reporter.respond_to?(:warning)
+
+      groups.each do |group|
+        progress_reporter.warning(
+          code: 'no_subtitles_found',
+          message: "Aucun sous-titre trouvé pour le groupe #{group}.",
+          group: group
+        )
+      end
     end
 
     def remux(audio_inputs, subtitle_path, output_path, total_steps)
@@ -205,10 +220,7 @@ module VideoEncoder
     end
 
     def report_progress(stage, **details)
-      progress_reporter&.call(
-        stage: stage,
-        **details
-      )
+      progress_reporter&.call(stage: stage, **details)
     end
   end
 end

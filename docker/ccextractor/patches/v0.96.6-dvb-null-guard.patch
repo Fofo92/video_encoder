@@ -1,0 +1,9 @@
+diff --git a/src/lib_ccx/general_loop.c b/src/lib_ccx/general_loop.c
+--- a/src/lib_ccx/general_loop.c
++++ b/src/lib_ccx/general_loop.c
+@@ -1300 +1300,4 @@
+-			if ((*data_node)->bufferdatatype == CCX_DVB_SUBTITLE && (*dec_ctx)->dec_sub.prev->end_time == 0)
++			if ((*data_node)->bufferdatatype == CCX_DVB_SUBTITLE &&
++			    *dec_ctx &&
++			    (*dec_ctx)->dec_sub.prev &&
++			    (*dec_ctx)->dec_sub.prev->end_time == 0)

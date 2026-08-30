@@ -22,8 +22,9 @@ esac
 
 readonly SOURCE_URL="https://github.com/CCExtractor/ccextractor.git"
 readonly SOURCE_TAG="v${VERSION}"
-readonly BASE_IMAGE="video-encoder-ccextractor-build:${VERSION}-ocr"
-readonly OUTPUT_IMAGE="video-encoder-ccextractor:${VERSION}-ocr-fra"
+readonly IMAGE_SUFFIX="${VIDEO_ENCODER_CCEXTRACTOR_BUILD_SUFFIX:-}"
+readonly BASE_IMAGE="video-encoder-ccextractor-build:${VERSION}-ocr${IMAGE_SUFFIX}"
+readonly OUTPUT_IMAGE="video-encoder-ccextractor:${VERSION}-ocr-fra${IMAGE_SUFFIX}"
 readonly DOCKERFILE="${PROJECT_ROOT}/docker/ccextractor/Dockerfile"
 
 build_directory="$(mktemp -d \
@@ -74,6 +75,30 @@ if [ -f "$patch_path" ]; then
     -C "$build_directory/ccextractor" \
     apply \
     "$patch_path"
+fi
+
+if [ "$VERSION" = "0.96.6" ]; then
+  dvb_patch_path="${PROJECT_ROOT}/docker/ccextractor/patches/v0.96.6-dvb-null-guard.patch"
+
+  if [ ! -f "$dvb_patch_path" ]; then
+    printf 'Missing DVB patch: %s\n' "$dvb_patch_path" >&2
+    exit 1
+  fi
+
+  printf 'Checking DVB subtitle safety patch…\n'
+
+  git \
+    -C "$build_directory/ccextractor" \
+    apply \
+    --check \
+    --unidiff-zero \
+    "$dvb_patch_path"
+
+  git \
+    -C "$build_directory/ccextractor" \
+    apply \
+    --unidiff-zero \
+    "$dvb_patch_path"
 fi
 
 printf 'Building upstream OCR image…\n'

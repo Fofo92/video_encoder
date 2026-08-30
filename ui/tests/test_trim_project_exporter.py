@@ -31,6 +31,44 @@ class TrimProjectExporterTest(unittest.TestCase):
         )
         self.application.processEvents()
 
+    def test_routes_warnings_separately_from_stages(self):
+        warnings = []
+        stages = []
+        statuses = []
+
+        exporter = TrimProjectExporter()
+
+        exporter.warning_received.connect(
+            warnings.append
+        )
+        exporter.stage_changed.connect(
+            stages.append
+        )
+        exporter.status_changed.connect(
+            statuses.append
+        )
+
+        warning = {
+            "type": "warning",
+            "code": "no_subtitles_found",
+            "message": "Aucun sous-titre trouvé.",
+            "group": 1
+        }
+        stage = {
+            "stage": "subtitles",
+            "step": 4,
+            "total": 5
+        }
+
+        exporter.record_event_output(
+            [stage, warning],
+            []
+        )
+
+        self.assertEqual(warnings, [warning])
+        self.assertEqual(stages, [stage])
+        self.assertEqual(statuses, [])
+        self.assertFalse(exporter.completed)
 
     def test_reports_mlt_progress(self):
         percentages = []

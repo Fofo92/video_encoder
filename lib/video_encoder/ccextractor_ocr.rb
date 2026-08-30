@@ -3,6 +3,9 @@
 module VideoEncoder
   # Converts DVB bitmap subtitles to SRT using CCExtractor OCR.
   class CcextractorOcr
+    # Indicates that CCExtractor completed without finding subtitles.
+    class NoSubtitlesFound < StandardError; end
+
     def initialize(
       runner:,
       executable: 'ccextractor',
@@ -25,6 +28,11 @@ module VideoEncoder
         input_path.to_s,
         '-o', output_path.to_s
       )
+    rescue CommandRunner::CommandFailed => e
+      raise unless e.exit_status == 10 && e.term_signal.nil?
+
+      raise NoSubtitlesFound,
+            "CCExtractor n’a trouvé aucun sous-titre dans #{input_path}"
     end
 
     private
