@@ -869,9 +869,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.shuttle_reader.jogged.connect(
                 self.schedule_wheel_move
             )
-        self.shuttle_reader.shuttle_changed.connect(
-            self.set_transport_position
-        )
+            self.shuttle_reader.shuttle_changed.connect(
+                self.set_transport_position
+            )
 
     def schedule_scrub(self, position):
         self.pending_position = position
