@@ -38,8 +38,6 @@ La version 0.96.5 reste disponible comme point de comparaison et solution de ret
 Les évolutions suivantes pourront être étudiées lorsqu’un besoin concret les
  justifiera :
 
-- vérifier explicitement la disponibilité de Docker et de l’image configurée
-   avant le démarrage d’un export ;
 - publier les images dans un registre si `video_encoder` doit être installé sur
    une autre machine ;
 - automatiser une partie de la construction et des tests d’acceptation des
@@ -48,3 +46,36 @@ Les évolutions suivantes pourront être étudiées lorsqu’un besoin concret l
    images ;
 - surveiller les nouvelles versions de CCExtractor et leurs effets sur le
    décodage DVB, l’OCR et la synchronisation.
+
+## Fiabilisation du montage et reprise d’export
+
+### Réalisé
+
+- chaînes MLT distinctes par segment, sans déplacement automatique des bornes ;
+- validation des deux raccords et du rendu complet sur le cas de diagnostic ;
+- correction du crash CCExtractor, testée dans une image de diagnostic ;
+- distinction entre absence de sous-titres et panne technique ;
+- conservation des groupes de sous-titres valides avant signalement d’un
+  résultat incomplet ;
+- avertissements Ruby transmis à l’IHM sur un canal distinct de la progression ;
+- diagnostic d’erreur complet sur disque et extrait limité dans une fenêtre
+  non modale ;
+- refus des écrasements et des attentes interactives pendant le remuxage ;
+- fonctionnement de l’IHM lorsque le ShuttleXpress est indisponible.
+
+### À réaliser
+
+- promouvoir l’image OCR corrigée après les contrôles de distribution ;
+- proposer une décision explicite en cas de sous-titres incomplets ;
+- reprendre la finalisation sans refaire les composants déjà validés ;
+- enregistrer un manifeste reliant les composants au projet, aux sources
+  et aux paramètres de rendu ;
+- vérifier les composants avant réutilisation et le média final avant nettoyage ;
+- définir la conservation des diagnostics et la suppression contrôlée
+  des workspaces ;
+- ouvrir un projet JSON existant pour récupération ;
+- démarrer l’IHM sans argument, choisir un enregistrement et fournir un
+  lanceur KDE dans la catégorie Multimédia.
+
+La récupération effectuée pendant le diagnostic était manuelle. Elle ne
+constitue pas encore une fonction de reprise disponible dans l’IHM.

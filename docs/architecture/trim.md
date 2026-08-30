@@ -101,10 +101,7 @@ Ces informations restent dérivées des fichiers source au moment de l’export.
 
 ### ExportTrimProject
 
-`ExportTrimProject` constitue le point d’entrée applicatif d’un projet déjà
-chargé.
-
-Il :
+`ExportTrimProject` constitue le point d’entrée applicatif d’un projet déjà chargé. Il :
 
 1. recueille les sources distinctes du projet ;
 2. demande à `TrackSelector` les pistes vidéo, audio et de sous-titres ;
@@ -121,8 +118,7 @@ Il :
 2. le charge avec `TrimProjectLoader` ;
 3. appelle `ExportTrimProject`.
 
-Ce service forme la frontière commune entre la CLI actuelle et une future
-interface Rails.
+Ce service charge les projets persistants pour l’export CLI. L’IHM Python/Qt lance cette CLI dans un processus asynchrone.
 
 ### Fabriques
 
@@ -164,6 +160,23 @@ TrimExporter
 
 `MltProjectBuilder` traduit la chronologie en projet MLT.
 
+Chaque segment possède sa propre chaîne MLT, même lorsque plusieurs segments
+réutilisent le même média source. La source reste unique dans le modèle de
+domaine ; seule son instance de traitement MLT est distincte.
+
+Cette isolation corrige un défaut reproduit sur un enregistrement DVB :
+avec une chaîne partagée, une image publicitaire apparaissait au début d’un
+segment malgré un point IN correct dans la prévisualisation. Le défaut
+disparaissait avec des chaînes distinctes, puis cette correction a été
+confirmée sur le rendu complet.
+
+Le mécanisme interne exact du défaut n’est pas établi. Aucune compensation
+systématique de plus ou moins une image n’est appliquée aux bornes.
+
+Les bornes IN et OUT restent inclusives. Lorsque les cadences source et sortie
+diffèrent, le début est converti par arrondi inférieur, et la fin exclusive par
+arrondi supérieur avant conversion en fin inclusive.
+
 `MltRenderer` utilise `melt-7` pour produire une vidéo HEVC 1280 × 720,
 progressive à 25 images par seconde.
 
@@ -198,10 +211,47 @@ Pour chaque groupe continu de segments admissibles :
 5. `SrtComposer` rassemble et renumérote les résultats ;
 6. `FfmpegRemuxer` ajoute la piste SubRip française au média final.
 
-Le traitement OCR sur la chronologie concaténée évite les dérives d’horloge
-observées lorsque chaque segment est interprété indépendamment.
+Le traitement OCR est effectué sur un transport intermédiaire placé sur la
+chronologie du montage. Sa synchronisation doit être vérifiée sur les médias
+traités : elle ne peut pas être déduite du seul succès de CCExtractor.
 
-## Interface en ligne de commande
+Lors d’un diagnostic, l’OCR direct d’un enregistrement original produisait
+un SRT en avance d’environ dix secondes. L’export d’un extrait de trois minutes
+par la chaîne de montage ne présentait pas ce décalage important. Ce résultat
+ne justifie ni une compensation globale de dix secondes, ni une garantie
+générale de synchronisation sur les montages longs.
+
+## Erreurs et conservation des résultats
+
+`CommandRunner::CommandFailed` expose séparément le code de sortie et le
+signal éventuel du processus.
+
+`CcextractorOcr` traduit le code de sortie 10, sans signal de terminaison,
+en `NoSubtitlesFound`. Les autres échecs restent des erreurs techniques.
+
+Lorsqu’un groupe ne fournit aucun sous-titre, `TrimSubtitleExporter` poursuit
+l’examen des autres groupes. Il compose et conserve les résultats valides,
+sans déplacer leurs positions temporelles, puis lève `IncompleteSubtitles`.
+Cette erreur indique les groupes manquants et le chemin du SRT partiel,
+s’il existe.
+
+`TrimExporter` signale les groupes manquants au rapporteur d’avertissements
+lorsqu’il est disponible, puis propage l’erreur. Le remuxage n’est pas lancé.
+
+L’IHM Qt reçoit les avertissements sur un signal distinct de la progression.
+Elle les conserve dans une zone permanente de la barre d’état. Leur affichage
+ne constitue pas une autorisation de poursuivre.
+
+`WorkspaceCleaningExporter` nettoie le workspace après le retour normal de
+l’exporteur. Une exception empêche ce nettoyage. La validation automatique
+du média final avant nettoyage reste à renforcer.
+
+Le remuxage utilise `-nostdin` et `-n` : il n’attend pas de réponse interactive
+et refuse d’écraser une sortie existante.
+
+La reprise depuis un workspace, la confirmation de poursuite sans certains
+sous-titres et la réutilisation automatique des composants validés ne sont
+pas encore implémentées.## Interface en ligne de commande
 
 La CLI expose l’export d’un projet persistant :
 
@@ -217,9 +267,8 @@ La CLI reste une interface : elle ne porte aucune règle métier du montage.
 ## Principes d’architecture
 
 - Le domaine ne dépend d’aucun outil multimédia.
-- Le document persistant contient les décisions de montage, pas les
-  métadonnées dérivées.
+- Le document persistant contient les décisions de montage, pas les métadonnées dérivées.
 - Les services applicatifs orchestrent les cas d’utilisation.
 - Les adaptateurs encapsulent MLT, FFmpeg, FFprobe et CCExtractor.
-- La CLI et la future IHM Rails doivent appeler les mêmes services.
-- Les traitements longs devront être exécutés hors du cycle d’une requête HTTP.
+- La CLI et l’IHM Python/Qt utilisent le même moteur Ruby d’export.
+- L’IHM exécute l’export dans un processus distinct pour rester réactive.
