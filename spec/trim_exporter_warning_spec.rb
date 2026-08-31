@@ -53,6 +53,7 @@ RSpec.describe VideoEncoder::TrimExporter, 'subtitle warnings' do
       progress_reporter: reporter
     )
 
+    expect(renderer).not_to have_received(:render_video)
     expect do
       exporter.call(
         trim_project: project,
@@ -73,5 +74,80 @@ RSpec.describe VideoEncoder::TrimExporter, 'subtitle warnings' do
     ).once
 
     expect(remuxer).not_to have_received(:remux)
+  end
+
+  it 'exports French audio only when no usable subtitles were found' do
+    french = VideoEncoder::AudioOutputTrack.new(
+      role: :french,
+      tracks_by_source: { media => :french_track }
+    )
+    original = VideoEncoder::AudioOutputTrack.new(
+      role: :original,
+      tracks_by_source: { media => :original_track }
+    )
+    failure = VideoEncoder::TrimSubtitleExporter::IncompleteSubtitles.new(
+      missing_groups: [1],
+      subtitle_path: nil
+    )
+    steps = []
+
+    allow(builder).to receive(:build).and_return('<mlt/>')
+    allow(workspace).to receive_messages(
+      write_mlt: nil,
+      mlt_path: 'tmp/project.mlt',
+      video_path: 'tmp/video.mkv'
+    )
+    allow(workspace).to receive(:audio_path) do |track|
+      "tmp/#{track.role}.mka"
+    end
+
+    allow(subtitle_exporter).to receive(:call) do
+      steps << :subtitles
+      raise failure
+    end
+    allow(renderer).to receive(:render_video) do
+      steps << :video
+    end
+    allow(renderer).to receive(:render_audio) do
+      steps << :audio
+    end
+    allow(remuxer).to receive(:remux) do
+      steps << :remux
+    end
+    allow(reporter).to receive(:call)
+    allow(reporter).to receive(:warning)
+
+    exporter = described_class.new(
+      builder: builder,
+      renderer: renderer,
+      remuxer: remuxer,
+      workspace: workspace,
+      subtitle_exporter: subtitle_exporter,
+      progress_reporter: reporter
+    )
+
+    exporter.call(
+      trim_project: project,
+      video_tracks_by_source: { media => video_track },
+      audio_output_tracks: [french, original],
+      subtitle_tracks_by_source: { media => :subtitle_track },
+      output_path: 'movie.mkv'
+    )
+
+    expect(steps).to eq(%i[subtitles video audio remux])
+    expect(renderer).to have_received(:render_audio).with(
+      project_path: 'tmp/project.mlt',
+      output_path: 'tmp/french.mka'
+    ).once
+    expect(remuxer).to have_received(:remux).with(
+      video_path: 'tmp/video.mkv',
+      audio_inputs: [
+        { path: 'tmp/french.mka', output_track: french }
+      ],
+      output_path: 'movie.mkv'
+    )
+    expect(reporter).to have_received(:warning).with(
+      hash_including(code: 'original_audio_omitted_no_subtitles')
+    )
   end
 end

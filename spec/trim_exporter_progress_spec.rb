@@ -109,22 +109,22 @@ RSpec.describe VideoEncoder::TrimExporter, 'progress reporting' do
     expect(events).to eq(
       [
         {
-          stage: :video,
+          stage: :subtitles,
           step: 1,
           total: 4
         },
         {
-          stage: :audio,
+          stage: :video,
           step: 2,
+          total: 4
+        },
+        {
+          stage: :audio,
+          step: 3,
           total: 4,
           track: 1,
           tracks: 1,
           role: :french
-        },
-        {
-          stage: :subtitles,
-          step: 3,
-          total: 4
         },
         {
           stage: :remux,

@@ -32,6 +32,16 @@ module VideoEncoder
         output_track.complete_for?(sources)
       end
 
+      subtitle_path, selected_audio_tracks = SubtitleExportPreparation.new(
+        exporter: subtitle_exporter,
+        progress_reporter: progress_reporter
+      ).call(
+        trim_project: trim_project,
+        video_tracks_by_source: video_tracks_by_source,
+        subtitle_tracks_by_source: subtitle_tracks_by_source,
+        audio_output_tracks: selected_audio_tracks
+      )
+
       total_steps = total_steps_for(selected_audio_tracks)
 
       render_video(
@@ -48,20 +58,16 @@ module VideoEncoder
         total_steps
       )
 
-      subtitle_path = render_subtitles(
-        trim_project,
-        video_tracks_by_source,
-        subtitle_tracks_by_source,
-        selected_audio_tracks.length,
-        total_steps
-      )
+      report_progress(:remux, step: total_steps, total: total_steps)
 
-      remux(
-        audio_inputs,
-        subtitle_path,
-        output_path,
-        total_steps
-      )
+      args = {
+        video_path: workspace.video_path,
+        audio_inputs: audio_inputs,
+        output_path: output_path
+      }
+      args[:subtitle_path] = subtitle_path if subtitle_path
+
+      @remuxer.remux(**args)
     end
 
     private
@@ -82,7 +88,7 @@ module VideoEncoder
     def render_video(trim_project, video_tracks_by_source, total_steps)
       report_progress(
         :video,
-        step: 1,
+        step: subtitle_exporter ? 2 : 1,
         total: total_steps
       )
 
@@ -131,7 +137,7 @@ module VideoEncoder
     )
       report_progress(
         :audio,
-        step: index + 2,
+        step: index + (subtitle_exporter ? 3 : 2),
         total: total_steps,
         track: index + 1,
         tracks: track_count,
@@ -162,61 +168,6 @@ module VideoEncoder
         path: audio_path,
         output_track: output_track
       }
-    end
-
-    def render_subtitles(
-      trim_project,
-      video_tracks_by_source,
-      subtitle_tracks_by_source,
-      audio_track_count,
-      total_steps
-    )
-      return unless subtitle_exporter
-
-      report_progress(
-        :subtitles,
-        step: audio_track_count + 2,
-        total: total_steps
-      )
-
-      subtitle_exporter.call(
-        trim_project: trim_project,
-        video_tracks_by_source: video_tracks_by_source,
-        subtitle_tracks_by_source: subtitle_tracks_by_source
-      )
-    rescue TrimSubtitleExporter::IncompleteSubtitles => e
-      report_missing_subtitles(e.missing_groups)
-      raise
-    end
-
-    def report_missing_subtitles(groups)
-      return unless progress_reporter.respond_to?(:warning)
-
-      groups.each do |group|
-        progress_reporter.warning(
-          code: 'no_subtitles_found',
-          message: "Aucun sous-titre trouvé pour le groupe #{group}.",
-          group: group
-        )
-      end
-    end
-
-    def remux(audio_inputs, subtitle_path, output_path, total_steps)
-      report_progress(
-        :remux,
-        step: total_steps,
-        total: total_steps
-      )
-
-      arguments = {
-        video_path: workspace.video_path,
-        audio_inputs: audio_inputs,
-        output_path: output_path
-      }
-
-      arguments[:subtitle_path] = subtitle_path if subtitle_path
-
-      remuxer.remux(**arguments)
     end
 
     def report_progress(stage, **details)
