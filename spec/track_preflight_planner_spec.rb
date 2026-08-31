@@ -43,13 +43,7 @@ RSpec.describe VideoEncoder::TrackPreflightPlanner do
     project = VideoEncoder::TrimProject.new
 
     [[0, 2999], [5000, 6999]].each do |first, last|
-      project.add_segment(
-        VideoEncoder::Segment.new(
-          source: source,
-          start_frame: first,
-          end_frame: last
-        )
-      )
+      add_segment(project, source, first, last)
     end
 
     audio_outputs = [
@@ -104,13 +98,7 @@ RSpec.describe VideoEncoder::TrackPreflightPlanner do
       [other_source, 10_000, 15_999],
       [source, 5000, 6999]
     ].each do |media, first, last|
-      project.add_segment(
-        VideoEncoder::Segment.new(
-          source: media,
-          start_frame: first,
-          end_frame: last
-        )
-      )
+      add_segment(project, media, first, last)
     end
 
     audio_output = VideoEncoder::AudioOutputTrack.new(
@@ -154,13 +142,7 @@ RSpec.describe VideoEncoder::TrackPreflightPlanner do
   it 'uses the whole segment when it is shorter than the sample duration' do
     project = VideoEncoder::TrimProject.new
 
-    project.add_segment(
-      VideoEncoder::Segment.new(
-        source: source,
-        start_frame: 100,
-        end_frame: 349
-      )
-    )
+    add_segment(project, source, 100, 349)
 
     samples = described_class.new(sample_seconds: 60).call(
       trim_project: project,
@@ -179,6 +161,65 @@ RSpec.describe VideoEncoder::TrackPreflightPlanner do
           frame_rate: Rational(25, 1)
         }
       ]
+    )
+  end
+
+  it 'skips a confirmed audio track only for its own source' do
+    other_source = instance_double(VideoEncoder::Media)
+
+    other_audio = VideoEncoder::Track.new(
+      index: french_track.index,
+      type: :audio,
+      language: 'fra'
+    )
+
+    project = VideoEncoder::TrimProject.new
+
+    [source, other_source].each do |media|
+      add_segment(project, media, 0, 2999)
+    end
+
+    audio_output = VideoEncoder::AudioOutputTrack.new(
+      role: :french,
+      tracks_by_source: {
+        source => french_track,
+        other_source => other_audio
+      }
+    )
+
+    samples = described_class.new(sample_seconds: 60).call(
+      trim_project: project,
+      video_tracks_by_source: {
+        source => video_track,
+        other_source => video_track
+      },
+      audio_output_tracks: [audio_output],
+      subtitle_tracks_by_source: {},
+      confirmed_audio_tracks_by_source: {
+        source => [french_track.index]
+      }
+    )
+
+    expect(samples).to eq(
+      [
+        {
+          source: other_source,
+          track: other_audio,
+          start_frame: 750,
+          end_frame: 2249,
+          frame_rate: Rational(25, 1)
+        }
+      ]
+    )
+  end
+
+  def add_segment(project, media, first, last)
+    project.add_segment(
+      VideoEncoder::Segment.new(
+        source: media,
+        start_frame: first,
+        end_frame: last
+      )
     )
   end
 end

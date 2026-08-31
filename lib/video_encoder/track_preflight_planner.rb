@@ -15,7 +15,8 @@ module VideoEncoder
       trim_project:,
       video_tracks_by_source:,
       audio_output_tracks:,
-      subtitle_tracks_by_source:
+      subtitle_tracks_by_source:,
+      confirmed_audio_tracks_by_source: {}
     )
       segments_by_source = trim_project.segments.group_by(&:source)
 
@@ -23,7 +24,8 @@ module VideoEncoder
         tracks = selected_tracks(
           source,
           audio_output_tracks,
-          subtitle_tracks_by_source
+          subtitle_tracks_by_source,
+          confirmed_audio_tracks_by_source.fetch(source, [])
         )
 
         next [] if tracks.empty?
@@ -47,8 +49,18 @@ module VideoEncoder
 
     attr_reader :sample_seconds
 
-    def selected_tracks(source, audio_outputs, subtitle_tracks)
+    def selected_tracks(
+      source,
+      audio_outputs,
+      subtitle_tracks,
+      confirmed_audio_indexes
+    )
       tracks = audio_outputs.map { |output| output.track_for(source) }
+
+      tracks.reject! do |track|
+        confirmed_audio_indexes.include?(track.index)
+      end
+
       subtitle = subtitle_tracks[source]
       tracks << subtitle if subtitle
 
