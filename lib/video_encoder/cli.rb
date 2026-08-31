@@ -2,6 +2,7 @@
 
 require_relative 'cli/export_command'
 require_relative 'cli/config_command'
+require_relative 'cli/preflight_audio_command'
 
 module VideoEncoder
   # CLI handles command-line interface for VideoEncoder.
@@ -15,13 +16,26 @@ module VideoEncoder
     'run' => :run_worker,
     'config' => :show_config,
     'watch' => :watch,
-    'export' => :export_trim_project
+    'export' => :export_trim_project,
+    'preflight-audio' => :preflight_audio
   }.freeze
+
+  CLI_USAGE = <<~TEXT
+    Usage:
+      video_encoder version
+      video_encoder enqueue <file>
+      video_encoder run [--once]
+      video_encoder list
+      video_encoder status <job_id>
+      video_encoder config
+      video_encoder watch [--once]
+      video_encoder export <project.json> --output <movie.mkv>
+      video_encoder preflight-audio <project.json>
+      video_encoder failed
+  TEXT
 
   # Provides the command-line interface for VideoEncoder.
   class CLI
-    # Provides the command-line interface for VideoEncoder.
-
     def self.start(argv, **)
       new(argv, **).run
     rescue MissingExternalDependenciesError => e
@@ -66,6 +80,13 @@ module VideoEncoder
         service: @trim_export_service,
         dependency_checker: @dependency_checker,
         command_probe: command_probe
+      ).run
+    end
+
+    def preflight_audio
+      PreflightAudioCommand.new(
+        argv: @argv,
+        dependency_checker: dependency_checker
       ).run
     end
 
@@ -221,18 +242,7 @@ module VideoEncoder
     end
 
     def usage
-      <<~TEXT
-        Usage:
-          video_encoder version
-          video_encoder enqueue <file>
-          video_encoder run [--once]
-          video_encoder list
-          video_encoder status <job_id>
-          video_encoder config
-          video_encoder watch [--once]
-          video_encoder export <project.json> --output <movie.mkv>
-          video_encoder failed
-      TEXT
+      CLI_USAGE
     end
 
     def watcher
