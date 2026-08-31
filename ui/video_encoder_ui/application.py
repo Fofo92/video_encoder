@@ -26,6 +26,7 @@ from .trim_project_file_writer import (
 from .trim_project_exporter import (
     TrimProjectExporter,
 )
+from .audio_preflight_runner import AudioPreflightRunner
 
 PREVIEW_WIDTH = 640
 PREVIEW_HEIGHT = 360
@@ -58,7 +59,21 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             TrimProjectBridge()
         )
         self.project_path = None
+        self.audio_preflight_runner = AudioPreflightRunner()
+        self.pending_export = None
+        self.close_after_preflight = False
+        self.audio_preflight_cancel_prompt_active = False
+        self.deferred_audio_preflight_result = None
 
+        self.audio_preflight_runner.failed.connect(
+            self.audio_preflight_failed
+        )
+        self.audio_preflight_runner.succeeded.connect(
+            self.audio_preflight_succeeded
+        )
+        self.audio_preflight_runner.status_changed.connect(
+            self.audio_preflight_status_changed
+        )
         self.trim_project_exporter = (
             TrimProjectExporter()
         )
@@ -1188,6 +1203,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
     def select_segment(self, index):
+        if self.export_status in {"running", "preflight", "confirming"}:
+            return
+
         segments = self.trim_session.segments
 
         if not 0 <= index < len(segments):
@@ -1203,6 +1221,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
     def delete_segment(self, index):
+        if self.export_status in {"running", "preflight", "confirming"}:
+            return
+
         segments = self.trim_session.segments
 
         if not 0 <= index < len(segments):
@@ -1297,6 +1318,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
     def add_current_segment(self):
+        if self.export_status in {"running", "preflight", "confirming"}:
+            return
+
         if (
             self.in_position is None
             or self.out_position is None
@@ -1328,6 +1352,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.clear_active_markers()
 
     def set_in_marker(self):
+        if self.export_status in {"running", "preflight", "confirming"}:
+            return
+
         position = self.current_position
 
         if (
@@ -1355,6 +1382,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
     def set_out_marker(self):
+        if self.export_status in {"running", "preflight", "confirming"}:
+            return
+
         position = self.current_position
 
         if (
@@ -1383,6 +1413,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
     def save_project(self):
+        if self.export_status in {"running", "preflight", "confirming"}:
+            return
+
         destination = self.project_path
 
         if destination is None:
@@ -1436,7 +1469,11 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         return destination
 
     def export_project(self):
-        if self.trim_project_exporter.is_running:
+        if (
+            self.trim_project_exporter.is_running
+            or self.audio_preflight_runner.is_running
+            or self.pending_export is not None
+        ):
             return
 
         if not self.trim_session.segments:
@@ -1481,21 +1518,142 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         if project_path is None:
             return
 
+        self.pending_export = (project_path, output_path)
+
+        try:
+            self.audio_preflight_runner.start(project_path)
+        except RuntimeError as error:
+            self.export_status_changed("failed")
+            self.pending_export = None
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Contrôle audio indisponible",
+                str(error)
+            )
+
+    def audio_preflight_status_changed(self, status):
+        if status == "running":
+            self.export_status_changed("preflight")
+            return
+
+        if status not in {"succeeded", "failed", "cancelled"}:
+            return
+
+        if self.close_after_preflight:
+            self.pending_export = None
+            QtCore.QTimer.singleShot(0, self.close)
+            return
+
+        if status == "cancelled":
+            self.pending_export = None
+            self.export_status_changed("cancelled")
+        elif status == "succeeded":
+            self.export_status_changed(
+                "confirming"
+                if self.pending_export is not None
+                else "cancelled"
+            )
+
+    def audio_preflight_succeeded(self, report):
+        if self.audio_preflight_cancel_prompt_active:
+            self.deferred_audio_preflight_result = (
+                "succeeded",
+                report,
+            )
+            return
+
+        if self.pending_export is None:
+            return
+
+        pending_export = self.pending_export
+        status_labels = {
+            "signal_detected": "signal détecté",
+            "inconclusive": "résultat non concluant",
+        }
+
+        lines = []
+        for check in report["audio_checks"]:
+            source = check["source"]
+            index = check["track_index"]
+            language = check.get("language") or "non précisée"
+            status = check["analysis"]["status"]
+
+            lines.append(
+                f"{source}\n"
+                f"  Piste {index} — {language} : "
+                f"{status_labels.get(status, status)}"
+            )
+
+        summary = "\n\n".join(lines)
+        if not summary:
+            summary = "Aucune piste audio à contrôler."
+
+        answer = QtWidgets.QMessageBox.question(
+            self,
+            "Contrôle audio avant export",
+            (
+                f"{summary}\n\n"
+                "Ce contrôle mesure la présence d’un signal, "
+                "pas la langue réellement parlée.\n"
+                "Un résultat non concluant ne prouve pas "
+                "que la piste est inutilisable.\n\n"
+                "Veux-tu poursuivre l’export avec "
+                "les pistes sélectionnées ?"
+            ),
+            (
+                QtWidgets.QMessageBox.StandardButton.Yes
+                | QtWidgets.QMessageBox.StandardButton.No
+            ),
+            QtWidgets.QMessageBox.StandardButton.No
+        )
+
+        if self.pending_export != pending_export:
+            return
+
+        self.pending_export = None
+
+        if answer != QtWidgets.QMessageBox.StandardButton.Yes:
+            self.export_status_changed("cancelled")
+            return
+
+        project_path, output_path = pending_export
+
         try:
             self.trim_project_exporter.start(
                 project_path,
                 output_path
             )
         except RuntimeError as error:
+            self.export_status_changed("failed")
             QtWidgets.QMessageBox.warning(
                 self,
                 "Export indisponible",
                 str(error)
             )
 
+    def audio_preflight_failed(self, message):
+        if self.audio_preflight_cancel_prompt_active:
+            self.deferred_audio_preflight_result = (
+                "failed",
+                message,
+            )
+            return
+
+        self.pending_export = None
+
+        if self.close_after_preflight:
+            return
+
+        self.export_status_changed("failed")
+        QtWidgets.QMessageBox.warning(
+            self,
+            "Échec du contrôle audio",
+            message
+        )
+
     def export_status_changed(self, status):
         self.export_status = status
-        running = status == "running"
+        running = status in {"running", "preflight", "confirming"}
 
         self.export_project_action.setEnabled(
             not running
@@ -1505,7 +1663,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
         self.cancel_export_action.setEnabled(
-            running
+            status in {"running", "preflight"}
         )
 
         self.in_button.setEnabled(
@@ -1520,6 +1678,21 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.segment_list.setEnabled(
             not running
         )
+
+        if status in {"preflight", "confirming"}:
+            message = (
+                "Contrôle audio en cours…"
+                if status == "preflight"
+                else "Confirmation audio en attente…"
+            )
+            self.export_elapsed_timer.stop()
+            self.export_progress_bar.setRange(0, 0)
+            self.export_progress_bar.setFormat(message)
+            self.export_progress_bar.setVisible(True)
+            self.statusBar().showMessage(message)
+            return
+
+        self.export_progress_bar.setRange(0, 100)
 
         if running:
             self.export_warnings.clear()
@@ -1905,7 +2078,66 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.frame_source.close()
             self.frame_source = None
 
+    def cancel_audio_preflight(self, quitting=False):
+        if self.audio_preflight_cancel_prompt_active:
+            return False
+
+        if not self.audio_preflight_runner.is_running:
+            return True
+
+        if quitting:
+            question = (
+                "Un contrôle audio est en cours.\n"
+                "Veux-tu l’interrompre et quitter ?"
+            )
+        else:
+            question = (
+                "Un contrôle audio est en cours.\n"
+                "Veux-tu réellement l’interrompre ?"
+            )
+
+        self.audio_preflight_cancel_prompt_active = True
+        self.deferred_audio_preflight_result = None
+
+        try:
+            answer = QtWidgets.QMessageBox.question(
+                self,
+                "Interrompre le contrôle audio ?",
+                question,
+                (
+                    QtWidgets.QMessageBox.StandardButton.Yes
+                    | QtWidgets.QMessageBox.StandardButton.No
+                ),
+                QtWidgets.QMessageBox.StandardButton.No
+            )
+        finally:
+            self.audio_preflight_cancel_prompt_active = False
+
+        deferred_result = self.deferred_audio_preflight_result
+        self.deferred_audio_preflight_result = None
+
+        if answer == QtWidgets.QMessageBox.StandardButton.Yes:
+            self.pending_export = None
+
+            if self.audio_preflight_runner.is_running:
+                return self.audio_preflight_runner.cancel()
+
+            self.export_status_changed("cancelled")
+            return True
+
+        if deferred_result is not None:
+            status, payload = deferred_result
+
+            if status == "succeeded":
+                self.audio_preflight_succeeded(payload)
+            else:
+                self.audio_preflight_failed(payload)
+
+        return False
+
     def cancel_export(self, quitting=False):
+        if self.audio_preflight_runner.is_running:
+            return self.cancel_audio_preflight(quitting=quitting)
         if not self.trim_project_exporter.is_running:
             return True
 
@@ -1955,12 +2187,34 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         return False
 
     def closeEvent(self, event):
+        if self.audio_preflight_runner.is_running:
+            event.ignore()
+
+            if self.close_after_preflight:
+                return
+
+            if not self.cancel_audio_preflight(quitting=True):
+                return
+
+            self.close_after_preflight = True
+
+            if not self.audio_preflight_runner.is_running:
+                QtCore.QTimer.singleShot(0, self.close)
+
+            return
+
+        if self.pending_export is not None:
+            event.ignore()
+            return
+
         if not self.cancel_export(quitting=True):
+            self.close_after_preflight = False
             event.ignore()
             return
 
         self.shutdown()
         super().closeEvent(event)
+
 
 def main():
     if len(sys.argv) != 2:
