@@ -39,6 +39,26 @@ module VideoEncoder
     attr_reader :exporter, :progress_reporter
 
     def extract_subtitles(**arguments)
+      export_subtitles(**arguments)
+    rescue CcextractorOcr::TechnicalFailure
+      fallback_tracks = hearing_impaired_fallback(
+        arguments.fetch(:subtitle_tracks_by_source)
+      )
+
+      raise unless fallback_tracks
+
+      warn(
+        code: 'hearing_impaired_subtitles_fallback',
+        message: 'La piste de sous-titres normale est inutilisable : utilisation de la piste pour malentendants.'
+      )
+
+      export_subtitles(
+        **arguments,
+        subtitle_tracks_by_source: fallback_tracks
+      )
+    end
+
+    def export_subtitles(**arguments)
       exporter.call(**arguments)
     rescue TrimSubtitleExporter::IncompleteSubtitles => e
       e.missing_groups.each do |group|
@@ -52,6 +72,24 @@ module VideoEncoder
       raise unless e.subtitle_path.nil?
 
       nil
+    end
+
+    def hearing_impaired_fallback(tracks_by_source)
+      replacement_found = false
+
+      fallback_tracks = tracks_by_source.to_h do |source, selected|
+        replacement = source.subtitle_tracks.find do |candidate|
+          candidate.index != selected.index &&
+            candidate.language == selected.language &&
+            candidate.hearing_impaired
+        end
+
+        replacement_found = true if replacement
+
+        [source, replacement || selected]
+      end
+
+      fallback_tracks if replacement_found
     end
 
     def retained_audio_tracks(audio_tracks, subtitle_path)

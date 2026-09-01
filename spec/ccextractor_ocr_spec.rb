@@ -18,6 +18,7 @@ RSpec.describe VideoEncoder::CcextractorOcr do
 
       expect(runner).to have_received(:run).with(
         'ccextractor',
+        '--ts',
         '--codec', 'dvbsub',
         '--streamtype', '6',
         '--ocrlang', 'fra',
@@ -53,7 +54,7 @@ RSpec.describe VideoEncoder::CcextractorOcr do
       )
     end
 
-    it 'preserves technical failures from CCExtractor' do
+    it 'identifies technical failures from CCExtractor' do
       status = instance_double(
         Process::Status,
         exitstatus: 2,
@@ -74,9 +75,9 @@ RSpec.describe VideoEncoder::CcextractorOcr do
           output_path: '/tmp/subtitle_segment.srt'
         )
       end.to raise_error(
-        VideoEncoder::CommandRunner::CommandFailed
+        VideoEncoder::CcextractorOcr::TechnicalFailure
       ) { |error|
-        expect(error).to equal(failure)
+        expect(error.failure).to equal(failure)
       }
     end
   end
