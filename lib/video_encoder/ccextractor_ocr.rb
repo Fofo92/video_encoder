@@ -30,6 +30,7 @@ module VideoEncoder
       runner.run(
         executable,
         '--ts',
+        '--analyzevideo',
         '--codec', 'dvbsub',
         '--streamtype', '6',
         '--ocrlang', language,

@@ -19,6 +19,7 @@ RSpec.describe VideoEncoder::CcextractorOcr do
       expect(runner).to have_received(:run).with(
         'ccextractor',
         '--ts',
+        '--analyzevideo',
         '--codec', 'dvbsub',
         '--streamtype', '6',
         '--ocrlang', 'fra',
