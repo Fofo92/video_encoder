@@ -1686,6 +1686,14 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
                 else "Confirmation audio en attente…"
             )
             self.export_elapsed_timer.stop()
+
+            if status in {
+                "succeeded",
+                "failed",
+                "cancelled"
+            }:
+              self.export_progress_bar.setVisible(True)
+
             self.export_progress_bar.setRange(0, 0)
             self.export_progress_bar.setFormat(message)
             self.export_progress_bar.setVisible(True)
@@ -1780,11 +1788,22 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.export_stage_name(event)
         )
 
-        self.export_progress_bar.setRange(
-            0,
-            100
+        measurable = self.export_stage in {
+            "video",
+            "audio"
+        }
+
+        self.export_progress_bar.setVisible(
+            measurable
         )
-        self.export_progress_bar.setValue(0)
+
+        if measurable:
+            self.export_progress_bar.setRange(
+                0,
+                100
+            )
+            self.export_progress_bar.setValue(0)
+
         self.update_export_progress_format()
         self.update_export_elapsed()
 
@@ -1854,6 +1873,16 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
                 f"{self.export_total_steps} — "
                 f"{self.export_stage_label}"
             )
+
+            if self.export_stage not in {
+                "video",
+                "audio"
+            }:
+                message = (
+                    f"{message} — "
+                    "progression non mesurable"
+                )
+
         else:
             message = "Export : préparation"
 
