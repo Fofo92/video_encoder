@@ -2215,16 +2215,40 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.shutdown()
         super().closeEvent(event)
 
+def select_source_path(arguments):
+    if arguments:
+        return Path(arguments[0]).expanduser().resolve()
+
+    source_path, _selected_filter = (
+        QtWidgets.QFileDialog.getOpenFileName(
+            None,
+            "Ouvrir un enregistrement",
+            "",
+            (
+                "Fichiers vidéo "
+                "(*.m2t *.mts *.ts *.mkv *.mp4);;"
+                "Tous les fichiers (*)"
+            )
+        )
+    )
+
+    if not source_path:
+        return None
+
+    return Path(source_path).expanduser().resolve()
 
 def main():
-    if len(sys.argv) != 2:
+    if len(sys.argv) > 2:
         print(
-            f"Usage: {Path(sys.argv[0]).name} <media>",
+            f"Usage: {Path(sys.argv[0]).name} [media]",
             file=sys.stderr
         )
         return 2
+    app = QtWidgets.QApplication(sys.argv)
+    source_path = select_source_path(sys.argv[1:])
 
-    source_path = Path(sys.argv[1]).expanduser().resolve()
+    if source_path is None:
+        return 0
 
     if not source_path.is_file():
         print(
@@ -2236,7 +2260,6 @@ def main():
     factory = mlt.Factory()
     factory.init()
 
-    app = QtWidgets.QApplication(sys.argv)
     window = MltFrameMonitor(source_path)
     window.show()
 
