@@ -15,6 +15,8 @@ module VideoEncoder
         '-consumer',
         "avformat:#{output_path}",
         'vcodec=libx265',
+        'crf=24',
+        'preset=medium',
         'an=1'
       )
     end

@@ -23,6 +23,8 @@ RSpec.describe VideoEncoder::MltRenderer do
         '-consumer',
         'avformat:tmp/video.mkv',
         'vcodec=libx265',
+        'crf=24',
+        'preset=medium',
         'an=1'
       )
     end
