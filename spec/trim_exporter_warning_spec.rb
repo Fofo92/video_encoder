@@ -147,7 +147,15 @@ RSpec.describe VideoEncoder::TrimExporter, 'subtitle warnings' do
       output_path: 'movie.mkv'
     )
     expect(reporter).to have_received(:warning).with(
-      hash_including(code: 'original_audio_omitted_no_subtitles')
+      code: 'original_audio_omitted_no_subtitles',
+      message:
+        'Aucun sous-titre exploitable n’a été trouvé. ' \
+        'L’export se poursuit sans sous-titres ni piste audio ' \
+        'en version originale.'
+    ).once
+
+    expect(reporter).not_to have_received(:warning).with(
+      hash_including(code: 'no_subtitles_found')
     )
   end
 end

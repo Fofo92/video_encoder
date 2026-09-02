@@ -61,6 +61,8 @@ module VideoEncoder
     def export_subtitles(**arguments)
       exporter.call(**arguments)
     rescue TrimSubtitleExporter::IncompleteSubtitles => e
+      return unless e.subtitle_path
+
       e.missing_groups.each do |group|
         warn(
           code: 'no_subtitles_found',
@@ -69,9 +71,7 @@ module VideoEncoder
         )
       end
 
-      raise unless e.subtitle_path.nil?
-
-      nil
+      raise
     end
 
     def hearing_impaired_fallback(tracks_by_source)
@@ -106,7 +106,10 @@ module VideoEncoder
 
       warn(
         code: 'original_audio_omitted_no_subtitles',
-        message: 'Aucun sous-titre exploitable : export sans sous-titres ni piste audio qaa.'
+        message:
+          'Aucun sous-titre exploitable n’a été trouvé. ' \
+          'L’export se poursuit sans sous-titres ni piste audio ' \
+          'en version originale.'
       )
 
       retained
