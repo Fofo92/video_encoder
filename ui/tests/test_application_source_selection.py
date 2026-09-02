@@ -1,10 +1,6 @@
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
-from video_encoder_ui.application import (
-    load_startup_selection,
-    select_source_path,
-)
 
 try:
     import mlt7
@@ -14,6 +10,7 @@ except ModuleNotFoundError:
 
 if QtWidgets is not None:
     from video_encoder_ui.application import (
+        load_startup_selection,
         select_source_path,
     )
 

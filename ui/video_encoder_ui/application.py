@@ -2355,7 +2355,7 @@ def load_startup_selection(
 def main():
     if len(sys.argv) > 2:
         print(
-            f"Usage: {Path(sys.argv[0]).name} [name] ",
+            f"Usage: {Path(sys.argv[0]).name} [name] "
             "[media-or-project]",
             file=sys.stderr
         )
