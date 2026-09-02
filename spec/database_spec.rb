@@ -76,6 +76,15 @@ RSpec.describe VideoEncoder::Persistence::Database do
           target: 1
         )
 
+        legacy_database.create_table(
+          :schema_migrations
+        ) do
+          primary_key :id
+          Integer :version,
+                  null: false,
+                  unique: true
+        end
+
         legacy_database[:jobs].insert(
           job_id: 'legacy-job',
           source: 'legacy.m2t',
@@ -86,6 +95,12 @@ RSpec.describe VideoEncoder::Persistence::Database do
 
         database = described_class.connect(path)
         job = database[:jobs].first
+
+        expect(
+          database.table_exists?(
+            :schema_migrations
+          )
+        ).to be(false)
 
         expect(database[:jobs].count).to eq(1)
         expect(job).to include(
