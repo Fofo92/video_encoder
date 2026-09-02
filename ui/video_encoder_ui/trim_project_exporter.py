@@ -5,6 +5,10 @@ from PySide6 import QtCore
 from .mlt_progress_parser import MltProgressParser
 from .export_event_parser import ExportEventParser
 
+DEFAULT_INHIBITOR_EXECUTABLE = Path(
+    "/usr/bin/systemd-inhibit"
+)
+
 class TrimProjectExporter(QtCore.QObject):
     status_changed = QtCore.Signal(str)
     warning_received = QtCore.Signal(object)
@@ -14,11 +18,19 @@ class TrimProjectExporter(QtCore.QObject):
     succeeded = QtCore.Signal(str)
     failed = QtCore.Signal(str)
 
-    def __init__(self, executable=None):
+    def __init__(
+      self,
+      executable=None,
+      inhibitor_executable=None
+      ):
         super().__init__()
 
         project_directory = (
             Path(__file__).resolve().parents[2]
+        )
+
+        uses_default_executable = (
+            executable is None
         )
 
         if executable is None:
@@ -29,6 +41,22 @@ class TrimProjectExporter(QtCore.QObject):
             )
 
         self.executable = Path(executable)
+
+        if (
+            inhibitor_executable is None
+            and uses_default_executable
+            and DEFAULT_INHIBITOR_EXECUTABLE.is_file()
+        ):
+            inhibitor_executable = (
+                DEFAULT_INHIBITOR_EXECUTABLE
+            )
+
+        self.inhibitor_executable = (
+            Path(inhibitor_executable)
+            if inhibitor_executable is not None
+            else None
+        )
+
         self.ccextractor_executable = (
             project_directory
             / "bin"
@@ -103,17 +131,31 @@ class TrimProjectExporter(QtCore.QObject):
             )
 
         self.process.setProcessEnvironment(environment)
-        self.process.setProgram(
-            str(self.executable)
-        )
-        self.process.setArguments(
-            [
-                "export",
-                str(project_path),
-                "--output",
-                str(self.output_path)
+
+        program = self.executable
+        arguments = [
+            "export",
+            str(project_path),
+            "--output",
+            str(self.output_path)
+        ]
+
+        if self.inhibitor_executable is not None:
+            arguments = [
+                "--what=sleep",
+                "--who=video_encoder",
+                (
+                    "--why=Export video_encoder "
+                    "en cours"
+                ),
+                "--mode=block",
+                str(program),
+                *arguments
             ]
-        )
+            program = self.inhibitor_executable
+
+        self.process.setProgram(str(program))
+        self.process.setArguments(arguments)
 
         self.status_changed.emit("running")
         self.process.start()

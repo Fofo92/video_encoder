@@ -112,6 +112,41 @@ class TrimProjectExporterTest(unittest.TestCase):
             ""
         )
 
+    def test_prevents_sleep_during_the_export(self):
+        exporter = TrimProjectExporter(
+            executable="/bin/true",
+            inhibitor_executable="/bin/echo"
+        )
+
+        exporter.start(
+            "project.json",
+            "movie.mkv"
+        )
+
+        self.assertEqual(
+            exporter.process.program(),
+            "/bin/echo"
+        )
+        self.assertEqual(
+            exporter.process.arguments(),
+            [
+                "--what=sleep",
+                "--who=video_encoder",
+                (
+                    "--why=Export video_encoder "
+                    "en cours"
+                ),
+                "--mode=block",
+                "/bin/true",
+                "export",
+                "project.json",
+                "--output",
+                "movie.mkv"
+            ]
+        )
+
+        self.wait_for_export(exporter)
+
     def test_reports_a_successful_export(self):
         statuses = []
         output_paths = []
