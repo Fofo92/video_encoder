@@ -4,6 +4,7 @@ require_relative 'cli/export_command'
 require_relative 'cli/config_command'
 require_relative 'cli/preflight_audio_command'
 require_relative 'cli/job_presenter'
+require_relative 'cli/enqueue_trim_export_command'
 
 module VideoEncoder
   # CLI handles command-line interface for VideoEncoder.
@@ -11,6 +12,7 @@ module VideoEncoder
   COMMANDS = {
     'version' => :print_version,
     'enqueue' => :enqueue,
+    'enqueue-trim-export' => :enqueue_trim_export,
     'list' => :list,
     'status' => :status,
     'failed' => :failed,
@@ -26,6 +28,7 @@ module VideoEncoder
       video_encoder version
       video_encoder enqueue <file>
       video_encoder run [--once]
+      video_encoder enqueue-trim-export <project.json> --output <movie.mkv>
       video_encoder list
       video_encoder status <job_id>
       video_encoder config
@@ -126,6 +129,10 @@ module VideoEncoder
       repo.enqueue(job)
 
       puts "Enqueued: #{job.id} (#{file})"
+    end
+
+    def enqueue_trim_export
+      EnqueueTrimExportCommand.new(argv: @argv, repo: repo).run
     end
 
     def status
