@@ -83,6 +83,10 @@ module VideoEncoder
       self
     end
 
+    def input_path
+      project_path
+    end
+
     private
 
     def now

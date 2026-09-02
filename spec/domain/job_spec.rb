@@ -35,6 +35,13 @@ RSpec.describe VideoEncoder::Job do
     it 'identifies an encoding job' do
       expect(job.kind).to eq('encoding')
     end
+
+    it 'exposes its source as the input path' do
+      expect(job.input_path).to eq(
+        Pathname('video.mp4')
+      )
+      expect(job.output_path).to be_nil
+    end
   end
 
   describe '#start!' do

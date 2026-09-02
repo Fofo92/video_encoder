@@ -89,6 +89,14 @@ module VideoEncoder
       )
     end
 
+    def input_path
+      source
+    end
+
+    def output_path
+      nil
+    end
+
     private
 
     def now

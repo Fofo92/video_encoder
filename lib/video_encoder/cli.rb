@@ -3,6 +3,7 @@
 require_relative 'cli/export_command'
 require_relative 'cli/config_command'
 require_relative 'cli/preflight_audio_command'
+require_relative 'cli/job_presenter'
 
 module VideoEncoder
   # CLI handles command-line interface for VideoEncoder.
@@ -107,13 +108,13 @@ module VideoEncoder
     def list
       jobs = repo.all
 
-      puts 'ID | SOURCE | STATUS'
-      puts '-' * 60
+      puts JobPresenter::HEADER
+      puts '-' * 80
 
       return puts 'No jobs found' if jobs.empty?
 
       jobs.each do |job|
-        puts "#{job.id} | #{job.source} | #{job.status} | attempts=#{job.attempts}"
+        puts job_presenter.summary(job)
       end
     end
 
@@ -137,14 +138,11 @@ module VideoEncoder
     end
 
     def print_job_status(job)
-      puts "ID:       #{job.id}"
-      puts "Source:   #{job.source}"
-      puts "Status:   #{job.status}"
-      puts "Attempts: #{job.attempts}"
-      puts "Created:  #{job.created_at}"
-      puts "Started:  #{job.started_at}"
-      puts "Finished: #{job.finished_at}"
-      puts "Error:    #{job.error}"
+      puts job_presenter.details(job)
+    end
+
+    def job_presenter
+      @job_presenter ||= JobPresenter.new
     end
 
     def failed
@@ -159,7 +157,7 @@ module VideoEncoder
       puts '-' * 60
 
       jobs.each do |job|
-        puts "#{job.id} | #{job.source} | attempts=#{job.attempts} | error=#{job.error}"
+        puts job_presenter.failure(job)
       end
     end
 

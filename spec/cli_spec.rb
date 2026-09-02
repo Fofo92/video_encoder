@@ -62,7 +62,7 @@ RSpec.describe VideoEncoder::CLI do
 
       expect { cli.run }
         .to output(
-          /123 \| video\.mp4 \| queued \| attempts=0/
+          /123 \| encoding \| video\.mp4 \| - \| queued \| attempts=0/
         ).to_stdout
     end
 
@@ -105,7 +105,7 @@ RSpec.describe VideoEncoder::CLI do
 
       expect { cli.run }
         .to output(
-          /ID:\s+123.*Source:\s+video\.mp4.*Status:\s+done.*Attempts:\s+1/m
+          /ID:\s+123.*Type:\s+encoding.*Input:\s+video\.mp4.*Output:\s+-.*Status:\s+done.*Attempts:\s+1/m
         ).to_stdout
     end
 

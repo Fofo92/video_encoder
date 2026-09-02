@@ -28,5 +28,14 @@ RSpec.describe VideoEncoder::TrimExportJob do
       expect(job).to be_queued
       expect(job.attempts).to eq(0)
     end
+
+    it 'exposes its project as the input path' do
+      expect(job.input_path).to eq(
+        Pathname('movie.json')
+      )
+      expect(job.output_path).to eq(
+        Pathname('movie.mkv')
+      )
+    end
   end
 end
