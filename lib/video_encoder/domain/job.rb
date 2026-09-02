@@ -7,6 +7,7 @@ require 'time'
 module VideoEncoder
   # Represents a video encoding job
   class Job
+    KIND = 'encoding'
     attr_reader :id,
                 :source,
                 :status,
@@ -34,6 +35,10 @@ module VideoEncoder
       @started_at = started_at
       @finished_at = finished_at
       @error = error
+    end
+
+    def kind
+      KIND
     end
 
     def queued?
@@ -83,7 +88,7 @@ module VideoEncoder
         error: error
       )
     end
-    
+
     private
 
     def now

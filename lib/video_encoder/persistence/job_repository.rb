@@ -12,16 +12,19 @@ module VideoEncoder
 
       def enqueue(job)
         @jobs.insert(
-          job_id: job.id,
-          source: job.source.to_s,
-          status: Status::QUEUED,
-          created_at: Time.now,
-          attempts: 0
+          persistence_attributes(job)
         )
       end
 
-      def next
-        row = @jobs.where(status: Status::QUEUED).first
+      def next(kind: Job::KIND)
+        row = @jobs
+              .where(
+                status: Status::QUEUED,
+                kind: kind
+              )
+              .order(:id)
+              .first
+
         return unless row
 
         build_job(row)
@@ -77,17 +80,61 @@ module VideoEncoder
 
       private
 
+      def persistence_attributes(job)
+        attributes = {
+          job_id: job.id,
+          kind: job.kind,
+          status: Status::QUEUED,
+          created_at: Time.now,
+          attempts: 0
+        }
+
+        case job
+        when TrimExportJob
+          attributes.merge(
+            project_path:
+              job.project_path.to_s,
+            output_path:
+              job.output_path.to_s
+          )
+        when Job
+          attributes.merge(
+            source: job.source.to_s
+          )
+        else
+          raise ArgumentError,
+                "unsupported job: #{job.class}"
+        end
+      end
+
       def build_job(row)
-        Job.new(
+        attributes = {
           id: row[:job_id],
-          source: row[:source],
           status: row[:status],
           attempts: row[:attempts] || 0,
           created_at: row[:created_at],
           started_at: row[:started_at],
           finished_at: row[:finished_at],
           error: row[:error]
-        )
+        }
+
+        case row[:kind]
+        when TrimExportJob::KIND
+          TrimExportJob.new(
+            project_path: row[:project_path],
+            output_path: row[:output_path],
+            **attributes
+          )
+        when Job::KIND, nil
+          Job.new(
+            source: row[:source],
+            **attributes
+          )
+        else
+          raise ArgumentError,
+                'unsupported job kind: ' \
+                "#{row[:kind]}"
+        end
       end
     end
   end

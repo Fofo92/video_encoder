@@ -31,6 +31,10 @@ RSpec.describe VideoEncoder::Job do
     it 'is queued by default' do
       expect(job).to be_queued
     end
+
+    it 'identifies an encoding job' do
+      expect(job.kind).to eq('encoding')
+    end
   end
 
   describe '#start!' do

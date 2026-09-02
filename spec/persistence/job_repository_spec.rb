@@ -4,6 +4,12 @@ RSpec.describe VideoEncoder::Persistence::JobRepository do
   subject(:repo) { described_class.new(test_db) }
 
   let(:job) { VideoEncoder::Job.new(source: 'video.mp4') }
+  let(:trim_export_job) do
+    VideoEncoder::TrimExportJob.new(
+      project_path: 'movie.json',
+      output_path: 'movie.mkv'
+    )
+  end
 
   describe '#enqueue' do
     it 'stores a job' do
@@ -16,6 +22,28 @@ RSpec.describe VideoEncoder::Persistence::JobRepository do
       expect(stored_job.source).to eq(Pathname('video.mp4'))
       expect(stored_job).to be_queued
       expect(stored_job.attempts).to eq(0)
+    end
+
+    it 'stores a trim export job' do
+      repo.enqueue(trim_export_job)
+
+      stored_job = repo.find(
+        trim_export_job.id
+      )
+
+      expect(stored_job).to be_a(
+        VideoEncoder::TrimExportJob
+      )
+      expect(stored_job.kind).to eq(
+        'trim_export'
+      )
+      expect(stored_job.project_path).to eq(
+        Pathname('movie.json')
+      )
+      expect(stored_job.output_path).to eq(
+        Pathname('movie.mkv')
+      )
+      expect(stored_job).to be_queued
     end
   end
 
@@ -81,6 +109,28 @@ RSpec.describe VideoEncoder::Persistence::JobRepository do
       repo.mark_running(job)
 
       expect(repo.next).to be_nil
+    end
+
+    it 'selects queued jobs by kind' do
+      repo.enqueue(job)
+      repo.enqueue(trim_export_job)
+
+      encoding = repo.next
+      trim_export = repo.next(
+        kind: VideoEncoder::TrimExportJob::KIND
+      )
+
+      expect(encoding).to be_a(
+        VideoEncoder::Job
+      )
+      expect(encoding.id).to eq(job.id)
+
+      expect(trim_export).to be_a(
+        VideoEncoder::TrimExportJob
+      )
+      expect(trim_export.id).to eq(
+        trim_export_job.id
+      )
     end
   end
 
@@ -162,6 +212,39 @@ RSpec.describe VideoEncoder::Persistence::JobRepository do
       stored_job = repo.find(job.id)
 
       expect(stored_job.attempts).to eq(2)
+    end
+  end
+
+  describe 'trim export lifecycle' do
+    it 'tracks failure, retry and completion' do
+      repo.enqueue(trim_export_job)
+
+      repo.mark_running(trim_export_job)
+      repo.mark_failed(
+        trim_export_job,
+        'temporary failure'
+      )
+
+      failed = repo.find(trim_export_job.id)
+
+      expect(failed).to be_failed
+      expect(failed.error).to eq(
+        'temporary failure'
+      )
+      expect(failed.attempts).to eq(1)
+
+      repo.retry(trim_export_job.id)
+      repo.mark_running(trim_export_job)
+      repo.mark_done(trim_export_job)
+
+      completed = repo.find(
+        trim_export_job.id
+      )
+
+      expect(completed).to be_done
+      expect(completed.error).to be_nil
+      expect(completed.attempts).to eq(2)
+      expect(completed.finished_at).not_to be_nil
     end
   end
 end
