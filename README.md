@@ -1,14 +1,11 @@
 # Video Encoder
 
-Pipeline Ruby d’encodage et de montage vidéo, conçu principalement pour des
-enregistrements TNT.
+Pipeline Ruby d’encodage et de montage vidéo, conçu principalement pour des enregistrements TNT.
 
 Le projet comporte actuellement deux chaînes complémentaires :
 
-- une file de travaux pour automatiser l’encodage, la vérification et
-  l’archivage des médias ;
-- un domaine de montage non destructif capable d’assembler des segments issus
-  de plusieurs sources.
+- une file de travaux pour automatiser l’encodage, la vérification et l’archivage des médias ;
+- un domaine de montage non destructif capable d’assembler des segments issus de plusieurs sources.
 
 ## Fonctionnalités
 
@@ -22,9 +19,8 @@ Le projet comporte actuellement deux chaînes complémentaires :
 - archivage de la source ;
 - suivi des travaux terminés ou en échec.
 
-Le profil fourni produit un fichier Matroska HEVC en 1280 × 720, avec
-désentrelacement et audio AAC. Il utilise `hevc_nvenc` par défaut et nécessite
-donc un FFmpeg compatible NVIDIA NVENC.
+Le profil fourni produit un fichier Matroska HEVC en 1280 × 720, avec désentrelacement et audio AAC. Il
+utilise `hevc_nvenc` par défaut et nécessite donc un FFmpeg compatible NVIDIA NVENC.
 
 ### Montage multi-source
 
@@ -34,22 +30,19 @@ Le domaine de montage permet :
 - d’assembler des segments provenant de plusieurs médias ;
 - de convertir les repères temporels selon la cadence propre à chaque source ;
 - de produire une vidéo HEVC 720p25 progressive avec MLT ;
-- de conserver, lorsqu’elles sont disponibles dans toutes les sources, une
-  piste française et une piste en version originale ;
-- de convertir les sous-titres DVB français en SubRip avec CCExtractor et
-  Tesseract ;
+- de conserver, lorsqu’elles sont disponibles dans toutes les sources, une piste française et une piste en
+  version originale ;
+- de convertir les sous-titres DVB français en SubRip avec CCExtractor et Tesseract ;
 - de composer une piste de sous-titres unique sur la chronologie du montage ;
-- de supprimer les balises de présentation issues de l’OCR et de borner les
-  sous-titres aux plages exportées.
+- de supprimer les balises de présentation issues de l’OCR et de borner les sous-titres aux plages
+  exportées.
 
-Les segments consécutifs possédant des sous-titres sont d’abord concaténés sur
-la chronologie du projet. CCExtractor effectue ensuite une seule passe OCR sur
-cet ensemble, ce qui évite les dérives d’horloge observées lors d’un traitement
-indépendant de chaque segment.
+Les segments consécutifs possédant des sous-titres sont d’abord concaténés sur la chronologie du projet.
+CCExtractor effectue ensuite une seule passe OCR sur cet ensemble, ce qui évite les dérives d’horloge
+observées lors d’un traitement indépendant de chaque segment.
 
-Cette chaîne est exposée par le service `ExportTrimProject` construit par
-`TrimExportFactory`. Elle pourra ainsi être utilisée par une future interface
-graphique sans dépendre des scripts expérimentaux.
+Cette chaîne est exposée par le service `ExportTrimProject` construit par `TrimExportFactory`. Elle pourra
+ainsi être utilisée par une future interface graphique sans dépendre des scripts expérimentaux.
 
 ## Prérequis
 
@@ -73,11 +66,10 @@ Le projet fournit une image dédiée contenant :
 - Tesseract ;
 - les données linguistiques françaises de Tesseract.
 
-Seul CCExtractor est exécuté dans ce conteneur. FFmpeg, FFprobe, MLT et
-`video_encoder` restent exécutés directement sur la machine hôte.
+Seul CCExtractor est exécuté dans ce conteneur. FFmpeg, FFprobe, MLT et `video_encoder` restent
+exécutés directement sur la machine hôte.
 
-La construction et les possibilités de déploiement futur sont décrites dans
-la [documentation d’architecture](docs/architecture/deployment.md).
+La construction et les possibilités de déploiement futur sont décrites dans la [documentation d’architecture](docs/architecture/deployment.md).
 
 ## Installation
 
@@ -128,41 +120,60 @@ Cette commande produit l’image locale :
 video-encoder-ccextractor:0.96.6-ocr-fra
 ```
 
-## Moniteur graphique expérimental
+## Interface graphique de montage
 
-Le moniteur Qt permet actuellement d’ouvrir un média depuis la ligne de commande :
+L’interface graphique peut être lancée sans argument :
+
+```bash
+bin/video_encoder_ui
+```
+
+Elle demande alors de sélectionner un enregistrement vidéo ou un fichier JSON
+de découpage.
+
+Un chemin peut également être fourni directement :
 
 ```bash
 bin/video_encoder_ui /chemin/vers/un-media.m2t
+bin/video_encoder_ui /chemin/vers/un-decoupage.json
 ```
 
-Il fournit :
+L’ouverture d’une vidéo crée une nouvelle session de montage. L’ouverture d’un découpage JSON restaure
+les segments enregistrés et positionne le moniteur sur le début du premier segment.
 
-- une prévisualisation redimensionnable conservant le ratio de l’image ;
-- un slider cliquable avec scrubbing continu ;
-- un affichage du numéro d’image et du timecode ;
-- une navigation à la souris avec accélération ;
-- une navigation image par image avec la molette centrale du ShuttleXpress ;
-- une lecture avant sonore à vitesse normale ;
-- des lectures avant et arrière muettes jusqu’à ×50 ;
-- une pause lorsque la couronne du ShuttleXpress revient au centre.
+Le titre de la fenêtre indique la source active et, lorsqu’il existe, le fichier de découpage associé.
 
-Le ShuttleXpress est réservé exclusivement par le moniteur pendant son
-exécution afin que sa couronne ne fasse pas défiler les autres applications.
-Il est libéré à la fermeture.
+L’interface permet actuellement :
 
-Le premier mouvement de la molette centrale initialise son compteur circulaire
-et ne déplace pas encore l’image. Les mouvements suivants sont comptabilisés
-exactement, y compris lors d’une rotation rapide.
+- de prévisualiser la vidéo en conservant son ratio ;
+- de naviguer à la souris ou avec un ShuttleXpress ;
+- de lire la source avec le son à vitesse normale ;
+- d’effectuer des lectures muettes accélérées en avant et en arrière ;
+- de poser des repères IN et OUT à l’image près ;
+- d’ajouter et de retirer les segments conservés ;
+- de visualiser ces segments sur la timeline ;
+- d’enregistrer le découpage dans un document JSON versionné ;
+- de reprendre ultérieurement un découpage mono-source ;
+- de contrôler la présence d’un signal sur les pistes audio sélectionnées ;
+- de lancer, suivre et annuler l’export ;
+- d’afficher les étapes mesurables ou non mesurables et les avertissements du
+  moteur.
 
-Cette interface constitue encore un socle expérimental. La sélection graphique
-du fichier, les repères IN/OUT, la liste des segments conservés et le lancement
-de l’export seront ajoutés lors des prochaines étapes. Le moteur Ruby existant
-restera responsable de `Media`, `Segment`, `TrimProject` et de l’export final.
+Le ShuttleXpress est réservé exclusivement par l’interface pendant son exécution afin que sa couronne ne
+fasse pas défiler les autres applications. Il est libéré à la fermeture.
 
-Certaines sources MPEG-TS peuvent produire dans le terminal des avertissements
-de décodage H.264 concernant des images de référence manquantes. Ils proviennent
-de MLT/libavcodec et ne sont pas bloquants lorsque l’image et le son restent corrects.
+Lorsqu’un export est en cours et que `/usr/bin/systemd-inhibit` est disponible, la suspension et
+l’hibernation du système sont bloquées. L’extinction et le verrouillage de l’écran restent autorisés.
+
+L’éditeur graphique est actuellement limité aux découpages mono-source et ne prend pas encore en
+charge les gaps présents dans un document persistant. Le moteur Ruby sait déjà exporter des montages
+multi-sources ; l’adaptation de l’interface viendra dans une étape ultérieure.
+
+Certaines sources MPEG-TS peuvent produire dans le terminal des avertissements de décodage H.264
+concernant des images de référence manquantes. Ils proviennent de MLT/libavcodec et ne sont pas
+bloquants lorsque l’image et le son restent corrects.
+
+L’architecture et les responsabilités de l’interface sont détaillées dans la [documentation dédiée](docs/architecture/ui.md).
 
 ## Utilisation de la CLI
 
@@ -181,16 +192,15 @@ bin/video_encoder watch --once
 bin/video_encoder watch
 ```
 
-`run --once` traite un seul travail disponible. Sans `--once`, le worker
-continue à traiter la file jusqu’à son interruption.
+`run --once` traite un seul travail disponible. Sans `--once`, le worker continue à traiter la file jusqu’à son
+interruption.
 
-`watch --once` effectue un seul balayage du répertoire d’entrée. Sans
-`--once`, la surveillance reste active.
+`watch --once` effectue un seul balayage du répertoire d’entrée. Sans `--once`, la surveillance reste active.
 
 ### Exporter un projet de montage
 
-La commande `export` charge un projet persistant, sonde ses sources avec
-FFprobe, sélectionne les pistes disponibles puis exécute l’export complet.
+La commande `export` charge un projet persistant, sonde ses sources avec FFprobe, sélectionne les pistes
+disponibles puis exécute l’export complet.
 
 Pour utiliser l’image CCExtractor fournie par le projet :
 
@@ -199,19 +209,17 @@ CCEXTRACTOR_EXECUTABLE="$PWD/bin/video_encoder_ccextractor" \
   bin/video_encoder export projet.json --output montage.mkv
 ```
 
-Le workspace est créé à côté du fichier de sortie. Pour un fichier
-`montage.mkv`, son nom est `video_encoder_montage_workspace`. Il est supprimé
-après un export réussi et conservé lorsqu’une erreur interrompt le traitement.
+Le workspace est créé à côté du fichier de sortie. Pour un fichier `montage.mkv`, son nom est
+`video_encoder_montage_workspace`. Il est supprimé après un export réussi et conservé lorsqu’une erreur
+interrompt le traitement.
 
-Avant de créer le workspace, la CLI exécute CCExtractor avec `--version`. Avec
-le lanceur fourni, cette sonde vérifie que Docker fonctionne et que l’image
-configurée peut démarrer. En cas d’échec, l’export s’arrête sans créer de média
-ni de workspace.
+Avant de créer le workspace, la CLI exécute CCExtractor avec `--version`. Avec le lanceur fourni, cette
+sonde vérifie que Docker fonctionne et que l’image configurée peut démarrer. En cas d’échec, l’export
+s’arrête sans créer de média ni de workspace.
 
-Le lanceur CCExtractor démarre ensuite un conteneur éphémère sans accès réseau,
-monte uniquement le workspace nécessaire et le supprime à la fin du traitement.
-L’option Docker `--pull never` interdit le téléchargement implicite d’une image
-absente.
+Le lanceur CCExtractor démarre ensuite un conteneur éphémère sans accès réseau, monte uniquement le
+workspace nécessaire et le supprime à la fin du traitement.
+L’option Docker `--pull never` interdit le téléchargement implicite d’une image absente.
 
 Pour comparer les résultats avec la version précédente ou effectuer un retour
 arrière, construis d’abord cette version :
@@ -230,19 +238,16 @@ CCEXTRACTOR_EXECUTABLE="$PWD/bin/video_encoder_ccextractor" \
 ```
 
 Un autre exécutable compatible peut également être fourni directement avec
-`CCEXTRACTOR_EXECUTABLE`.
+CCEXTRACTOR_EXECUTABLE`.
 
-Avant de démarrer un traitement, la CLI vérifie les dépendances externes
-nécessaires à la commande :
+Avant de démarrer un traitement, la CLI vérifie les dépendances externes nécessaires à la commande :
 
-- `run` vérifie la présence de `ffmpeg` et `ffprobe` lorsque l’encodeur FFmpeg
-  est configuré ;
-- ``export` vérifie `ffmpeg`, `ffprobe`, `melt-7` et l’exécutable CCExtractor
-    configuré, puis s’assure que ce dernier peut être exécuté avec `--version`.
+- `run` vérifie la présence de `ffmpeg` et `ffprobe` lorsque l’encodeur FFmpeg est configuré ;
+- ``export` vérifie `ffmpeg`, `ffprobe`, `melt-7` et l’exécutable CCExtractor configuré, puis s’assure que ce
+    dernier peut être exécuté avec `--version`.
 
-Si une dépendance manque, la commande s’arrête avec un code de sortie non nul
-avant de créer le workspace ou de lancer un traitement externe. Les commandes
-qui n’utilisent pas ces outils, telles que `version`, restent disponibles.
+Si une dépendance manque, la commande s’arrête avec un code de sortie non nul avant de créer le
+workspace ou de lancer un traitement externe. Les commandes qui n’utilisent pas ces outils, telles que `version`, restent disponibles.
 
 Le format persistant est un document JSON versionné :
 
@@ -265,15 +270,15 @@ Le format persistant est un document JSON versionné :
 }
 ```
 
-Les bornes `start_frame` et `end_frame` sont inclusives. Les métadonnées
-techniques du média — durée, cadence et pistes — ne sont pas dupliquées dans
-le document : elles sont recalculées depuis chaque source lors du chargement.
+Les bornes `start_frame` et `end_frame` sont inclusives. Les métadonnées techniques du média — durée,
+cadence et pistes — ne sont pas dupliquées dans le document : elles sont recalculées depuis chaque
+source lors du chargement.
 Une même source réutilisée dans plusieurs segments n’est sondée qu’une fois.
 
 ## Contrôle qualité
 
-Le contrôle standard vérifie les dépendances Ruby, la syntaxe des scripts
-shell, RuboCop et les tests unitaires :
+Le contrôle standard vérifie les dépendances Ruby, la syntaxe des scripts shell, RuboCop et les tests
+unitaires :
 
 ```bash
 bin/check
@@ -291,30 +296,25 @@ ou :
 bin/check --all
 ```
 
-Les tests d’intégration sont ignorés automatiquement lorsque `melt-7` n’est
-pas disponible.
+Les tests d’intégration sont ignorés automatiquement lorsque `melt-7` n’est pas disponible.
 
 ## Outils de développement
 
-`bin/generate_mlt.rb` et `bin/export_multi_source_test.rb` sont des scénarios
-techniques utilisés pendant le développement et les essais d’acceptation. Ils
-contiennent des sources et des plages de montage propres à l’environnement de
-développement ; ils ne constituent pas encore une interface utilisateur
-générique.
+`bin/generate_mlt.rb` et `bin/export_multi_source_test.rb` sont des scénarios techniques utilisés
+pendant le développement et les essais d’acceptation. Ils contiennent des sources et des plages de
+montage propres à l’environnement de développement ; ils ne constituent pas encore une interface
+utilisateur générique.
 
 ## État du projet
 
 Version actuelle : **0.2.0**
 
-Le pipeline d’encodage dispose d’une CLI. Le domaine de montage multi-source
-et son export sont fonctionnels, mais leur intégration dans une interface
-utilisateur reste à réaliser.
+Le pipeline d’encodage dispose d’une CLI. Le domaine de montage multi-source et son export sont
+fonctionnels, mais leur intégration dans une interface utilisateur reste à réaliser.
 
 Deux précisions importantes :
 
-- l’OCR est nécessaire aux exports qui convertissent des sous-titres DVB,
-  tandis que le pipeline historique d’encodage peut fonctionner sans
-  CCExtractor ;
-- Docker est requis lorsque le lanceur `bin/video_encoder_ccextractor` est
-  utilisé, mais le cœur de l’application continue d’accepter tout exécutable
-  compatible configuré avec `CCEXTRACTOR_EXECUTABLE`.
+- l’OCR est nécessaire aux exports qui convertissent des sous-titres DVB, tandis que le pipeline historique
+  d’encodage peut fonctionner sans CCExtractor ;
+- Docker est requis lorsque le lanceur `bin/video_encoder_ccextractor` est utilisé, mais le cœur de
+  l’application continue d’accepter tout exécutable compatible configuré avec `CCEXTRACTOR_EXECUTABLE`.
