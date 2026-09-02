@@ -5,6 +5,7 @@ require_relative 'cli/config_command'
 require_relative 'cli/preflight_audio_command'
 require_relative 'cli/job_presenter'
 require_relative 'cli/enqueue_trim_export_command'
+require_relative 'cli/run_trim_exports_command'
 
 module VideoEncoder
   # CLI handles command-line interface for VideoEncoder.
@@ -17,6 +18,7 @@ module VideoEncoder
     'status' => :status,
     'failed' => :failed,
     'run' => :run_worker,
+    'run-trim-exports' => :run_trim_exports,
     'config' => :show_config,
     'watch' => :watch,
     'export' => :export_trim_project,
@@ -28,6 +30,7 @@ module VideoEncoder
       video_encoder version
       video_encoder enqueue <file>
       video_encoder run [--once]
+      video_encoder run-trim-exports [--once]
       video_encoder enqueue-trim-export <project.json> --output <movie.mkv>
       video_encoder list
       video_encoder status <job_id>
@@ -181,9 +184,7 @@ module VideoEncoder
           media_probe: media_probe
         )
       else
-        VideoEncoder::Encoder::FakeEncoder.new(
-          logger: logger
-        )
+        VideoEncoder::Encoder::FakeEncoder.new(logger: logger)
       end
     end
 
@@ -204,6 +205,15 @@ module VideoEncoder
         puts 'Running in loop (CTRL+C to stop)'
         worker.run
       end
+    end
+
+    def run_trim_exports
+      RunTrimExportsCommand.new(
+        argv: @argv,
+        repo: repo,
+        dependency_checker: dependency_checker,
+        command_probe: command_probe
+      ).run
     end
 
     def check_encoding_dependencies
