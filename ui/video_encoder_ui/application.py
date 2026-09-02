@@ -30,6 +30,10 @@ from .audio_preflight_runner import AudioPreflightRunner
 from .trim_project_file_reader import (
     TrimProjectFileReader,
 )
+from .trim_export_queue_client import (
+    TrimExportQueueClient,
+    TrimExportQueueError,
+)
 
 PREVIEW_WIDTH = 640
 PREVIEW_HEIGHT = 360
@@ -96,6 +100,11 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
 
         self.audio_preflight_runner = AudioPreflightRunner()
         self.pending_export = None
+        self.pending_export_mode = None
+        self.trim_export_queue_client = (
+            TrimExportQueueClient()
+        )
+
         self.close_after_preflight = False
         self.audio_preflight_cancel_prompt_active = False
         self.deferred_audio_preflight_result = None
@@ -707,6 +716,63 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
                 pixmap
             )
 
+        def queue_video_icon():
+            icon_size = QtCore.QSize(32, 32)
+            pixmap = export_video_icon().pixmap(
+                icon_size
+            )
+
+            painter = QtGui.QPainter(pixmap)
+            painter.setRenderHint(
+                QtGui.QPainter.RenderHint.Antialiasing,
+                True
+            )
+
+            badge_rectangle = QtCore.QRect(
+                15,
+                15,
+                17,
+                17
+            )
+
+            badge_pen = QtGui.QPen(
+                self.palette().color(
+                    QtGui.QPalette.ColorRole.Window
+                ),
+                1
+            )
+            painter.setPen(badge_pen)
+            painter.setBrush(
+                self.palette().color(
+                    QtGui.QPalette.ColorRole.Highlight
+                )
+            )
+            painter.drawEllipse(badge_rectangle)
+
+            plus_pen = QtGui.QPen(
+                self.palette().color(
+                    QtGui.QPalette.ColorRole.HighlightedText
+                ),
+                3
+            )
+            plus_pen.setCapStyle(
+                QtCore.Qt.PenCapStyle.RoundCap
+            )
+            painter.setPen(plus_pen)
+
+            painter.drawLine(
+                QtCore.QPoint(19, 23),
+                QtCore.QPoint(28, 23)
+            )
+            painter.drawLine(
+                QtCore.QPoint(23, 19),
+                QtCore.QPoint(23, 28)
+            )
+
+            painter.end()
+
+            return QtGui.QIcon(pixmap)
+
         def save_json_icon():
             icon_size = QtCore.QSize(32, 32)
 
@@ -811,6 +877,30 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             "Encoder le montage dans un fichier MKV"
         )
 
+        self.queue_export_action = QtGui.QAction(
+            "Ajouter le montage à la file…",
+            self,
+        )
+        self.queue_export_action.setShortcut(
+            QtGui.QKeySequence("Ctrl+Shift+E")
+        )
+        self.queue_export_action.triggered.connect(
+            lambda _checked=False: self.export_project(
+                queued=True
+            )
+        )
+        self.queue_export_action.setIcon(
+            queue_video_icon()
+        )
+        self.queue_export_action.setToolTip(
+            "Ajouter le montage à la file "
+            "(Ctrl+Shift+E)"
+        )
+        self.queue_export_action.setStatusTip(
+            "Contrôler puis ajouter le montage "
+            "à la file d’export"
+        )
+
         self.cancel_export_action = QtGui.QAction(
             "Annuler l’export",
             self
@@ -836,10 +926,12 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         file_menu.addAction(
             self.save_project_action
         )
-
         file_menu.addSeparator()
         file_menu.addAction(
             self.export_project_action
+        )
+        file_menu.addAction(
+            self.queue_export_action
         )
 
         file_menu.addAction(
@@ -866,6 +958,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         main_toolbar.addAction(
             self.export_project_action
         )
+        main_toolbar.addAction(
+            self.queue_export_action
+        )
 
         main_toolbar.addSeparator()
         main_toolbar.addAction(
@@ -875,6 +970,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         for action in (
             self.save_project_action,
             self.export_project_action,
+            self.queue_export_action,
             self.cancel_export_action
         ):
             tool_button = main_toolbar.widgetForAction(
@@ -1495,7 +1591,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
 
         return destination
 
-    def export_project(self):
+    def export_project(self, queued=False):
         if (
             self.trim_project_exporter.is_running
             or self.audio_preflight_runner.is_running
@@ -1545,6 +1641,12 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         if project_path is None:
             return
 
+        self.pending_export_mode = (
+            "queued"
+            if queued
+            else "immediate"
+        )
+
         self.pending_export = (project_path, output_path)
 
         try:
@@ -1552,6 +1654,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         except RuntimeError as error:
             self.export_status_changed("failed")
             self.pending_export = None
+            self.pending_export_mode = None
             QtWidgets.QMessageBox.warning(
                 self,
                 "Contrôle audio indisponible",
@@ -1568,11 +1671,13 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
 
         if self.close_after_preflight:
             self.pending_export = None
+            self.pending_export_mode = None
             QtCore.QTimer.singleShot(0, self.close)
             return
 
         if status == "cancelled":
             self.pending_export = None
+            self.pending_export_mode = None
             self.export_status_changed("cancelled")
         elif status == "succeeded":
             self.export_status_changed(
@@ -1593,6 +1698,11 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             return
 
         pending_export = self.pending_export
+
+        pending_export_mode = (
+            self.pending_export_mode
+        )
+
         status_labels = {
             "signal_detected": "signal détecté",
             "inconclusive": "résultat non concluant",
@@ -1638,12 +1748,39 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             return
 
         self.pending_export = None
+        self.pending_export_mode = None
 
         if answer != QtWidgets.QMessageBox.StandardButton.Yes:
             self.export_status_changed("cancelled")
             return
 
         project_path, output_path = pending_export
+
+        if pending_export_mode == "queued":
+            try:
+                self.trim_export_queue_client.enqueue(
+                    project_path,
+                    output_path,
+                )
+            except TrimExportQueueError as error:
+                self.export_status_changed("failed")
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "Mise en file impossible",
+                    str(error),
+                )
+                return
+
+            self.export_status_changed("queued")
+            QtWidgets.QMessageBox.information(
+                self,
+                "Montage ajouté à la file",
+                (
+                    "Le montage sera exporté vers :\n"
+                    f"{output_path}"
+                ),
+            )
+            return
 
         try:
             self.trim_project_exporter.start(
@@ -1667,6 +1804,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             return
 
         self.pending_export = None
+        self.pending_export_mode = None
 
         if self.close_after_preflight:
             return
@@ -1683,6 +1821,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         running = status in {"running", "preflight", "confirming"}
 
         self.export_project_action.setEnabled(
+            not running
+        )
+        self.queue_export_action.setEnabled(
             not running
         )
         self.save_project_action.setEnabled(
@@ -1770,11 +1911,18 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.export_progress_bar.setFormat(
                 "Export annulé — %p %"
             )
+        elif status == "queued":
+            self.export_progress_bar.setValue(0)
+            self.export_progress_bar.setFormat(
+                "Montage ajouté à la file"
+            )
+            self.export_progress_bar.setVisible(False)
 
         messages = {
             "succeeded": "Export terminé",
             "failed": "Échec de l’export",
-            "cancelled": "Export annulé"
+            "cancelled": "Export annulé",
+            "queued": "Montage ajouté à la file"
         }
 
         message = messages.get(status, status)
@@ -2174,6 +2322,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
 
         if answer == QtWidgets.QMessageBox.StandardButton.Yes:
             self.pending_export = None
+            self.pending_export_mode = None
 
             if self.audio_preflight_runner.is_running:
                 return self.audio_preflight_runner.cancel()

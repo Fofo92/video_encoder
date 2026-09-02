@@ -24,6 +24,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             "export_status_changed": Mock(),
             "audio_preflight_cancel_prompt_active": False,
             "deferred_audio_preflight_result": None,
+            "pending_export_mode": "immediate",
         }
         defaults.update(attributes)
         return SimpleNamespace(**defaults)
@@ -60,6 +61,50 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
         self.assertEqual(
             monitor.pending_export,
             (project_path, output_path)
+        )
+
+    def test_checks_audio_before_queuing_the_export(self):
+        project_path = Path("/projects/movie.json")
+        output_path = "/output/movie.mkv"
+
+        exporter = Mock(is_running=False)
+        preflight = Mock(is_running=False)
+
+        monitor = self.make_monitor(
+            source_path=Path("/recordings/movie.ts"),
+            trim_session=SimpleNamespace(
+                segments=[object()]
+            ),
+            project_path=project_path,
+            trim_project_exporter=exporter,
+            audio_preflight_runner=preflight,
+            pending_export=None,
+            write_project=Mock(
+                return_value=project_path
+            ),
+        )
+
+        with patch(
+            "video_encoder_ui.application."
+            "QtWidgets.QFileDialog.getSaveFileName",
+            return_value=(output_path, ""),
+        ):
+            MltFrameMonitor.export_project(
+                monitor,
+                queued=True,
+            )
+
+        preflight.start.assert_called_once_with(
+            project_path
+        )
+        exporter.start.assert_not_called()
+        self.assertEqual(
+            monitor.pending_export,
+            (project_path, output_path),
+        )
+        self.assertEqual(
+            monitor.pending_export_mode,
+            "queued",
         )
 
     def test_abandons_the_pending_export_when_preflight_fails(self):
@@ -175,6 +220,62 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             output_path,
         )
         self.assertIsNone(monitor.pending_export)
+
+    def test_enqueues_when_queue_mode_is_selected(self):
+        project_path = Path("/projects/movie.json")
+        output_path = "/output/movie.mkv"
+        exporter = Mock()
+        queue_client = Mock()
+
+        monitor = self.make_monitor(
+            trim_project_exporter=exporter,
+            trim_export_queue_client=queue_client,
+            pending_export=(project_path, output_path),
+            pending_export_mode="queued",
+        )
+        report = {
+            "version": 1,
+            "audio_checks": [],
+        }
+
+        with (
+            patch(
+                "video_encoder_ui.application."
+                "QtWidgets.QMessageBox.question",
+                return_value=(
+                    QtWidgets.QMessageBox.StandardButton.Yes
+                ),
+            ),
+            patch(
+                "video_encoder_ui.application."
+                "QtWidgets.QMessageBox.information"
+            ) as information,
+        ):
+            MltFrameMonitor.audio_preflight_succeeded(
+                monitor,
+                report,
+            )
+
+        queue_client.enqueue.assert_called_once_with(
+            project_path,
+            output_path,
+        )
+        exporter.start.assert_not_called()
+        monitor.export_status_changed.assert_called_with(
+            "queued"
+        )
+        information.assert_called_once_with(
+            monitor,
+            "Montage ajouté à la file",
+            (
+                "Le montage sera exporté vers :\n"
+                f"{output_path}"
+            ),
+        )
+        self.assertIsNone(monitor.pending_export)
+        self.assertIsNone(
+            monitor.pending_export_mode
+        )
 
     def test_discards_pending_export_before_cancelling_preflight(self):
         preflight = Mock(is_running=True)
