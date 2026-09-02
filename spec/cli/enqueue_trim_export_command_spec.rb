@@ -3,6 +3,7 @@
 require 'spec_helper'
 
 RSpec.describe VideoEncoder::CLI::EnqueueTrimExportCommand do
+  let(:file) { class_double(File) }
   let(:repo) do
     instance_double(
       VideoEncoder::Persistence::JobRepository
@@ -10,6 +11,16 @@ RSpec.describe VideoEncoder::CLI::EnqueueTrimExportCommand do
   end
 
   describe '#run' do
+    before do
+      allow(file).to receive(:file?)
+        .with('movie.json')
+        .and_return(true)
+
+      allow(file).to receive(:exist?)
+        .with('movie.mkv')
+        .and_return(false)
+    end
+
     it 'enqueues a trim export job' do
       job = nil
 
@@ -23,7 +34,8 @@ RSpec.describe VideoEncoder::CLI::EnqueueTrimExportCommand do
           '--output',
           'movie.mkv'
         ],
-        repo: repo
+        repo: repo,
+        file: file
       )
 
       expect { command.run }
@@ -49,7 +61,8 @@ RSpec.describe VideoEncoder::CLI::EnqueueTrimExportCommand do
     it 'rejects invalid arguments' do
       command = described_class.new(
         argv: ['movie.json'],
-        repo: repo
+        repo: repo,
+        file: file
       )
 
       expect { command.run }
@@ -57,6 +70,54 @@ RSpec.describe VideoEncoder::CLI::EnqueueTrimExportCommand do
           SystemExit,
           'Usage: video_encoder enqueue-trim-export ' \
           '<project.json> --output <movie.mkv>'
+        )
+    end
+
+    it 'rejects a missing project file' do
+      allow(file).to receive(:file?)
+        .with('movie.json')
+        .and_return(false)
+
+      command = described_class.new(
+        argv: [
+          'movie.json',
+          '--output',
+          'movie.mkv'
+        ],
+        repo: repo,
+        file: file
+      )
+
+      expect(repo).not_to receive(:enqueue)
+
+      expect { command.run }
+        .to raise_error(
+          SystemExit,
+          'project file not found: movie.json'
+        )
+    end
+
+    it 'refuses an existing output file' do
+      allow(file).to receive(:exist?)
+        .with('movie.mkv')
+        .and_return(true)
+
+      command = described_class.new(
+        argv: [
+          'movie.json',
+          '--output',
+          'movie.mkv'
+        ],
+        repo: repo,
+        file: file
+      )
+
+      expect(repo).not_to receive(:enqueue)
+
+      expect { command.run }
+        .to raise_error(
+          SystemExit,
+          'output already exists: movie.mkv'
         )
     end
   end

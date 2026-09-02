@@ -7,9 +7,10 @@ module VideoEncoder
       USAGE = 'Usage: video_encoder enqueue-trim-export ' \
               '<project.json> --output <movie.mkv>'
 
-      def initialize(argv:, repo:)
+      def initialize(argv:, repo:, file: File)
         @argv = argv
         @repo = repo
+        @file = file
       end
 
       def run
@@ -20,6 +21,11 @@ module VideoEncoder
         validate_arguments(
           project_path,
           option,
+          output_path
+        )
+
+        validate_paths(
+          project_path,
           output_path
         )
 
@@ -38,7 +44,7 @@ module VideoEncoder
 
       private
 
-      attr_reader :argv, :repo
+      attr_reader :argv, :repo, :file
 
       def validate_arguments(
         project_path,
@@ -51,6 +57,20 @@ module VideoEncoder
                 argv.empty?
 
         abort(USAGE) unless valid
+      end
+
+      def validate_paths(project_path, output_path)
+        unless file.file?(project_path)
+          abort(
+            "project file not found: #{project_path}"
+          )
+        end
+
+        return unless file.exist?(output_path)
+
+        abort(
+          "output already exists: #{output_path}"
+        )
       end
     end
   end
