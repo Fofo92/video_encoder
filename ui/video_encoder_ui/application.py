@@ -27,6 +27,9 @@ from .trim_project_exporter import (
     TrimProjectExporter,
 )
 from .audio_preflight_runner import AudioPreflightRunner
+from .trim_project_file_reader import (
+    TrimProjectFileReader,
+)
 
 PREVIEW_WIDTH = 640
 PREVIEW_HEIGHT = 360
@@ -48,17 +51,49 @@ SHUTTLE_SPEED_BY_POSITION = {
 }
 
 class MltFrameMonitor(QtWidgets.QMainWindow):
-    def __init__(self, source_path):
+    def __init__(
+        self,
+        source_path,
+        trim_session=None,
+        project_path=None
+    ):
+
         super().__init__()
 
-        self.source_path = source_path
+        self.source_path = Path(source_path)
+        self.trim_session = (
+            trim_session
+            if trim_session is not None
+            else TrimSession()
+        )
 
-        self.source_id = "source"
-        self.trim_session = TrimSession()
+        if trim_session is None:
+            self.source_id = "source"
+            self.trim_session.add_source(
+                SourceReference(
+                    identifier=self.source_id,
+                    path=self.source_path
+                )
+            )
+        else:
+            sources = self.trim_session.sources
+
+            if len(sources) != 1:
+                raise ValueError(
+                    "the editor requires exactly one source"
+                )
+
+            self.source_id = sources[0].identifier
+
         self.trim_project_writer = TrimProjectFileWriter(
             TrimProjectBridge()
         )
-        self.project_path = None
+        self.project_path = (
+            Path(project_path)
+            if project_path is not None
+            else None
+        )
+
         self.audio_preflight_runner = AudioPreflightRunner()
         self.pending_export = None
         self.close_after_preflight = False
@@ -125,13 +160,6 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.update_export_elapsed
         )
 
-        self.trim_session.add_source(
-            SourceReference(
-                identifier=self.source_id,
-                path=source_path
-            )
-        )
-
         self.frame_source = MltFrameSource(
             source_path,
             preview_width=PREVIEW_WIDTH,
@@ -184,11 +212,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.advance_transport
         )
 
-        self.setWindowTitle(
-            "Moniteur d’image MLT — video_encoder"
-        )
-        self.resize(960, 600)
-
+        self.update_window_title()
         self.video_label = VideoLabel()
 
         self.position_slider = ClickableSlider(
@@ -888,6 +912,8 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
                 self.set_transport_position
             )
 
+        self.refresh_segment_list()
+
     def schedule_scrub(self, position):
         self.pending_position = position
 
@@ -1461,6 +1487,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             return None
 
         self.project_path = destination
+        self.update_window_title()
         self.statusBar().showMessage(
             f"Projet enregistré : {destination}",
             5_000
@@ -2244,16 +2271,38 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.shutdown()
         super().closeEvent(event)
 
+    def update_window_title(self):
+        title = (
+            f"video_encoder — Source active : "
+            f"{self.source_path.name}"
+        )
+
+        if self.project_path is not None:
+            title += (
+                f" — Découpage : "
+                f"{self.project_path.name}"
+            )
+
+        self.setWindowTitle(title)
+
+
 def select_source_path(arguments):
     if arguments:
-        return Path(arguments[0]).expanduser().resolve()
+        return (
+            Path(arguments[0])
+            .expanduser()
+            .resolve()
+        )
 
     source_path, _selected_filter = (
         QtWidgets.QFileDialog.getOpenFileName(
             None,
-            "Ouvrir un enregistrement",
+            "Ouvrir un enregistrement ou un projet",
             "",
             (
+                "Enregistrements et projets "
+                "(*.m2t *.mts *.ts *.mkv *.mp4 *.json);;"
+                "Projets de montage (*.json);;"
                 "Fichiers vidéo "
                 "(*.m2t *.mts *.ts *.mkv *.mp4);;"
                 "Tous les fichiers (*)"
@@ -2264,37 +2313,125 @@ def select_source_path(arguments):
     if not source_path:
         return None
 
-    return Path(source_path).expanduser().resolve()
+    return (
+        Path(source_path)
+        .expanduser()
+        .resolve()
+    )
+
+
+def load_startup_selection(
+    selected_path,
+    reader=None
+):
+    selected_path = Path(selected_path)
+
+    if selected_path.suffix.lower() != ".json":
+        return selected_path, None, None
+
+    reader = reader or TrimProjectFileReader()
+    trim_session = reader.load(selected_path)
+    sources = trim_session.sources
+
+    if len(sources) != 1:
+        raise ValueError(
+            "the editor currently supports "
+            "single-source projects only"
+        )
+
+    source_path = (
+        sources[0]
+        .path
+        .expanduser()
+        .resolve()
+    )
+
+    return (
+        source_path,
+        trim_session,
+        selected_path
+    )
 
 def main():
     if len(sys.argv) > 2:
         print(
-            f"Usage: {Path(sys.argv[0]).name} [media]",
+            f"Usage: {Path(sys.argv[0]).name} [name] ",
+            "[media-or-project]",
             file=sys.stderr
         )
         return 2
     app = QtWidgets.QApplication(sys.argv)
-    source_path = select_source_path(sys.argv[1:])
+    selected_path = select_source_path(
+        sys.argv[1:]
+    )
 
-    if source_path is None:
+    if selected_path is None:
         return 0
 
+    if not selected_path.is_file():
+        QtWidgets.QMessageBox.critical(
+            None,
+            "Fichier introuvable",
+            f"Fichier introuvable : {selected_path}"
+        )
+        return 2
+
+    try:
+        (
+            source_path,
+            trim_session,
+            project_path,
+        ) = load_startup_selection(
+            selected_path
+        )
+    except (
+        KeyError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as error:
+        QtWidgets.QMessageBox.critical(
+            None,
+            "Projet incompatible",
+            str(error)
+        )
+        return 2
+
     if not source_path.is_file():
-        print(
-            f"Fichier introuvable : {source_path}",
-            file=sys.stderr
+        QtWidgets.QMessageBox.critical(
+            None,
+            "Source introuvable",
+            (
+                "La source vidéo du projet "
+                "est introuvable :\n"
+                f"{source_path}"
+            )
         )
         return 2
 
     factory = mlt.Factory()
     factory.init()
 
-    window = MltFrameMonitor(source_path)
+    window = MltFrameMonitor(
+        source_path,
+        trim_session=trim_session,
+        project_path=project_path
+    )
     window.show()
+
+    if (
+        trim_session is not None
+        and trim_session.segments
+    ):
+        initial_frame = (
+            trim_session.segments[0].start_frame
+        )
+    else:
+        initial_frame = INITIAL_FRAME
 
     QtCore.QTimer.singleShot(
         0,
-        lambda: window.show_frame(INITIAL_FRAME)
+        lambda: window.show_frame(initial_frame)
     )
 
     try:

@@ -1,6 +1,10 @@
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+from video_encoder_ui.application import (
+    load_startup_selection,
+    select_source_path,
+)
 
 try:
     import mlt7
@@ -55,6 +59,63 @@ class ApplicationSourceSelectionTest(unittest.TestCase):
 
         self.assertIsNone(source)
 
+    def test_keeps_a_video_as_a_fresh_session(self):
+        source_path, session, project_path = (
+            load_startup_selection(
+                Path("/recordings/movie.m2t")
+            )
+        )
+
+        self.assertEqual(
+            source_path,
+            Path("/recordings/movie.m2t")
+        )
+        self.assertIsNone(session)
+        self.assertIsNone(project_path)
+
+    def test_loads_a_single_source_project(self):
+        reader = Mock()
+        session = Mock()
+        source = Mock(
+            path=Path("/recordings/movie.m2t")
+        )
+        session.sources = (source,)
+        reader.load.return_value = session
+
+        source_path, restored, project_path = (
+            load_startup_selection(
+                Path("/projects/movie.json"),
+                reader=reader
+            )
+        )
+
+        reader.load.assert_called_once_with(
+            Path("/projects/movie.json")
+        )
+        self.assertEqual(
+            source_path,
+            Path("/recordings/movie.m2t")
+        )
+        self.assertIs(restored, session)
+        self.assertEqual(
+            project_path,
+            Path("/projects/movie.json")
+        )
+
+    def test_rejects_a_multi_source_project(self):
+        reader = Mock()
+        session = Mock()
+        session.sources = (Mock(), Mock())
+        reader.load.return_value = session
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "single-source projects only"
+        ):
+            load_startup_selection(
+                Path("/projects/movie.json"),
+                reader=reader
+            )
 
 if __name__ == "__main__":
     unittest.main()
