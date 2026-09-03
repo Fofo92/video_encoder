@@ -19,12 +19,17 @@ if QtWidgets is not None:
 )
 class ApplicationAudioPreflightTest(unittest.TestCase):
     def make_monitor(self, **attributes):
+        project_archiver = Mock()
+        project_archiver.archive.side_effect = (
+            lambda project_path, output_path: project_path
+        )
         defaults = {
             "close_after_preflight": False,
             "export_status_changed": Mock(),
             "audio_preflight_cancel_prompt_active": False,
             "deferred_audio_preflight_result": None,
             "pending_export_mode": "immediate",
+            "trim_project_archiver": project_archiver,
         }
         defaults.update(attributes)
         return SimpleNamespace(**defaults)
@@ -65,10 +70,17 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
 
     def test_checks_audio_before_queuing_the_export(self):
         project_path = Path("/projects/movie.json")
+        archived_project_path = Path(
+            "/output/movie.json"
+        )
         output_path = "/output/movie.mkv"
 
         exporter = Mock(is_running=False)
         preflight = Mock(is_running=False)
+        project_archiver = Mock()
+        project_archiver.archive.return_value = (
+            archived_project_path
+        )
 
         monitor = self.make_monitor(
             source_path=Path("/recordings/movie.ts"),
@@ -78,6 +90,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             project_path=project_path,
             trim_project_exporter=exporter,
             audio_preflight_runner=preflight,
+            trim_project_archiver=project_archiver,
             pending_export=None,
             write_project=Mock(
                 return_value=project_path
@@ -94,13 +107,23 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
                 queued=True,
             )
 
-        preflight.start.assert_called_once_with(
+        monitor.write_project.assert_called_once_with(
             project_path
+        )
+        project_archiver.archive.assert_called_once_with(
+            project_path,
+            output_path,
+        )
+        preflight.start.assert_called_once_with(
+            archived_project_path
         )
         exporter.start.assert_not_called()
         self.assertEqual(
             monitor.pending_export,
-            (project_path, output_path),
+            (
+                archived_project_path,
+                output_path,
+            ),
         )
         self.assertEqual(
             monitor.pending_export_mode,
@@ -434,6 +457,58 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
         question.assert_called_once()
         self.assertIsNone(monitor.pending_export)
         monitor.trim_project_exporter.start.assert_not_called()
+
+    def test_does_not_start_preflight_when_project_archiving_fails(
+        self
+    ):
+        project_path = Path("/projects/movie.json")
+        output_path = "/output/movie.mkv"
+        preflight = Mock(is_running=False)
+        archiver = Mock()
+        archiver.archive.side_effect = OSError(
+            "permission denied"
+        )
+
+        monitor = self.make_monitor(
+            source_path=Path("/recordings/movie.ts"),
+            trim_session=SimpleNamespace(
+                segments=[object()]
+            ),
+            project_path=project_path,
+            trim_project_exporter=Mock(
+                is_running=False
+            ),
+            audio_preflight_runner=preflight,
+            trim_project_archiver=archiver,
+            pending_export=None,
+            write_project=Mock(
+                return_value=project_path
+            ),
+        )
+
+        with (
+            patch(
+                "video_encoder_ui.application."
+                "QtWidgets.QFileDialog.getSaveFileName",
+                return_value=(output_path, ""),
+            ),
+            patch(
+                "video_encoder_ui.application."
+                "QtWidgets.QMessageBox.warning"
+            ) as warning,
+        ):
+            MltFrameMonitor.export_project(
+                monitor,
+                queued=True,
+            )
+
+        warning.assert_called_once_with(
+            monitor,
+            "Archivage du projet impossible",
+            "permission denied",
+        )
+        preflight.start.assert_not_called()
+        self.assertIsNone(monitor.pending_export)
 
 if __name__ == "__main__":
     unittest.main()

@@ -34,6 +34,9 @@ from .trim_export_queue_client import (
     TrimExportQueueClient,
     TrimExportQueueError,
 )
+from .trim_project_archiver import (
+    TrimProjectArchiver,
+)
 
 PREVIEW_WIDTH = 640
 PREVIEW_HEIGHT = 360
@@ -92,6 +95,10 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.trim_project_writer = TrimProjectFileWriter(
             TrimProjectBridge()
         )
+        self.trim_project_archiver = (
+            TrimProjectArchiver()
+        )
+
         self.project_path = (
             Path(project_path)
             if project_path is not None
@@ -1660,6 +1667,21 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
         if project_path is None:
+            return
+
+        try:
+            project_path = (
+                self.trim_project_archiver.archive(
+                    project_path,
+                    output_path,
+                )
+            )
+        except OSError as error:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Archivage du projet impossible",
+                str(error),
+            )
             return
 
         self.pending_export_mode = (
