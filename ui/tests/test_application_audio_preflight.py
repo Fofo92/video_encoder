@@ -232,6 +232,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             trim_export_queue_client=queue_client,
             pending_export=(project_path, output_path),
             pending_export_mode="queued",
+            close=Mock(),
         )
         report = {
             "version": 1,
@@ -272,6 +273,8 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
                 f"{output_path}"
             ),
         )
+
+        monitor.close.assert_called_once_with()
         self.assertIsNone(monitor.pending_export)
         self.assertIsNone(
             monitor.pending_export_mode

@@ -1801,6 +1801,18 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
                     f"{output_path}"
                 ),
             )
+            self.close()
+            return
+
+            self.export_status_changed("queued")
+            QtWidgets.QMessageBox.information(
+                self,
+                "Montage ajouté à la file",
+                (
+                    "Le montage sera exporté vers :\n"
+                    f"{output_path}"
+                ),
+            )
             return
 
         try:
