@@ -6,6 +6,7 @@ require_relative 'cli/preflight_audio_command'
 require_relative 'cli/job_presenter'
 require_relative 'cli/enqueue_trim_export_command'
 require_relative 'cli/run_trim_exports_command'
+require_relative 'cli/inspect_media_command'
 
 module VideoEncoder
   # CLI handles command-line interface for VideoEncoder.
@@ -22,7 +23,8 @@ module VideoEncoder
     'config' => :show_config,
     'watch' => :watch,
     'export' => :export_trim_project,
-    'preflight-audio' => :preflight_audio
+    'preflight-audio' => :preflight_audio,
+    'inspect-media' => :inspect_media
   }.freeze
 
   CLI_USAGE = <<~TEXT
@@ -38,6 +40,7 @@ module VideoEncoder
       video_encoder watch [--once]
       video_encoder export <project.json> --output <movie.mkv>
       video_encoder preflight-audio <project.json>
+      video_encoder inspect-media <file>
       video_encoder failed
   TEXT
 
@@ -91,10 +94,11 @@ module VideoEncoder
     end
 
     def preflight_audio
-      PreflightAudioCommand.new(
-        argv: @argv,
-        dependency_checker: dependency_checker
-      ).run
+      PreflightAudioCommand.new(argv: @argv, dependency_checker:).run
+    end
+
+    def inspect_media
+      InspectMediaCommand.new(argv: @argv, dependency_checker:).run
     end
 
     def config

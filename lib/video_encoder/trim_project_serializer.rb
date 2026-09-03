@@ -1,11 +1,16 @@
 # frozen_string_literal: true
 
 require 'json'
-require 'time'
 
 module VideoEncoder
   # Serializes a trim project into its versioned JSON representation.
   class TrimProjectSerializer
+    def initialize(
+      inspection_serializer: MediaInspectionSerializer.new
+    )
+      @inspection_serializer = inspection_serializer
+    end
+
     def dump(project)
       sources = project_sources(project)
       source_ids = build_source_ids(sources)
@@ -27,6 +32,8 @@ module VideoEncoder
 
     private
 
+    attr_reader :inspection_serializer
+
     def project_sources(project)
       project.timeline.filter_map do |item|
         item.source if item.is_a?(Segment)
@@ -47,73 +54,7 @@ module VideoEncoder
       {
         id: identifier,
         path: source.path.to_s,
-        inspection: serialize_inspection(source)
-      }
-    end
-
-    def serialize_inspection(source)
-      inspection = {
-        duration: source.duration
-      }
-
-      inspection[:inspected_at] = source.inspected_at.iso8601 if source.inspected_at
-
-      inspection[:size_bytes] = source.size_bytes if source.size_bytes
-
-      return inspection if source.tracks.empty?
-
-      inspection.merge(
-        video_tracks: source.video_tracks.map do |track|
-          serialize_video_track(track)
-        end,
-        audio_tracks: source.audio_tracks.map do |track|
-          serialize_audio_track(track)
-        end,
-        subtitle_tracks: source.subtitle_tracks.map do |track|
-          serialize_subtitle_track(track)
-        end
-      )
-    end
-
-    def serialize_video_track(track)
-      {
-        index: track.index,
-        codec: track.codec,
-        width: track.width,
-        height: track.height,
-        frame_rate: serialize_frame_rate(
-          track.frame_rate
-        )
-      }
-    end
-
-    def serialize_audio_track(track)
-      {
-        index: track.index,
-        codec: track.codec,
-        language: track.language,
-        default: track.default,
-        visual_impaired: track.visual_impaired
-      }
-    end
-
-    def serialize_subtitle_track(track)
-      {
-        index: track.index,
-        codec: track.codec,
-        language: track.language,
-        default: track.default,
-        forced: track.forced,
-        hearing_impaired: track.hearing_impaired
-      }
-    end
-
-    def serialize_frame_rate(frame_rate)
-      return unless frame_rate
-
-      {
-        numerator: frame_rate.numerator,
-        denominator: frame_rate.denominator
+        inspection: inspection_serializer.call(source)
       }
     end
 
