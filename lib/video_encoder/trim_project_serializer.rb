@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'json'
+require 'time'
 
 module VideoEncoder
   # Serializes a trim project into its versioned JSON representation.
@@ -54,6 +55,10 @@ module VideoEncoder
       inspection = {
         duration: source.duration
       }
+
+      inspection[:inspected_at] = source.inspected_at.iso8601 if source.inspected_at
+
+      inspection[:size_bytes] = source.size_bytes if source.size_bytes
 
       return inspection if source.tracks.empty?
 

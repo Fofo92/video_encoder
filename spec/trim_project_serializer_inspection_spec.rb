@@ -3,6 +3,15 @@
 RSpec.describe VideoEncoder::TrimProjectSerializer do
   describe '#dump' do
     it 'serializes the technical source inspection' do
+      inspected_at = Time.new(
+        2026,
+        9,
+        3,
+        18,
+        42,
+        0,
+        '+02:00'
+      )
       video = VideoEncoder::VideoTrack.new(
         index: 0,
         type: :video,
@@ -28,6 +37,8 @@ RSpec.describe VideoEncoder::TrimProjectSerializer do
       media = VideoEncoder::Media.new(
         path: '/commun/source-a.m2t',
         duration: 3_600,
+        inspected_at: inspected_at,
+        size_bytes: 6_581_393_080,
         video_tracks: [video],
         audio_tracks: [audio],
         subtitle_tracks: [subtitle]
@@ -53,6 +64,8 @@ RSpec.describe VideoEncoder::TrimProjectSerializer do
 
       expect(inspection).to eq(
         'duration' => 3_600,
+        'inspected_at' => '2026-09-03T18:42:00+02:00',
+        'size_bytes' => 6_581_393_080,
         'video_tracks' => [
           {
             'index' => 0,

@@ -100,5 +100,44 @@ RSpec.describe VideoEncoder::MediaProbe do
       expect(video_track.width).to eq(1920)
       expect(video_track.height).to eq(1080)
     end
+
+    it 'records when and at what size the source was inspected' do
+      inspected_at = Time.new(
+        2026,
+        9,
+        3,
+        18,
+        42,
+        0,
+        '+02:00'
+      )
+      clock = class_double(
+        Time,
+        now: inspected_at
+      )
+      status = instance_double(
+        Process::Status,
+        success?: true
+      )
+
+      stdout = JSON.generate(
+        'format' => {
+          'duration' => '123.456',
+          'size' => '6581393080'
+        },
+        'streams' => []
+      )
+
+      allow(Open3)
+        .to receive(:capture3)
+        .and_return([stdout, '', status])
+
+      media = described_class
+              .new(clock: clock)
+              .read('movie.m2t')
+
+      expect(media.inspected_at).to eq(inspected_at)
+      expect(media.size_bytes).to eq(6_581_393_080)
+    end
   end
 end

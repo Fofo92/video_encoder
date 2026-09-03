@@ -6,6 +6,10 @@ require 'json'
 module VideoEncoder
   # Retrieves media information using ffprobe.
   class MediaProbe
+    def initialize(clock: Time)
+      @clock = clock
+    end
+
     def duration(path)
       read(path).duration
     end
@@ -16,6 +20,8 @@ module VideoEncoder
       Media.new(
         path: path,
         duration: parse_duration(json),
+        inspected_at: clock.now,
+        size_bytes: parse_size(json),
         audio_tracks: parse_audio_tracks(json),
         video_tracks: parse_video_tracks(json),
         subtitle_tracks: parse_subtitle_tracks(json)
@@ -24,12 +30,22 @@ module VideoEncoder
 
     private
 
+    attr_reader :clock
+
     def parse_duration(json)
       json.dig('format', 'duration').to_f
     end
 
     def parse_audio_tracks(json)
       parse_tracks(json, 'audio')
+    end
+
+    def parse_size(json)
+      value = json.dig('format', 'size')
+
+      return unless value
+
+      Integer(value)
     end
 
     def parse_video_tracks(json)
