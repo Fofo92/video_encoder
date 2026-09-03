@@ -922,6 +922,28 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             lambda _checked=False: self.cancel_export()
         )
 
+        self.previous_frame_shortcut = QtGui.QShortcut(
+            QtGui.QKeySequence("Left"),
+            self
+        )
+        self.previous_frame_shortcut.setContext(
+            QtCore.Qt.ShortcutContext.WindowShortcut
+        )
+        self.previous_frame_shortcut.activated.connect(
+            lambda: self.schedule_wheel_move(-1)
+        )
+
+        self.next_frame_shortcut = QtGui.QShortcut(
+            QtGui.QKeySequence("Right"),
+            self
+        )
+        self.next_frame_shortcut.setContext(
+            QtCore.Qt.ShortcutContext.WindowShortcut
+        )
+        self.next_frame_shortcut.activated.connect(
+            lambda: self.schedule_wheel_move(1)
+        )
+
         file_menu = self.menuBar().addMenu("&Fichier")
         file_menu.addAction(
             self.save_project_action
@@ -1002,7 +1024,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
           )
         else:
             self.shuttle_reader.jogged.connect(
-                self.schedule_wheel_move
+                self.move_by_frames
             )
             self.shuttle_reader.shuttle_changed.connect(
                 self.set_transport_position
@@ -1109,7 +1131,6 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.audio_player.is_playing
             and speed != 1.0
         ):
-
             self.stop_audio_playback()
 
         self.transport_speed = speed
@@ -2203,7 +2224,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             QtCore.Qt.Key.Key_Enter: self.add_current_segment,
             QtCore.Qt.Key.Key_J: self.accelerate_backward,
             QtCore.Qt.Key.Key_K: self.pause_transport,
-            QtCore.Qt.Key.Key_L: self.accelerate_forward
+            QtCore.Qt.Key.Key_L: self.accelerate_forward,
+            QtCore.Qt.Key.Key_Left: self.show_previous_frame,
+            QtCore.Qt.Key.Key_Right: self.show_next_frame,
         }
 
         action = actions.get(event.key())
