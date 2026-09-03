@@ -88,6 +88,67 @@ class TrimProjectFileReaderTest(unittest.TestCase):
             )
         )
 
+    def test_restores_a_version_2_source_inspection(self):
+        inspection = {
+            "duration": 3600
+        }
+
+        session = self.load(
+            {
+                "format": "video_encoder.trim_project",
+                "version": 2,
+                "sources": [
+                    {
+                        "id": "source",
+                        "path": "/commun/source-a.m2t",
+                        "inspection": inspection
+                    }
+                ],
+                "timeline": [
+                    {
+                        "type": "segment",
+                        "source_id": "source",
+                        "start_frame": 1000,
+                        "end_frame": 1999
+                    },
+                    {
+                        "type": "segment",
+                        "source_id": "source",
+                        "start_frame": 3000,
+                        "end_frame": 3999
+                    }
+                ]
+            }
+        )
+
+        self.assertEqual(
+            session.sources,
+            (
+                SourceReference(
+                    identifier="source",
+                    path=Path(
+                        "/commun/source-a.m2t"
+                    ),
+                    inspection=inspection
+                ),
+            )
+        )
+        self.assertEqual(
+            session.segments,
+            (
+                SegmentSelection(
+                    "source",
+                    1000,
+                    1999
+                ),
+                SegmentSelection(
+                    "source",
+                    3000,
+                    3999
+                )
+            )
+        )
+
     def test_rejects_an_unknown_version(self):
         with self.assertRaisesRegex(
             ValueError,
@@ -96,7 +157,7 @@ class TrimProjectFileReaderTest(unittest.TestCase):
             self.load(
                 {
                     "format": "video_encoder.trim_project",
-                    "version": 2,
+                    "version": 3,
                     "timeline": []
                 }
             )

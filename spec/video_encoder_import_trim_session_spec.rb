@@ -30,7 +30,8 @@ RSpec.describe 'bin/video_encoder_import_trim_session' do
 
     expect(JSON.parse(stdout)).to eq(
       'format' => 'video_encoder.trim_project',
-      'version' => 1,
+      'version' => 2,
+      'sources' => [],
       'timeline' => []
     )
   end

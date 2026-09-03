@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-
 @dataclass(frozen=True)
 class SourceReference:
     identifier: str
     path: Path
+    inspection: dict | None = None
 
     def __post_init__(self):
         if not self.identifier:
@@ -19,6 +19,12 @@ class SourceReference:
             Path(self.path)
         )
 
+        if self.inspection is not None:
+            object.__setattr__(
+                self,
+                "inspection",
+                dict(self.inspection)
+            )
 
 @dataclass(frozen=True)
 class SegmentSelection:
@@ -79,15 +85,26 @@ class TrimSession:
     def remove_segment(self, segment):
         self._segments.remove(segment)
 
+    @staticmethod
+    def serialize_source(source):
+        document = {
+            "id": source.identifier,
+            "path": str(source.path)
+        }
+
+        if source.inspection is not None:
+            document["inspection"] = (
+                source.inspection
+            )
+
+        return document
+
     def to_document(self):
         return {
             "format": self.FORMAT,
             "version": self.VERSION,
             "sources": [
-                {
-                    "id": source.identifier,
-                    "path": str(source.path)
-                }
+                self.serialize_source(source)
                 for source in self.sources
             ],
             "timeline": [

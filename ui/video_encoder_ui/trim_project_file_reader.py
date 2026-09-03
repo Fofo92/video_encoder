@@ -10,7 +10,7 @@ from .trim_session import (
 
 class TrimProjectFileReader:
     FORMAT = "video_encoder.trim_project"
-    VERSION = 1
+    SUPPORTED_VERSIONS = {1, 2}
 
     def load(self, path):
         document = json.loads(
@@ -21,17 +21,10 @@ class TrimProjectFileReader:
 
         self.validate(document)
 
-        session = TrimSession()
-        source_ids_by_path = {}
+        if document["version"] == 1:
+            return self.load_version_1(document)
 
-        for item in document["timeline"]:
-            self.add_item(
-                session,
-                item,
-                source_ids_by_path
-            )
-
-        return session
+        return self.load_version_2(document)
 
     def validate(self, document):
         if document.get("format") != self.FORMAT:
@@ -39,7 +32,10 @@ class TrimProjectFileReader:
                 "unsupported trim project format"
             )
 
-        if document.get("version") != self.VERSION:
+        if (
+            document.get("version")
+            not in self.SUPPORTED_VERSIONS
+        ):
             raise ValueError(
                 "unsupported trim project version"
             )
@@ -52,23 +48,59 @@ class TrimProjectFileReader:
                 "trim project timeline is required"
             )
 
-    def add_item(
+        if (
+            document["version"] == 2
+            and not isinstance(
+                document.get("sources"),
+                list
+            )
+        ):
+            raise ValueError(
+                "trim project sources are required"
+            )
+
+    def load_version_1(self, document):
+        session = TrimSession()
+        source_ids_by_path = {}
+
+        for item in document["timeline"]:
+            self.add_version_1_item(
+                session,
+                item,
+                source_ids_by_path
+            )
+
+        return session
+
+    def load_version_2(self, document):
+        session = TrimSession()
+
+        for source in document["sources"]:
+            session.add_source(
+                SourceReference(
+                    identifier=source["id"],
+                    path=Path(source["path"]),
+                    inspection=source.get(
+                        "inspection"
+                    )
+                )
+            )
+
+        for item in document["timeline"]:
+            self.add_version_2_item(
+                session,
+                item
+            )
+
+        return session
+
+    def add_version_1_item(
         self,
         session,
         item,
         source_ids_by_path
     ):
-        item_type = item.get("type")
-
-        if item_type == "gap":
-            raise ValueError(
-                "gaps are not supported by the editor"
-            )
-
-        if item_type != "segment":
-            raise ValueError(
-                "unsupported trim project item"
-            )
+        self.reject_unsupported_item(item)
 
         source_path = Path(item["source"])
         source_id = source_ids_by_path.get(
@@ -85,6 +117,27 @@ class TrimProjectFileReader:
                 source_id
             )
 
+        self.add_segment(
+            session,
+            item,
+            source_id
+        )
+
+    def add_version_2_item(
+        self,
+        session,
+        item
+    ):
+        self.reject_unsupported_item(item)
+
+        self.add_segment(
+            session,
+            item,
+            item["source_id"]
+        )
+
+    @staticmethod
+    def add_segment(session, item, source_id):
         session.add_segment(
             SegmentSelection(
                 source_id=source_id,
@@ -92,6 +145,20 @@ class TrimProjectFileReader:
                 end_frame=item["end_frame"]
             )
         )
+
+    @staticmethod
+    def reject_unsupported_item(item):
+        item_type = item.get("type")
+
+        if item_type == "gap":
+            raise ValueError(
+                "gaps are not supported by the editor"
+            )
+
+        if item_type != "segment":
+            raise ValueError(
+                "unsupported trim project item"
+            )
 
     @staticmethod
     def add_source(session, source_path, index):

@@ -69,6 +69,8 @@ module VideoEncoder
               type: type.to_sym,
               codec: stream['codec_name'],
               frame_rate: parse_frame_rate(stream),
+              width: stream['width'],
+              height: stream['height'],
               language: stream.dig('tags', 'language'),
               default: stream.dig('disposition', 'default') == 1,
               forced: stream.dig('disposition', 'forced') == 1,

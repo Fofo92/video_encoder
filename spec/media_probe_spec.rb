@@ -62,8 +62,11 @@ RSpec.describe VideoEncoder::MediaProbe do
       expect(media.path).to eq(Pathname('movie.m2t'))
     end
 
-    it 'preserves the frame rate of a video track' do
-      status = instance_double(Process::Status, success?: true)
+    it 'preserves the technical properties of a video track' do
+      status = instance_double(
+        Process::Status,
+        success?: true
+      )
 
       stdout = JSON.generate(
         'format' => {
@@ -74,6 +77,8 @@ RSpec.describe VideoEncoder::MediaProbe do
             'index' => 0,
             'codec_type' => 'video',
             'codec_name' => 'h264',
+            'width' => 1920,
+            'height' => 1080,
             'avg_frame_rate' => '25/1',
             'tags' => {},
             'disposition' => {}
@@ -85,9 +90,15 @@ RSpec.describe VideoEncoder::MediaProbe do
         .to receive(:capture3)
         .and_return([stdout, '', status])
 
-      media = media_probe.read('movie.m2t')
+      video_track = media_probe
+                    .read('movie.m2t')
+                    .video_tracks
+                    .first
 
-      expect(media.video_tracks.first.frame_rate).to eq(Rational(25, 1))
+      expect(video_track.frame_rate)
+        .to eq(Rational(25, 1))
+      expect(video_track.width).to eq(1920)
+      expect(video_track.height).to eq(1080)
     end
   end
 end

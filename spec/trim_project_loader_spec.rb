@@ -49,7 +49,7 @@ RSpec.describe VideoEncoder::TrimProjectLoader do
 
       document = JSON.generate(
         format: 'video_encoder.trim_project',
-        version: 2,
+        version: 3,
         timeline: []
       )
 
@@ -57,8 +57,64 @@ RSpec.describe VideoEncoder::TrimProjectLoader do
         described_class.new(media_probe: probe).load(document)
       end.to raise_error(
         ArgumentError,
-        'unsupported trim project version: 2'
+        'unsupported trim project version: 3'
       )
+    end
+
+    it 'loads a version 2 project through its source references' do
+      probe = instance_double(VideoEncoder::MediaProbe)
+      media = instance_double(VideoEncoder::Media)
+
+      allow(probe).to receive(:read)
+        .with('/commun/source-a.m2t')
+        .and_return(media)
+
+      document = JSON.generate(
+        format: 'video_encoder.trim_project',
+        version: 2,
+        sources: [
+          {
+            id: 'source',
+            path: '/commun/source-a.m2t',
+            inspection: {
+              duration: 3_600
+            }
+          }
+        ],
+        timeline: [
+          {
+            type: 'segment',
+            source_id: 'source',
+            start_frame: 30_000,
+            end_frame: 31_499
+          },
+          {
+            type: 'gap',
+            frame_count: 50
+          }
+        ]
+      )
+
+      project = described_class.new(
+        media_probe: probe
+      ).load(document)
+
+      expect(project.timeline).to eq(
+        [
+          VideoEncoder::Segment.new(
+            source: media,
+            start_frame: 30_000,
+            end_frame: 31_499
+          ),
+          VideoEncoder::Gap.new(
+            frame_count: 50
+          )
+        ]
+      )
+
+      expect(probe).to have_received(:read)
+        .with('/commun/source-a.m2t')
+        .once
     end
 
     it 'rejects another document format' do

@@ -119,6 +119,31 @@ class TrimSessionTest(unittest.TestCase):
             }
         )
 
+    def test_includes_source_inspection_in_document(self):
+        session = TrimSession()
+        inspection = {
+            "duration": 3600
+        }
+
+        session.add_source(
+            SourceReference(
+                identifier="source",
+                path="/commun/source-a.m2t",
+                inspection=inspection
+            )
+        )
+
+        self.assertEqual(
+            session.to_document()["sources"],
+            [
+                {
+                    "id": "source",
+                    "path": "/commun/source-a.m2t",
+                    "inspection": inspection
+                }
+            ]
+        )
+
     def test_removes_a_segment(self):
         segment = SegmentSelection(
             source_id="A",
