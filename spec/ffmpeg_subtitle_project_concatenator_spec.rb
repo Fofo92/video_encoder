@@ -64,5 +64,31 @@ RSpec.describe VideoEncoder::FfmpegSubtitleProjectConcatenator do
         '/tmp/subtitle_project.ts'
       )
     end
+
+    it 'escapes apostrophes in transport paths' do
+      allow(writer).to receive(:write)
+      allow(runner).to receive(:run)
+
+      concatenator.call(
+        segments: [
+          {
+            path:
+              "/tmp/Alsace, terre d'orgues.ts",
+            duration: Rational(60, 1)
+          }
+        ],
+        manifest_path:
+          '/tmp/subtitle_project.ffconcat',
+        output_path:
+          '/tmp/subtitle_project.ts'
+      )
+
+      expect(writer).to have_received(:write).with(
+        '/tmp/subtitle_project.ffconcat',
+        a_string_including(
+          %q(file '/tmp/Alsace, terre d'\''orgues.ts')
+        )
+      )
+    end
   end
 end

@@ -54,12 +54,8 @@ RSpec.describe VideoEncoder::TrimExportExecutor do
 
       expect(service).to receive(:call)
         .with(
-          project_path: Pathname(
-            '/projects/movie.json'
-          ),
-          output_path: Pathname(
-            '/exports/movie.mkv'
-          )
+          project_path: '/projects/movie.json',
+          output_path: '/exports/movie.mkv'
         )
 
       executor.call(job)

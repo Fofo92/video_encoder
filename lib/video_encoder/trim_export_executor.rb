@@ -30,8 +30,8 @@ module VideoEncoder
       service_factory.build(
         workspace_directory: workspace_directory
       ).call(
-        project_path: job.project_path,
-        output_path: job.output_path
+        project_path: job.project_path.to_s,
+        output_path: job.output_path.to_s
       )
     end
 

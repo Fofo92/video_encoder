@@ -42,7 +42,7 @@ module VideoEncoder
         duration = format_time(segment.fetch(:duration))
 
         lines.push(
-          "file '#{segment.fetch(:path)}'",
+          "file #{quote_path(segment.fetch(:path))}",
           'inpoint 0',
           "outpoint #{duration}",
           "duration #{duration}"
@@ -50,6 +50,14 @@ module VideoEncoder
       end
 
       "#{lines.join("\n")}\n"
+    end
+
+    def quote_path(path)
+      escaped = path.to_s.gsub("'") do
+        "'\\''"
+      end
+
+      "'#{escaped}'"
     end
 
     def format_time(value)
