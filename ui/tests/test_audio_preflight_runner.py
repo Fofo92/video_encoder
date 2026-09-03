@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 try:
-    from PySide6 import QtCore
+    from PySide6 import QtCore, QtWidgets
 except ModuleNotFoundError:
     QtCore = None
 
@@ -20,9 +20,9 @@ if QtCore is not None:
 class AudioPreflightRunnerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.application = (
-            QtCore.QCoreApplication.instance()
-            or QtCore.QCoreApplication([])
+         cls.application = (
+            QtWidgets.QApplication.instance()
+            or QtWidgets.QApplication([])
         )
 
     def test_launches_preflight_and_returns_the_report(self):

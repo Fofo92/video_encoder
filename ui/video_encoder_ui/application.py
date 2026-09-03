@@ -37,6 +37,13 @@ from .trim_export_queue_client import (
 from .trim_project_archiver import (
     TrimProjectArchiver,
 )
+from .media_inspection_client import (
+    MediaInspectionClient,
+    MediaInspectionError,
+)
+from .source_information_dialog import (
+    SourceInformationDialog,
+)
 
 PREVIEW_WIDTH = 640
 PREVIEW_HEIGHT = 360
@@ -110,6 +117,10 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.pending_export_mode = None
         self.trim_export_queue_client = (
             TrimExportQueueClient()
+        )
+
+        self.media_inspection_client = (
+            MediaInspectionClient()
         )
 
         self.close_after_preflight = False
@@ -884,6 +895,29 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             "Encoder le montage dans un fichier MKV"
         )
 
+        self.source_information_action = (
+            QtGui.QAction(
+                "Informations sur les sources…",
+                self,
+            )
+        )
+        self.source_information_action.setIcon(
+            themed_icon(
+                "document-properties",
+                QtWidgets.QStyle.StandardPixmap.SP_FileDialogInfoView,
+            )
+        )
+        self.source_information_action.setToolTip(
+            "Afficher les informations des sources"
+        )
+        self.source_information_action.setStatusTip(
+            "Afficher les pistes et les propriétés "
+            "techniques de chaque source"
+        )
+        self.source_information_action.triggered.connect(
+            self.show_source_information
+        )
+
         self.queue_export_action = QtGui.QAction(
             "Ajouter le montage à la file…",
             self,
@@ -955,6 +989,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         file_menu.addAction(
             self.save_project_action
         )
+        file_menu.addAction(
+            self.source_information_action
+        )
         file_menu.addSeparator()
         file_menu.addAction(
             self.export_project_action
@@ -985,6 +1022,10 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.save_project_action
         )
         main_toolbar.addAction(
+            self.source_information_action
+        )
+        main_toolbar.addSeparator()
+        main_toolbar.addAction(
             self.export_project_action
         )
         main_toolbar.addAction(
@@ -998,6 +1039,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
 
         for action in (
             self.save_project_action,
+            self.source_information_action,
             self.export_project_action,
             self.queue_export_action,
             self.cancel_export_action
@@ -1561,6 +1603,28 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.out_marker_label.setToolTip(
             f"OUT : image {position}"
         )
+
+    def show_source_information(self):
+        try:
+            inspected_sources = [
+                self.media_inspection_client.inspect(
+                    source.path
+                )
+                for source in self.trim_session.sources
+            ]
+        except MediaInspectionError as error:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Inspection impossible",
+                str(error),
+            )
+            return
+
+        dialog = SourceInformationDialog(
+            inspected_sources,
+            self,
+        )
+        dialog.exec()
 
     def save_project(self):
         if self.export_status in {"running", "preflight", "confirming"}:
