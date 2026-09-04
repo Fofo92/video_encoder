@@ -2771,6 +2771,37 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
         return False
 
+    def confirm_unsaved_changes(self):
+        if not self.project_modified:
+            return True
+
+        answer = QtWidgets.QMessageBox.question(
+            self,
+            "Modifications non enregistrées",
+            (
+                "Le projet de découpage a été modifié.\n\n"
+                "Veux-tu enregistrer les modifications "
+                "avant de continuer ?"
+            ),
+            (
+                QtWidgets.QMessageBox.StandardButton.Save
+                | QtWidgets.QMessageBox.StandardButton.Discard
+                | QtWidgets.QMessageBox.StandardButton.Cancel
+            ),
+            QtWidgets.QMessageBox.StandardButton.Save
+        )
+
+        if (
+            answer
+            == QtWidgets.QMessageBox.StandardButton.Save
+        ):
+            return self.save_project() is not None
+
+        return (
+            answer
+            == QtWidgets.QMessageBox.StandardButton.Discard
+        )
+
     def closeEvent(self, event):
         if self.audio_preflight_runner.is_running:
             event.ignore()
@@ -2794,6 +2825,10 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
 
         if not self.cancel_export(quitting=True):
             self.close_after_preflight = False
+            event.ignore()
+            return
+
+        if not self.confirm_unsaved_changes():
             event.ignore()
             return
 

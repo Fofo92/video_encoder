@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 try:
     from PySide6 import QtWidgets
@@ -56,6 +56,64 @@ class ApplicationProjectModifiedTest(unittest.TestCase):
         )
         monitor.update_window_title.assert_called_once_with()
 
+    def test_allows_closing_an_unmodified_project(self):
+        monitor = SimpleNamespace(
+            project_modified=False,
+        )
+
+        self.assertTrue(
+            MltFrameMonitor.confirm_unsaved_changes(
+                monitor
+            )
+        )
+
+    def test_saves_a_modified_project_before_closing(self):
+        monitor = SimpleNamespace(
+            project_modified=True,
+            save_project=Mock(
+                return_value=Path(
+                    "/commun/movie.json"
+                )
+            ),
+        )
+
+        with patch(
+            "video_encoder_ui.application."
+            "QtWidgets.QMessageBox.question",
+            return_value=(
+                QtWidgets.QMessageBox.StandardButton.Save
+            ),
+        ):
+            result = (
+                MltFrameMonitor.confirm_unsaved_changes(
+                    monitor
+                )
+            )
+
+        self.assertTrue(result)
+        monitor.save_project.assert_called_once_with()
+
+    def test_cancels_closing_a_modified_project(self):
+        monitor = SimpleNamespace(
+            project_modified=True,
+            save_project=Mock(),
+        )
+
+        with patch(
+            "video_encoder_ui.application."
+            "QtWidgets.QMessageBox.question",
+            return_value=(
+                QtWidgets.QMessageBox.StandardButton.Cancel
+            ),
+        ):
+            result = (
+                MltFrameMonitor.confirm_unsaved_changes(
+                    monitor
+                )
+            )
+
+        self.assertFalse(result)
+        monitor.save_project.assert_not_called()
 
 if __name__ == "__main__":
     unittest.main()
