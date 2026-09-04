@@ -48,17 +48,31 @@ class ClickableSlider(QtWidgets.QSlider):
         self.in_position = None
         self.out_position = None
         self.segments = ()
+        self.selection_color = QtGui.QColor(
+            "#3daee9"
+        )
         self.setMinimumHeight(34)
 
+    def set_segments(
+        self,
+        segments,
+        selection_color=None
+    ):
+        self.segments = tuple(segments)
+
+        if selection_color is not None:
+            self.selection_color = QtGui.QColor(
+                selection_color
+            )
+
+        self.update()
 
     def set_markers(self, in_position, out_position):
         self.in_position = in_position
         self.out_position = out_position
         self.update()
 
-    def set_segments(self, segments):
-        self.segments = tuple(segments)
-        self.update()
+
 
     def pixel_for_value(self, value):
         if self.maximum() == self.minimum():
@@ -126,31 +140,29 @@ class ClickableSlider(QtWidgets.QSlider):
                 3
             )
 
-        for start_position, end_position in self.segments:
+        for (
+            start_position,
+            end_position,
+            segment_color,
+        ) in self.segments:
+            color = QtGui.QColor(segment_color)
+            color.setAlpha(190)
+
             draw_range(
                 start_position,
                 end_position,
-                QtGui.QColor(
-                    46,
-                    160,
-                    67,
-                    190
-                )
+                color
             )
 
         if (
             self.in_position is not None
             and self.out_position is not None
         ):
-            draw_range(
-                self.in_position,
-                self.out_position,
-                QtGui.QColor(
-                    46,
-                    160,
-                    67,
-                    100
-                )
+            QtGui.QColor(
+                self.selection_color.red(),
+                self.selection_color.green(),
+                self.selection_color.blue(),
+                100
             )
 
         def draw_marker(position):

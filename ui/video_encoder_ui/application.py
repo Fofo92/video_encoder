@@ -1485,17 +1485,23 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             bool(segments)
         )
 
+        active_source_color = source_colors[
+            self.source_id
+        ]
+
         visible_segments = [
             (
                 segment.start_frame,
-                segment.end_frame
+                segment.end_frame,
+                source_colors[segment.source_id],
             )
             for segment in segments
             if segment.source_id == self.source_id
         ]
 
         self.position_slider.set_segments(
-            visible_segments
+            visible_segments,
+            selection_color=active_source_color
         )
 
     def clear_active_markers(self):
