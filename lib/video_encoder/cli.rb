@@ -4,6 +4,8 @@ require_relative 'cli/export_command'
 require_relative 'cli/config_command'
 require_relative 'cli/preflight_audio_command'
 require_relative 'cli/job_presenter'
+require_relative 'cli/job_serializer'
+require_relative 'cli/list_jobs_command'
 require_relative 'cli/enqueue_trim_export_command'
 require_relative 'cli/run_trim_exports_command'
 require_relative 'cli/inspect_media_command'
@@ -34,7 +36,7 @@ module VideoEncoder
       video_encoder run [--once]
       video_encoder run-trim-exports [--once]
       video_encoder enqueue-trim-export <project.json> --output <movie.mkv>
-      video_encoder list
+      video_encoder list [--json]
       video_encoder status <job_id>
       video_encoder config
       video_encoder watch [--once]
@@ -116,16 +118,10 @@ module VideoEncoder
     end
 
     def list
-      jobs = repo.all
-
-      puts JobPresenter::HEADER
-      puts '-' * 80
-
-      return puts 'No jobs found' if jobs.empty?
-
-      jobs.each do |job|
-        puts job_presenter.summary(job)
-      end
+      ListJobsCommand.new(
+        argv: @argv,
+        repo: repo
+      ).run
     end
 
     def enqueue

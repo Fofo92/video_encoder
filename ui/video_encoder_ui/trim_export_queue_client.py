@@ -1,3 +1,5 @@
+import json
+import subprocess
 import subprocess
 from pathlib import Path
 
@@ -47,8 +49,54 @@ class TrimExportQueueClient:
 
         return result.stdout.strip()
 
+    def list_jobs(self):
+        result = self.runner(
+            [
+                str(self.executable),
+                "list",
+                "--json",
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        if result.returncode != 0:
+            raise TrimExportQueueError(
+                self.error_message(
+                    result,
+                    fallback="trim export queue listing failed",
+                )
+            )
+
+        try:
+            document = json.loads(result.stdout)
+        except json.JSONDecodeError as error:
+            raise TrimExportQueueError(
+                "invalid trim export queue response"
+            ) from error
+
+        if (
+            document.get("format")
+            != "video_encoder.job_list"
+            or document.get("version") != 1
+            or not isinstance(document.get("jobs"), list)
+        ):
+            raise TrimExportQueueError(
+                "unsupported trim export queue response"
+            )
+
+        return [
+            job
+            for job in document["jobs"]
+            if job.get("kind") == "trim_export"
+        ]
+
     @staticmethod
-    def error_message(result):
+    def error_message(
+        result,
+        fallback="trim export enqueue failed",
+    ):
         message = result.stderr.strip()
 
         if message:
@@ -59,4 +107,4 @@ class TrimExportQueueClient:
         if message:
             return message
 
-        return "trim export enqueue failed"
+        return fallback
