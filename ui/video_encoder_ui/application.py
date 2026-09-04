@@ -34,6 +34,9 @@ from .trim_export_queue_client import (
     TrimExportQueueClient,
     TrimExportQueueError,
 )
+from .trim_export_queue_dialog import (
+    TrimExportQueueDialog,
+)
 from .trim_project_archiver import (
     TrimProjectArchiver,
 )
@@ -1049,6 +1052,31 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             "à la file d’export"
         )
 
+        self.show_export_queue_action = QtGui.QAction(
+            "File des montages…",
+            self,
+        )
+        self.show_export_queue_action.setShortcut(
+            QtGui.QKeySequence("Ctrl+Shift+Q")
+        )
+        self.show_export_queue_action.setIcon(
+            themed_icon(
+                "view-list-details",
+                QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView,
+            )
+        )
+        self.show_export_queue_action.setToolTip(
+            "Afficher la file des montages "
+            "(Ctrl+Shift+Q)"
+        )
+        self.show_export_queue_action.setStatusTip(
+            "Consulter les montages en attente, "
+            "en cours ou terminés"
+        )
+        self.show_export_queue_action.triggered.connect(
+            self.show_trim_export_queue
+        )
+
         self.cancel_export_action = QtGui.QAction(
             "Annuler l’export",
             self
@@ -1108,6 +1136,10 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
         file_menu.addAction(
+            self.show_export_queue_action
+        )
+
+        file_menu.addAction(
             self.cancel_export_action
         )
 
@@ -1146,6 +1178,10 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.queue_export_action
         )
 
+        main_toolbar.addAction(
+            self.show_export_queue_action
+        )
+
         main_toolbar.addSeparator()
         main_toolbar.addAction(
             self.cancel_export_action
@@ -1156,6 +1192,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.source_information_action,
             self.export_project_action,
             self.queue_export_action,
+            self.show_export_queue_action,
             self.cancel_export_action
         ):
             tool_button = main_toolbar.widgetForAction(
@@ -1855,6 +1892,26 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.out_marker_label.setToolTip(
             f"OUT : image {position}"
         )
+
+    def show_trim_export_queue(self):
+        try:
+            jobs = (
+                self.trim_export_queue_client
+                .list_jobs()
+            )
+        except TrimExportQueueError as error:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "File indisponible",
+                str(error),
+            )
+            return
+
+        dialog = TrimExportQueueDialog(
+            jobs,
+            self,
+        )
+        dialog.exec()
 
     def show_source_information(self):
         try:
