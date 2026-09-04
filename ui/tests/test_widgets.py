@@ -1,10 +1,22 @@
 import unittest
 
-from PySide6 import QtCore, QtGui, QtWidgets
+try:
+    from PySide6 import QtCore, QtGui, QtWidgets
+except ModuleNotFoundError:
+    QtCore = None
+    QtGui = None
+    QtWidgets = None
 
-from video_encoder_ui.widgets import ClickableSlider
+if QtWidgets is not None:
+    from video_encoder_ui.widgets import (
+        ClickableSlider,
+    )
 
 
+@unittest.skipIf(
+    QtWidgets is None,
+    "PySide6 is unavailable",
+)
 class ClickableSliderTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
