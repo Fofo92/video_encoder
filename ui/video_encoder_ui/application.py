@@ -664,6 +664,27 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             "Enregistrer le projet…",
             self
         )
+        self.clear_all_segments_action = QtGui.QAction(
+            "Supprimer tous les segments…",
+            self
+        )
+        self.clear_all_segments_action.setIcon(
+            themed_icon(
+                "edit-clear-all",
+                QtWidgets.QStyle.StandardPixmap.SP_TrashIcon
+            )
+        )
+        self.clear_all_segments_action.setToolTip(
+            "Supprimer tous les segments du montage"
+        )
+        self.clear_all_segments_action.setStatusTip(
+            "Vider le montage sans modifier le fichier source"
+        )
+        self.clear_all_segments_action.setEnabled(False)
+        self.clear_all_segments_action.triggered.connect(
+            self.clear_all_segments
+        )
+
         self.save_project_action.setShortcut(
             QtGui.QKeySequence.StandardKey.Save
         )
@@ -1003,6 +1024,13 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
 
         file_menu.addAction(
             self.cancel_export_action
+        )
+
+        montage_menu = self.menuBar().addMenu(
+            "&Montage"
+        )
+        montage_menu.addAction(
+            self.clear_all_segments_action
         )
 
         main_toolbar = self.addToolBar(
@@ -1447,6 +1475,48 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
         self.refresh_segment_list()
 
+    def clear_all_segments(self):
+        if self.export_status in {
+            "running",
+            "preflight",
+            "confirming"
+        }:
+            return
+
+        segment_count = len(
+            self.trim_session.segments
+        )
+
+        if segment_count == 0:
+            return
+
+        suffix = "s" if segment_count > 1 else ""
+
+        answer = QtWidgets.QMessageBox.question(
+            self,
+            "Supprimer tous les segments",
+            (
+                f"Supprimer les {segment_count} "
+                f"segment{suffix} du montage ?\n\n"
+                "Le fichier source ne sera pas modifié."
+            ),
+            (
+                QtWidgets.QMessageBox.StandardButton.Yes
+                | QtWidgets.QMessageBox.StandardButton.No
+            ),
+            QtWidgets.QMessageBox.StandardButton.No
+        )
+
+        if (
+            answer
+            != QtWidgets.QMessageBox.StandardButton.Yes
+        ):
+            return
+
+        self.trim_session.clear_segments()
+        self.clear_active_markers()
+        self.refresh_segment_list()
+
     def refresh_segment_list(self):
         segments = self.trim_session.segments
 
@@ -1484,6 +1554,15 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.segment_list.setVisible(
             bool(segments)
         )
+        busy = self.export_status in {
+            "running",
+            "preflight",
+            "confirming"
+        }
+        self.clear_all_segments_action.setEnabled(
+            bool(segments) and not busy
+        )
+
 
         active_source_color = source_colors[
             self.source_id
@@ -1965,6 +2044,11 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
         self.save_project_action.setEnabled(
             not running
+        )
+
+        self.clear_all_segments_action.setEnabled(
+            bool(self.trim_session.segments)
+            and not running
         )
 
         self.cancel_export_action.setEnabled(

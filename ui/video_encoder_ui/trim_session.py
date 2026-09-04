@@ -85,6 +85,9 @@ class TrimSession:
     def remove_segment(self, segment):
         self._segments.remove(segment)
 
+    def clear_segments(self):
+        self._segments.clear()
+
     @staticmethod
     def serialize_source(source):
         document = {

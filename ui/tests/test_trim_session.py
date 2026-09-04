@@ -159,6 +159,35 @@ class TrimSessionTest(unittest.TestCase):
             ()
         )
 
+    def test_clears_all_segments_without_removing_sources(self):
+        self.session.add_segment(
+            SegmentSelection(
+                source_id="A",
+                start_frame=100,
+                end_frame=200
+            )
+        )
+        self.session.add_segment(
+            SegmentSelection(
+                source_id="C",
+                start_frame=300,
+                end_frame=400
+            )
+        )
+
+        self.session.clear_segments()
+
+        self.assertEqual(
+            self.session.segments,
+            ()
+        )
+        self.assertEqual(
+            tuple(
+                source.identifier
+                for source in self.session.sources
+            ),
+            ("A", "C")
+        )
 
 if __name__ == "__main__":
     unittest.main()
