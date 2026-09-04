@@ -1,12 +1,8 @@
 from pathlib import Path
-
 from PySide6 import QtGui, QtWidgets
-
-
-SOURCE_COLORS = (
-    "#3daee9",
-    "#e6a23c",
-    "#67c23a",
+from .source_colors import (
+    SOURCE_COLORS,
+    source_color,
 )
 
 
@@ -51,9 +47,7 @@ class SourceInformationDialog(QtWidgets.QDialog):
         self.tabs.tabBar().setTabTextColor(
             tab_index,
             QtGui.QColor(
-                SOURCE_COLORS[
-                    index % len(SOURCE_COLORS)
-                ]
+                source_color(index)
             )
         )
 

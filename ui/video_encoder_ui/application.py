@@ -44,6 +44,7 @@ from .media_inspection_client import (
 from .source_information_dialog import (
     SourceInformationDialog,
 )
+from .source_colors import source_color
 
 PREVIEW_WIDTH = 640
 PREVIEW_HEIGHT = 360
@@ -1468,7 +1469,18 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             for index, segment in enumerate(segments)
         ]
 
-        self.segment_list.set_rows(rows)
+        source_colors = {
+            source.identifier: source_color(index)
+            for index, source in enumerate(
+                self.trim_session.sources
+            )
+        }
+
+        self.segment_list.set_rows(
+            rows,
+            source_colors=source_colors
+        )
+
         self.segment_list.setVisible(
             bool(segments)
         )

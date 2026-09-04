@@ -1,4 +1,4 @@
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 
 class SegmentListWidget(QtWidgets.QTableWidget):
@@ -53,7 +53,13 @@ class SegmentListWidget(QtWidgets.QTableWidget):
             self.emit_selected_segment
         )
 
-    def set_rows(self, rows):
+    def set_rows(
+        self,
+        rows,
+        source_colors=None
+    ):
+        source_colors = source_colors or {}
+
         self.blockSignals(True)
 
         try:
@@ -65,6 +71,18 @@ class SegmentListWidget(QtWidgets.QTableWidget):
                     item = QtWidgets.QTableWidgetItem(
                         str(value)
                     )
+
+                    if column_index == 1:
+                        color = source_colors.get(value)
+
+                        if color:
+                            item.setForeground(
+                                QtGui.QColor(color)
+                            )
+                            font = item.font()
+                            font.setBold(True)
+                            item.setFont(font)
+
                     self.setItem(
                         row_index,
                         column_index,
@@ -97,6 +115,7 @@ class SegmentListWidget(QtWidgets.QTableWidget):
                 )
         finally:
             self.blockSignals(False)
+
     def emit_selected_segment(
         self,
         row,
