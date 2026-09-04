@@ -301,6 +301,81 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.show_next_frame
         )
 
+        self.go_to_source_start_action = QtGui.QAction(
+            "Début de la source",
+            self
+        )
+        self.go_to_source_start_action.triggered.connect(
+            self.go_to_source_start
+        )
+
+        self.go_to_source_end_action = QtGui.QAction(
+            "Fin de la source",
+            self
+        )
+        self.go_to_source_end_action.triggered.connect(
+            self.go_to_source_end
+        )
+
+        self.go_to_segment_start_action = QtGui.QAction(
+            "Début du segment sélectionné",
+            self
+        )
+        self.go_to_segment_start_action.triggered.connect(
+            self.go_to_segment_start
+        )
+        self.go_to_segment_start_action.setEnabled(False)
+
+        self.go_to_segment_end_action = QtGui.QAction(
+            "Fin du segment sélectionné",
+            self
+        )
+        self.go_to_segment_end_action.triggered.connect(
+            self.go_to_segment_end
+        )
+        self.go_to_segment_end_action.setEnabled(False)
+
+        go_to_menu = QtWidgets.QMenu(self)
+        go_to_menu.addAction(
+            self.go_to_source_start_action
+        )
+        go_to_menu.addAction(
+            self.go_to_source_end_action
+        )
+        go_to_menu.addSeparator()
+        go_to_menu.addAction(
+            self.go_to_segment_start_action
+        )
+        go_to_menu.addAction(
+            self.go_to_segment_end_action
+        )
+
+        go_to_icon = QtGui.QIcon.fromTheme(
+            "go-jump"
+        )
+
+        if go_to_icon.isNull():
+            go_to_icon = self.style().standardIcon(
+                QtWidgets.QStyle.StandardPixmap.SP_ArrowRight
+            )
+
+        self.go_to_button = QtWidgets.QToolButton()
+        self.go_to_button.setIcon(go_to_icon)
+        self.go_to_button.setIconSize(
+            QtCore.QSize(22, 22)
+        )
+        self.go_to_button.setFixedSize(36, 36)
+        self.go_to_button.setPopupMode(
+            QtWidgets.QToolButton.ToolButtonPopupMode.InstantPopup
+        )
+        self.go_to_button.setMenu(go_to_menu)
+        self.go_to_button.setToolTip(
+            "Aller à une borne de la source ou du segment"
+        )
+        self.go_to_button.setAccessibleName(
+            "Aller à"
+        )
+
         self.backward_button = QtWidgets.QPushButton()
         self.backward_button.clicked.connect(
             self.accelerate_backward
@@ -590,7 +665,10 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         controls_layout.addWidget(
             frame_button_group
         )
-
+        controls_layout.addSpacing(4)
+        controls_layout.addWidget(
+            self.go_to_button
+        )
         controls_layout.addWidget(
             transport_separator
         )
@@ -618,9 +696,15 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.segment_list.segment_selected.connect(
             self.select_segment
         )
+
         self.segment_list.delete_requested.connect(
             self.delete_segment
         )
+
+        self.segment_list.itemSelectionChanged.connect(
+            self.update_segment_navigation_actions
+        )
+
         self.segment_list.setVisible(False)
 
         self.export_progress_bar = (
@@ -1423,6 +1507,72 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             f"/{self.frame_source.length - 1}"
         )
 
+    def go_to_source_start(self):
+        self.show_frame(0)
+
+    def go_to_source_end(self):
+        self.show_frame(
+            self.frame_source.length - 1
+        )
+
+    def selected_segment(self):
+        index = self.segment_list.currentRow()
+        segments = self.trim_session.segments
+
+        if not 0 <= index < len(segments):
+            return None
+
+        segment = segments[index]
+
+        if segment.source_id != self.source_id:
+            return None
+
+        return segment
+
+    def update_segment_navigation_actions(self):
+        busy = self.export_status in {
+            "running",
+            "preflight",
+            "confirming"
+        }
+        enabled = (
+            not busy
+            and MltFrameMonitor.selected_segment(
+                self
+            ) is not None
+        )
+
+        self.go_to_segment_start_action.setEnabled(
+            enabled
+        )
+        self.go_to_segment_end_action.setEnabled(
+            enabled
+        )
+
+    def go_to_segment_start(self):
+        segment = MltFrameMonitor.selected_segment(
+            self
+        )
+
+        if segment is None:
+            return
+
+        self.show_frame(
+            segment.start_frame
+        )
+
+    def go_to_segment_end(self):
+        segment = MltFrameMonitor.selected_segment(
+            self
+        )
+
+        if segment is None:
+            return
+
+        self.show_frame(
+            segment.end_frame
+        )
+
     def select_segment(self, index):
         if self.export_status in {"running", "preflight", "confirming"}:
             return
@@ -1582,6 +1732,8 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             visible_segments,
             selection_color=active_source_color
         )
+
+        self.update_segment_navigation_actions()
 
     def clear_active_markers(self):
         self.in_position = None
@@ -2067,6 +2219,8 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.segment_list.setEnabled(
             not running
         )
+
+        self.update_segment_navigation_actions()
 
         if status in {"preflight", "confirming"}:
             message = (
