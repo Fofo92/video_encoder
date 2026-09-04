@@ -1911,7 +1911,31 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             jobs,
             self,
         )
+        dialog.refresh_requested.connect(
+            lambda: self.refresh_trim_export_queue(
+                dialog
+            )
+        )
         dialog.exec()
+
+    def refresh_trim_export_queue(
+        self,
+        dialog,
+    ):
+        try:
+            jobs = (
+                self.trim_export_queue_client
+                .list_jobs()
+            )
+        except TrimExportQueueError as error:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Actualisation impossible",
+                str(error),
+            )
+            return
+
+        dialog.set_jobs(jobs)
 
     def show_source_information(self):
         try:

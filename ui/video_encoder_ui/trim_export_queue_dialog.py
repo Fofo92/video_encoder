@@ -4,6 +4,7 @@ from PySide6 import QtCore, QtWidgets
 
 
 class TrimExportQueueDialog(QtWidgets.QDialog):
+    refresh_requested = QtCore.Signal()
     STATUS_LABELS = {
         "queued": "En attente",
         "running": "En cours",
@@ -69,6 +70,15 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             QtWidgets.QDialogButtonBox.StandardButton.Close,
             parent=self,
         )
+
+        self.refresh_button = buttons.addButton(
+            "Actualiser",
+            QtWidgets.QDialogButtonBox.ButtonRole.ActionRole,
+        )
+        self.refresh_button.clicked.connect(
+            self.refresh_requested
+        )
+
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 

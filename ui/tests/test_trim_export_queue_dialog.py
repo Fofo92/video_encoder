@@ -6,6 +6,7 @@ except ModuleNotFoundError:
     QtWidgets = None
 
 if QtWidgets is not None:
+    from unittest.mock import Mock
     from video_encoder_ui.trim_export_queue_dialog import (
         TrimExportQueueDialog,
     )
@@ -63,6 +64,16 @@ class TrimExportQueueDialogTest(unittest.TestCase):
             "En attente",
         )
 
+    def test_requests_a_queue_refresh(self):
+        dialog = TrimExportQueueDialog([])
+        refresh_requested = Mock()
+        dialog.refresh_requested.connect(
+            refresh_requested
+        )
+
+        dialog.refresh_button.click()
+
+        refresh_requested.assert_called_once_with()
 
 if __name__ == "__main__":
     unittest.main()

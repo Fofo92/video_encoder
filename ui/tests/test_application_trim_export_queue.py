@@ -89,5 +89,33 @@ class ApplicationTrimExportQueueTest(
         )
         dialog_class.assert_not_called()
 
+    def test_refreshes_the_displayed_jobs(self):
+        jobs = [
+            {
+                "id": "trim-2",
+                "kind": "trim_export",
+                "input_path": "/commun/next.json",
+                "output_path": "/videos/next.mkv",
+                "status": "running",
+                "attempts": 1,
+            }
+        ]
+        client = Mock()
+        client.list_jobs.return_value = jobs
+        monitor = SimpleNamespace(
+            trim_export_queue_client=client,
+        )
+        dialog = Mock()
+
+        MltFrameMonitor.refresh_trim_export_queue(
+            monitor,
+            dialog,
+        )
+
+        client.list_jobs.assert_called_once_with()
+        dialog.set_jobs.assert_called_once_with(
+            jobs
+        )
+
 if __name__ == "__main__":
     unittest.main()
