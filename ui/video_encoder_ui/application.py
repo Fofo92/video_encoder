@@ -113,6 +113,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             else None
         )
 
+        self.project_modified = False
         self.audio_preflight_runner = AudioPreflightRunner()
         self.pending_export = None
         self.pending_export_mode = None
@@ -1623,6 +1624,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.trim_session.remove_segment(
             segment
         )
+        self.set_project_modified()
         self.refresh_segment_list()
 
     def clear_all_segments(self):
@@ -1664,6 +1666,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             return
 
         self.trim_session.clear_segments()
+        self.set_project_modified()
         self.clear_active_markers()
         self.refresh_segment_list()
 
@@ -1788,7 +1791,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
                 str(error)
             )
             return
-
+        self.set_project_modified()
         self.refresh_segment_list()
         self.clear_active_markers()
 
@@ -1924,7 +1927,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             return None
 
         self.project_path = destination
-        self.update_window_title()
+        self.set_project_modified(False)
         self.statusBar().showMessage(
             f"Projet enregistré : {destination}",
             5_000
@@ -2797,6 +2800,13 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.shutdown()
         super().closeEvent(event)
 
+    def set_project_modified(
+        self,
+        modified=True
+    ):
+        self.project_modified = modified
+        self.update_window_title()
+
     def update_window_title(self):
         title = (
             f"video_encoder — Source active : "
@@ -2809,6 +2819,8 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
                 f"{self.project_path.name}"
             )
 
+        if self.project_modified:
+            title += " *"
         self.setWindowTitle(title)
 
 

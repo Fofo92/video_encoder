@@ -29,6 +29,7 @@ class ApplicationSegmentsTest(unittest.TestCase):
             trim_session=trim_session,
             clear_active_markers=Mock(),
             refresh_segment_list=Mock(),
+            set_project_modified=Mock(),
         )
 
     def test_clears_all_segments_after_confirmation(self):
@@ -48,7 +49,7 @@ class ApplicationSegmentsTest(unittest.TestCase):
         monitor.trim_session.clear_segments.assert_called_once_with()
         monitor.clear_active_markers.assert_called_once_with()
         monitor.refresh_segment_list.assert_called_once_with()
-
+        monitor.set_project_modified.assert_called_once_with()
     def test_keeps_segments_when_confirmation_is_declined(self):
         monitor = self.make_monitor()
 
@@ -66,7 +67,7 @@ class ApplicationSegmentsTest(unittest.TestCase):
         monitor.trim_session.clear_segments.assert_not_called()
         monitor.clear_active_markers.assert_not_called()
         monitor.refresh_segment_list.assert_not_called()
-
+        monitor.set_project_modified.assert_not_called()
 
 if __name__ == "__main__":
     unittest.main()
