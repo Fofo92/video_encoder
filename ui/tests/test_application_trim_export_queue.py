@@ -38,6 +38,10 @@ class ApplicationTrimExportQueueTest(
         client.list_jobs.return_value = jobs
         monitor = SimpleNamespace(
             trim_export_queue_client=client,
+            trim_export_queue_runner=SimpleNamespace(
+                is_running=False,
+            ),
+            trim_export_queue_dialog=None,
         )
         dialog = Mock()
 
@@ -115,6 +119,119 @@ class ApplicationTrimExportQueueTest(
         client.list_jobs.assert_called_once_with()
         dialog.set_jobs.assert_called_once_with(
             jobs
+        )
+
+    def test_starts_the_trim_export_queue(self):
+        runner = Mock()
+        monitor = SimpleNamespace(
+            trim_export_queue_runner=runner,
+        )
+        dialog = Mock()
+
+        MltFrameMonitor.start_trim_export_queue(
+            monitor,
+            dialog,
+        )
+
+        runner.start.assert_called_once_with()
+        dialog.set_running.assert_called_once_with(
+            True
+        )
+
+    def test_refreshes_the_queue_after_success(self):
+        dialog = Mock()
+        monitor = SimpleNamespace(
+            trim_export_queue_dialog=dialog,
+        )
+
+        with (
+            patch.object(
+                MltFrameMonitor,
+                "refresh_trim_export_queue",
+            ) as refresh,
+            patch(
+                "video_encoder_ui.application."
+                "QtWidgets.QMessageBox.information"
+            ) as information,
+        ):
+            MltFrameMonitor.trim_export_queue_succeeded(
+                monitor
+            )
+
+        dialog.set_running.assert_called_once_with(
+            False
+        )
+        refresh.assert_called_once_with(
+            monitor,
+            dialog,
+        )
+        information.assert_called_once_with(
+            monitor,
+            "File terminée",
+            "Tous les montages en attente ont été traités.",
+        )
+
+    def test_refreshes_the_queue_after_failure(self):
+        dialog = Mock()
+        monitor = SimpleNamespace(
+            trim_export_queue_dialog=dialog,
+        )
+
+        with (
+            patch.object(
+                MltFrameMonitor,
+                "refresh_trim_export_queue",
+            ) as refresh,
+            patch(
+                "video_encoder_ui.application."
+                "QtWidgets.QMessageBox.warning"
+            ) as warning,
+        ):
+            MltFrameMonitor.trim_export_queue_failed(
+                monitor,
+                "worker unavailable",
+            )
+
+        dialog.set_running.assert_called_once_with(
+            False
+        )
+        refresh.assert_called_once_with(
+            monitor,
+            dialog,
+        )
+        warning.assert_called_once_with(
+            monitor,
+            "Échec de la file",
+            "worker unavailable",
+        )
+
+    def test_prevents_closing_while_queue_is_running(self):
+        monitor = SimpleNamespace(
+            trim_export_queue_runner=SimpleNamespace(
+                is_running=True,
+            )
+        )
+        event = Mock()
+
+        with patch(
+            "video_encoder_ui.application."
+            "QtWidgets.QMessageBox.information"
+        ) as information:
+            MltFrameMonitor.closeEvent(
+                monitor,
+                event,
+            )
+
+        event.ignore.assert_called_once_with()
+        information.assert_called_once_with(
+            monitor,
+            "File en cours",
+            (
+                "La file des montages est en cours "
+                "d’exécution.\n"
+                "Attends sa fin avant de fermer "
+                "video_encoder."
+            ),
         )
 
 if __name__ == "__main__":

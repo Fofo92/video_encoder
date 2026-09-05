@@ -37,6 +37,9 @@ from .trim_export_queue_client import (
 from .trim_export_queue_dialog import (
     TrimExportQueueDialog,
 )
+from .trim_export_queue_runner import (
+    TrimExportQueueRunner,
+)
 from .trim_project_archiver import (
     TrimProjectArchiver,
 )
@@ -122,6 +125,18 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.pending_export_mode = None
         self.trim_export_queue_client = (
             TrimExportQueueClient()
+        )
+
+        self.trim_export_queue_runner = (
+            TrimExportQueueRunner()
+        )
+        self.trim_export_queue_dialog = None
+
+        self.trim_export_queue_runner.succeeded.connect(
+            self.trim_export_queue_succeeded
+        )
+        self.trim_export_queue_runner.failed.connect(
+            self.trim_export_queue_failed
         )
 
         self.media_inspection_client = (
@@ -1911,12 +1926,26 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             jobs,
             self,
         )
+        self.trim_export_queue_dialog = dialog
+
+        dialog.set_running(
+            self.trim_export_queue_runner.is_running
+        )
         dialog.refresh_requested.connect(
             lambda: self.refresh_trim_export_queue(
                 dialog
             )
         )
+        dialog.start_requested.connect(
+            lambda: self.start_trim_export_queue(
+                dialog
+            )
+        )
+
         dialog.exec()
+
+        if self.trim_export_queue_dialog is dialog:
+            self.trim_export_queue_dialog = None
 
     def refresh_trim_export_queue(
         self,
@@ -1936,6 +1965,73 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             return
 
         dialog.set_jobs(jobs)
+        dialog.mark_refreshed(
+            QtCore.QTime.currentTime().toString(
+                "HH:mm:ss"
+            )
+        )
+
+    def start_trim_export_queue(
+        self,
+        dialog,
+    ):
+        try:
+            self.trim_export_queue_runner.start()
+        except RuntimeError as error:
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Lancement impossible",
+                str(error),
+            )
+            return
+
+        dialog.set_running(True)
+
+    def trim_export_queue_succeeded(self):
+        dialog = getattr(
+            self,
+            "trim_export_queue_dialog",
+            None,
+        )
+
+        if dialog is not None:
+            dialog.set_running(False)
+            MltFrameMonitor.refresh_trim_export_queue(
+                self,
+                dialog,
+            )
+
+        QtWidgets.QMessageBox.information(
+            self,
+            "File terminée",
+            (
+                "Tous les montages en attente "
+                "ont été traités."
+            ),
+        )
+
+    def trim_export_queue_failed(
+        self,
+        message,
+    ):
+        dialog = getattr(
+            self,
+            "trim_export_queue_dialog",
+            None,
+        )
+
+        if dialog is not None:
+            dialog.set_running(False)
+            MltFrameMonitor.refresh_trim_export_queue(
+                self,
+                dialog,
+            )
+
+        QtWidgets.QMessageBox.warning(
+            self,
+            "Échec de la file",
+            message,
+        )
 
     def show_source_information(self):
         try:
@@ -2884,6 +2980,30 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
     def closeEvent(self, event):
+        queue_runner = getattr(
+            self,
+            "trim_export_queue_runner",
+            None,
+        )
+
+        if (
+            queue_runner is not None
+            and queue_runner.is_running
+        ):
+            event.ignore()
+
+            QtWidgets.QMessageBox.information(
+                self,
+                "File en cours",
+                (
+                    "La file des montages est en cours "
+                    "d’exécution.\n"
+                    "Attends sa fin avant de fermer "
+                    "video_encoder."
+                ),
+            )
+            return
+
         if self.audio_preflight_runner.is_running:
             event.ignore()
 

@@ -5,6 +5,8 @@ from PySide6 import QtCore, QtWidgets
 
 class TrimExportQueueDialog(QtWidgets.QDialog):
     refresh_requested = QtCore.Signal()
+    start_requested = QtCore.Signal()
+
     STATUS_LABELS = {
         "queued": "En attente",
         "running": "En cours",
@@ -27,7 +29,24 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         )
         self.resize(900, 420)
 
+        self.jobs = []
+        self.running = False
+
+        self.refresh_timer = QtCore.QTimer(self)
+        self.refresh_timer.setInterval(5_000)
+        self.refresh_timer.timeout.connect(
+            self.refresh_requested
+        )
+
         layout = QtWidgets.QVBoxLayout(self)
+
+        self.refresh_status_label = QtWidgets.QLabel(
+            "État chargé à l’ouverture",
+            self,
+        )
+        layout.addWidget(
+            self.refresh_status_label
+        )
 
         self.jobs_table = QtWidgets.QTableWidget(
             0,
@@ -71,6 +90,14 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             parent=self,
         )
 
+        self.start_button = buttons.addButton(
+            "Lancer la file",
+            QtWidgets.QDialogButtonBox.ButtonRole.ActionRole,
+        )
+        self.start_button.clicked.connect(
+            self.start_requested
+        )
+
         self.refresh_button = buttons.addButton(
             "Actualiser",
             QtWidgets.QDialogButtonBox.ButtonRole.ActionRole,
@@ -84,11 +111,47 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
         self.set_jobs(jobs)
 
+        self.set_jobs(jobs)
+
+    def mark_refreshed(self, time_text):
+        self.refresh_status_label.setText(
+            f"Dernière actualisation : {time_text}"
+        )
+
     def set_jobs(self, jobs):
+        self.jobs = list(jobs)
+        self.update_start_button()
+
         self.jobs_table.setRowCount(0)
 
-        for job in jobs:
+        for job in self.jobs:
             self.add_job(job)
+
+    def set_running(self, running):
+        self.running = bool(running)
+
+        if self.running:
+            self.refresh_timer.start()
+        else:
+            self.refresh_timer.stop()
+
+        self.update_start_button()
+
+    def update_start_button(self):
+        has_queued_jobs = any(
+            job.get("status") == "queued"
+            for job in self.jobs
+        )
+
+        self.start_button.setEnabled(
+            has_queued_jobs
+            and not self.running
+        )
+        self.start_button.setText(
+            "File en cours…"
+            if self.running
+            else "Lancer la file"
+        )
 
     def add_job(self, job):
         row = self.jobs_table.rowCount()

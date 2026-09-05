@@ -75,5 +75,113 @@ class TrimExportQueueDialogTest(unittest.TestCase):
 
         refresh_requested.assert_called_once_with()
 
+    def test_requests_the_queue_start(self):
+        dialog = TrimExportQueueDialog(
+            [
+                {
+                    "kind": "trim_export",
+                    "input_path": "movie.json",
+                    "output_path": "movie.mkv",
+                    "status": "queued",
+                    "attempts": 0,
+                }
+            ]
+        )
+        start_requested = Mock()
+        dialog.start_requested.connect(
+            start_requested
+        )
+
+        self.assertTrue(
+            dialog.start_button.isEnabled()
+        )
+
+        dialog.start_button.click()
+
+        start_requested.assert_called_once_with()
+
+    def test_disables_start_without_queued_jobs(self):
+        dialog = TrimExportQueueDialog(
+            [
+                {
+                    "kind": "trim_export",
+                    "input_path": "movie.json",
+                    "output_path": "movie.mkv",
+                    "status": "done",
+                    "attempts": 1,
+                }
+            ]
+        )
+
+        self.assertFalse(
+            dialog.start_button.isEnabled()
+        )
+
+    def test_disables_start_while_queue_is_running(self):
+        dialog = TrimExportQueueDialog(
+            [
+                {
+                    "kind": "trim_export",
+                    "input_path": "movie.json",
+                    "output_path": "movie.mkv",
+                    "status": "queued",
+                    "attempts": 0,
+                }
+            ]
+        )
+
+        dialog.set_running(True)
+
+        self.assertFalse(
+            dialog.start_button.isEnabled()
+        )
+        self.assertEqual(
+            dialog.start_button.text(),
+            "File en cours…",
+        )
+
+        dialog.set_running(False)
+
+        self.assertTrue(
+            dialog.start_button.isEnabled()
+        )
+        self.assertEqual(
+            dialog.start_button.text(),
+            "Lancer la file",
+        )
+
+    def test_refreshes_periodically_while_running(self):
+        dialog = TrimExportQueueDialog([])
+
+        self.assertFalse(
+            dialog.refresh_timer.isActive()
+        )
+
+        dialog.set_running(True)
+
+        self.assertTrue(
+            dialog.refresh_timer.isActive()
+        )
+        self.assertEqual(
+            dialog.refresh_timer.interval(),
+            5_000,
+        )
+
+        dialog.set_running(False)
+
+        self.assertFalse(
+            dialog.refresh_timer.isActive()
+        )
+
+    def test_displays_the_last_refresh_time(self):
+        dialog = TrimExportQueueDialog([])
+
+        dialog.mark_refreshed("09:42:17")
+
+        self.assertEqual(
+            dialog.refresh_status_label.text(),
+            "Dernière actualisation : 09:42:17",
+        )
+
 if __name__ == "__main__":
     unittest.main()
