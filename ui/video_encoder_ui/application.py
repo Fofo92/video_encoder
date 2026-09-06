@@ -2162,21 +2162,6 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         if project_path is None:
             return
 
-        try:
-            project_path = (
-                self.trim_project_archiver.archive(
-                    project_path,
-                    output_path,
-                )
-            )
-        except OSError as error:
-            QtWidgets.QMessageBox.warning(
-                self,
-                "Archivage du projet impossible",
-                str(error),
-            )
-            return
-
         self.pending_export_mode = (
             "queued"
             if queued
@@ -2291,6 +2276,22 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             return
 
         project_path, output_path = pending_export
+
+        try:
+            project_path = (
+                self.trim_project_archiver.archive(
+                    project_path,
+                    output_path,
+                )
+            )
+        except OSError as error:
+            self.export_status_changed("failed")
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Archivage du projet impossible",
+                str(error),
+            )
+            return
 
         if pending_export_mode == "queued":
             try:

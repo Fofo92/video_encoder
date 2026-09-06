@@ -68,7 +68,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             (project_path, output_path)
         )
 
-    def test_checks_audio_before_queuing_the_export(self):
+    def test_defers_archiving_until_audio_is_confirmed(self):
         project_path = Path("/projects/movie.json")
         archived_project_path = Path(
             "/output/movie.json"
@@ -78,9 +78,6 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
         exporter = Mock(is_running=False)
         preflight = Mock(is_running=False)
         project_archiver = Mock()
-        project_archiver.archive.return_value = (
-            archived_project_path
-        )
 
         monitor = self.make_monitor(
             source_path=Path("/recordings/movie.ts"),
@@ -110,18 +107,19 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
         monitor.write_project.assert_called_once_with(
             project_path
         )
-        project_archiver.archive.assert_called_once_with(
-            project_path,
-            output_path,
+        project_archiver.archive.assert_not_called()
+        preflight.start.assert_called_once_with(
+            project_path
         )
         preflight.start.assert_called_once_with(
-            archived_project_path
+            project_path
         )
+        project_archiver.archive.assert_not_called()
         exporter.start.assert_not_called()
         self.assertEqual(
             monitor.pending_export,
             (
-                archived_project_path,
+                project_path,
                 output_path,
             ),
         )
@@ -246,11 +244,18 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
 
     def test_enqueues_when_queue_mode_is_selected(self):
         project_path = Path("/projects/movie.json")
+        archived_project_path = Path(
+            "/output/movie.json"
+        )
         output_path = "/output/movie.mkv"
         exporter = Mock()
         queue_client = Mock()
-
+        project_archiver = Mock()
+        project_archiver.archive.return_value = (
+            archived_project_path
+        )
         monitor = self.make_monitor(
+            trim_project_archiver=project_archiver,
             trim_project_exporter=exporter,
             trim_export_queue_client=queue_client,
             pending_export=(project_path, output_path),
@@ -280,10 +285,15 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
                 report,
             )
 
-        queue_client.enqueue.assert_called_once_with(
+        project_archiver.archive.assert_called_once_with(
             project_path,
             output_path,
         )
+        queue_client.enqueue.assert_called_once_with(
+            archived_project_path,
+            output_path,
+        )
+
         exporter.start.assert_not_called()
         monitor.export_status_changed.assert_called_with(
             "queued"
@@ -458,57 +468,64 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
         self.assertIsNone(monitor.pending_export)
         monitor.trim_project_exporter.start.assert_not_called()
 
-    def test_does_not_start_preflight_when_project_archiving_fails(
+    def test_does_not_export_when_project_archiving_fails(
         self
     ):
         project_path = Path("/projects/movie.json")
         output_path = "/output/movie.mkv"
-        preflight = Mock(is_running=False)
+        exporter = Mock(is_running=False)
         archiver = Mock()
         archiver.archive.side_effect = OSError(
             "permission denied"
         )
 
         monitor = self.make_monitor(
-            source_path=Path("/recordings/movie.ts"),
-            trim_session=SimpleNamespace(
-                segments=[object()]
-            ),
-            project_path=project_path,
-            trim_project_exporter=Mock(
-                is_running=False
-            ),
-            audio_preflight_runner=preflight,
+            trim_project_exporter=exporter,
             trim_project_archiver=archiver,
-            pending_export=None,
-            write_project=Mock(
-                return_value=project_path
+            pending_export=(
+                project_path,
+                output_path,
             ),
+            pending_export_mode="immediate",
         )
 
         with (
             patch(
                 "video_encoder_ui.application."
-                "QtWidgets.QFileDialog.getSaveFileName",
-                return_value=(output_path, ""),
+                "QtWidgets.QMessageBox.question",
+                return_value=(
+                    QtWidgets.QMessageBox
+                    .StandardButton.Yes
+                ),
             ),
             patch(
                 "video_encoder_ui.application."
                 "QtWidgets.QMessageBox.warning"
             ) as warning,
         ):
-            MltFrameMonitor.export_project(
+            MltFrameMonitor.audio_preflight_succeeded(
                 monitor,
-                queued=True,
+                {
+                    "audio_checks": [],
+                },
             )
 
+        archiver.archive.assert_called_once_with(
+            project_path,
+            output_path,
+        )
         warning.assert_called_once_with(
             monitor,
             "Archivage du projet impossible",
             "permission denied",
         )
-        preflight.start.assert_not_called()
-        self.assertIsNone(monitor.pending_export)
+        exporter.start.assert_not_called()
+        self.assertIsNone(
+            monitor.pending_export
+        )
+        self.assertIsNone(
+            monitor.pending_export_mode
+        )
 
 if __name__ == "__main__":
     unittest.main()
