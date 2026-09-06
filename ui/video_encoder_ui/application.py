@@ -32,7 +32,6 @@ from .trim_project_file_reader import (
 )
 from .trim_export_queue_client import (
     TrimExportQueueClient,
-    TrimExportQueueError,
 )
 from .trim_export_queue_dialog import (
     TrimExportQueueDialog,
@@ -51,6 +50,16 @@ from .source_information_dialog import (
     SourceInformationDialog,
 )
 from .source_colors import source_color
+from .trim_export_queue_controller import (
+    TrimExportQueueController,
+)
+from .start_window import StartWindow
+from .application_controller import (
+    ApplicationController,
+)
+from .editor_window_controller import (
+    EditorWindowController,
+)
 
 PREVIEW_WIDTH = 640
 PREVIEW_HEIGHT = 360
@@ -130,13 +139,14 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.trim_export_queue_runner = (
             TrimExportQueueRunner()
         )
-        self.trim_export_queue_dialog = None
 
-        self.trim_export_queue_runner.succeeded.connect(
-            self.trim_export_queue_succeeded
-        )
-        self.trim_export_queue_runner.failed.connect(
-            self.trim_export_queue_failed
+        self.trim_export_queue_controller = (
+            TrimExportQueueController(
+                client=self.trim_export_queue_client,
+                runner=self.trim_export_queue_runner,
+                dialog_class=TrimExportQueueDialog,
+                parent=self,
+            )
         )
 
         self.media_inspection_client = (
@@ -1909,129 +1919,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
     def show_trim_export_queue(self):
-        try:
-            jobs = (
-                self.trim_export_queue_client
-                .list_jobs()
-            )
-        except TrimExportQueueError as error:
-            QtWidgets.QMessageBox.warning(
-                self,
-                "File indisponible",
-                str(error),
-            )
-            return
-
-        dialog = TrimExportQueueDialog(
-            jobs,
-            self,
-        )
-        self.trim_export_queue_dialog = dialog
-
-        dialog.set_running(
-            self.trim_export_queue_runner.is_running
-        )
-        dialog.refresh_requested.connect(
-            lambda: self.refresh_trim_export_queue(
-                dialog
-            )
-        )
-        dialog.start_requested.connect(
-            lambda: self.start_trim_export_queue(
-                dialog
-            )
-        )
-
-        dialog.exec()
-
-        if self.trim_export_queue_dialog is dialog:
-            self.trim_export_queue_dialog = None
-
-    def refresh_trim_export_queue(
-        self,
-        dialog,
-    ):
-        try:
-            jobs = (
-                self.trim_export_queue_client
-                .list_jobs()
-            )
-        except TrimExportQueueError as error:
-            QtWidgets.QMessageBox.warning(
-                self,
-                "Actualisation impossible",
-                str(error),
-            )
-            return
-
-        dialog.set_jobs(jobs)
-        dialog.mark_refreshed(
-            QtCore.QTime.currentTime().toString(
-                "HH:mm:ss"
-            )
-        )
-
-    def start_trim_export_queue(
-        self,
-        dialog,
-    ):
-        try:
-            self.trim_export_queue_runner.start()
-        except RuntimeError as error:
-            QtWidgets.QMessageBox.warning(
-                self,
-                "Lancement impossible",
-                str(error),
-            )
-            return
-
-        dialog.set_running(True)
-
-    def trim_export_queue_succeeded(self):
-        dialog = getattr(
-            self,
-            "trim_export_queue_dialog",
-            None,
-        )
-
-        if dialog is not None:
-            dialog.set_running(False)
-            MltFrameMonitor.refresh_trim_export_queue(
-                self,
-                dialog,
-            )
-
-        QtWidgets.QMessageBox.information(
-            self,
-            "File terminée",
-            (
-                "Tous les montages en attente "
-                "ont été traités."
-            ),
-        )
-
-    def trim_export_queue_failed(
-        self,
-        message,
-    ):
-        dialog = getattr(
-            self,
-            "trim_export_queue_dialog",
-            None,
-        )
-
-        if dialog is not None:
-            dialog.set_running(False)
-            MltFrameMonitor.refresh_trim_export_queue(
-                self,
-                dialog,
-            )
-
-        QtWidgets.QMessageBox.warning(
-            self,
-            "Échec de la file",
-            message,
-        )
+        self.trim_export_queue_controller.show()
 
     def show_source_information(self):
         try:
@@ -3060,6 +2948,50 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             title += " *"
         self.setWindowTitle(title)
 
+def select_media_path():
+    selected_path, _selected_filter = (
+        QtWidgets.QFileDialog.getOpenFileName(
+            None,
+            "Nouveau montage",
+            "",
+            (
+                "Fichiers vidéo "
+                "(*.m2t *.mts *.ts *.mkv *.mp4);;"
+                "Tous les fichiers (*)"
+            ),
+        )
+    )
+
+    if not selected_path:
+        return None
+
+    return (
+        Path(selected_path)
+        .expanduser()
+        .resolve()
+    )
+
+def select_project_path():
+    selected_path, _selected_filter = (
+        QtWidgets.QFileDialog.getOpenFileName(
+            None,
+            "Ouvrir un projet de découpage",
+            "",
+            (
+                "Projets de montage (*.json);;"
+                "Tous les fichiers (*)"
+            ),
+        )
+    )
+
+    if not selected_path:
+        return None
+
+    return (
+        Path(selected_path)
+        .expanduser()
+        .resolve()
+    )
 
 def select_source_path(arguments):
     if arguments:
@@ -3094,7 +3026,6 @@ def select_source_path(arguments):
         .resolve()
     )
 
-
 def load_startup_selection(
     selected_path,
     reader=None
@@ -3127,29 +3058,19 @@ def load_startup_selection(
         selected_path
     )
 
-def main():
-    if len(sys.argv) > 2:
-        print(
-            f"Usage: {Path(sys.argv[0]).name} [name] "
-            "[media-or-project]",
-            file=sys.stderr
-        )
-        return 2
-    app = QtWidgets.QApplication(sys.argv)
-    selected_path = select_source_path(
-        sys.argv[1:]
-    )
-
-    if selected_path is None:
-        return 0
+def create_editor_window(
+    selected_path,
+    editor_class=MltFrameMonitor,
+):
+    selected_path = Path(selected_path)
 
     if not selected_path.is_file():
         QtWidgets.QMessageBox.critical(
             None,
             "Fichier introuvable",
-            f"Fichier introuvable : {selected_path}"
+            f"Fichier introuvable : {selected_path}",
         )
-        return 2
+        return None
 
     try:
         (
@@ -3168,9 +3089,9 @@ def main():
         QtWidgets.QMessageBox.critical(
             None,
             "Projet incompatible",
-            str(error)
+            str(error),
         )
-        return 2
+        return None
 
     if not source_path.is_file():
         QtWidgets.QMessageBox.critical(
@@ -3180,19 +3101,15 @@ def main():
                 "La source vidéo du projet "
                 "est introuvable :\n"
                 f"{source_path}"
-            )
+            ),
         )
-        return 2
+        return None
 
-    factory = mlt.Factory()
-    factory.init()
-
-    window = MltFrameMonitor(
+    window = editor_class(
         source_path,
         trim_session=trim_session,
-        project_path=project_path
+        project_path=project_path,
     )
-    window.show()
 
     if (
         trim_session is not None
@@ -3206,16 +3123,95 @@ def main():
 
     QtCore.QTimer.singleShot(
         0,
-        lambda: window.show_frame(initial_frame)
+        lambda: window.show_frame(
+            initial_frame
+        ),
+    )
+
+    return window
+
+def main():
+    if len(sys.argv) > 2:
+        print(
+            (
+                f"Usage: {Path(sys.argv[0]).name} "
+                "[media-or-project]"
+            ),
+            file=sys.stderr,
+        )
+        return 2
+
+    app = QtWidgets.QApplication(sys.argv)
+    start_window = StartWindow()
+
+    queue_client = TrimExportQueueClient()
+    queue_runner = TrimExportQueueRunner()
+    queue_controller = TrimExportQueueController(
+        client=queue_client,
+        runner=queue_runner,
+        dialog_class=TrimExportQueueDialog,
+        parent=start_window,
+    )
+
+    mlt_factory = mlt.Factory()
+    mlt_initialized = False
+
+    def build_editor(selected_path):
+        nonlocal mlt_initialized
+
+        if not mlt_initialized:
+            mlt_factory.init()
+            mlt_initialized = True
+
+        return create_editor_window(
+            selected_path
+        )
+
+    editor_controller = EditorWindowController(
+        start_window=start_window,
+        editor_factory=build_editor,
+    )
+
+    application_controller = ApplicationController(
+        start_window=start_window,
+        select_source=select_media_path,
+        select_project=select_project_path,
+        open_editor=editor_controller.open,
+        queue_controller=queue_controller,
+    )
+
+    queue_runner.status_changed.connect(
+        application_controller.queue_status_changed
     )
 
     try:
+        if len(sys.argv) == 2:
+            selected_path = select_source_path(
+                sys.argv[1:]
+            )
+            editor_controller.open(
+                selected_path
+            )
+
+            if (
+                editor_controller.editor_window
+                is None
+            ):
+                return 2
+        else:
+            application_controller.show()
+
         return app.exec()
     finally:
-        window.shutdown()
-        del window
-        factory.close()
+        editor_window = (
+            editor_controller.editor_window
+        )
 
+        if editor_window is not None:
+            editor_window.shutdown()
+
+        if mlt_initialized:
+            mlt_factory.close()
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -2,6 +2,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+from video_encoder_ui.application import (
+    load_startup_selection,
+    select_media_path,
+    select_project_path,
+    select_source_path,
+)
+
 try:
     import mlt7
     from PySide6 import QtWidgets
@@ -113,6 +120,48 @@ class ApplicationSourceSelectionTest(unittest.TestCase):
                 Path("/projects/movie.json"),
                 reader=reader
             )
+
+    def test_selects_a_new_media_source(self):
+        with patch(
+            "video_encoder_ui.application."
+            "QtWidgets.QFileDialog.getOpenFileName",
+            return_value=(
+                "/recordings/movie.m2t",
+                "Fichiers vidéo",
+            ),
+        ) as dialog:
+            selected_path = select_media_path()
+
+        self.assertEqual(
+            selected_path,
+            Path("/recordings/movie.m2t")
+        )
+        dialog.assert_called_once()
+        self.assertEqual(
+            dialog.call_args.args[1],
+            "Nouveau montage"
+        )
+
+    def test_selects_an_existing_project(self):
+        with patch(
+            "video_encoder_ui.application."
+            "QtWidgets.QFileDialog.getOpenFileName",
+            return_value=(
+                "/projects/movie.json",
+                "Projets de montage",
+            ),
+        ) as dialog:
+            selected_path = select_project_path()
+
+        self.assertEqual(
+            selected_path,
+            Path("/projects/movie.json")
+        )
+        dialog.assert_called_once()
+        self.assertEqual(
+            dialog.call_args.args[1],
+            "Ouvrir un projet de découpage"
+        )
 
 if __name__ == "__main__":
     unittest.main()
