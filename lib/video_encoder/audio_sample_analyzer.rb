@@ -48,7 +48,6 @@ module VideoEncoder
         '-nostdin',
         '-nostats',
         '-loglevel', 'info',
-        '-xerror',
         '-ss', format('%.9f', start_time),
         '-i', sample.fetch(:source).path.to_s,
         '-t', format('%.9f', duration),

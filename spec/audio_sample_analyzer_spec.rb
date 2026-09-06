@@ -78,7 +78,6 @@ RSpec.describe VideoEncoder::AudioSampleAnalyzer do
       '-nostdin',
       '-nostats',
       '-loglevel', 'info',
-      '-xerror',
       '-ss', '30.000000000',
       '-i', '/media/movie.m2t',
       '-t', '60.000000000',
