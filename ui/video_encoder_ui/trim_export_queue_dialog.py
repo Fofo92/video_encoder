@@ -111,8 +111,6 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
         self.set_jobs(jobs)
 
-        self.set_jobs(jobs)
-
     def mark_refreshed(self, time_text):
         self.refresh_status_label.setText(
             f"Dernière actualisation : {time_text}"
