@@ -28,6 +28,7 @@ class StartWindowTest(unittest.TestCase):
         self.window = StartWindow()
 
     def tearDown(self):
+        self.window.set_queue_running(False)
         self.window.close()
         self.window.deleteLater()
 
@@ -112,6 +113,6 @@ class StartWindowTest(unittest.TestCase):
                 "video_encoder."
             ),
         )
-        
+
 if __name__ == "__main__":
     unittest.main()
