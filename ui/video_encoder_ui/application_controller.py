@@ -2,6 +2,7 @@ from .start_window_controller import (
     StartWindowController,
 )
 
+
 class ApplicationController:
     def __init__(
         self,
@@ -10,6 +11,7 @@ class ApplicationController:
         select_project,
         open_editor,
         queue_controller,
+        quarantine_controller,
         start_controller_class=StartWindowController,
     ):
         self.start_window = start_window
@@ -17,6 +19,9 @@ class ApplicationController:
         self.select_project = select_project
         self.open_editor = open_editor
         self.queue_controller = queue_controller
+        self.quarantine_controller = (
+            quarantine_controller
+        )
 
         self.start_controller = (
             start_controller_class(
@@ -24,6 +29,9 @@ class ApplicationController:
                 new_project=self.new_project,
                 open_project=self.open_project,
                 show_queue=self.show_queue,
+                quarantine_source=(
+                    self.quarantine_source
+                ),
             )
         )
 
@@ -48,3 +56,6 @@ class ApplicationController:
 
     def show_queue(self):
         self.queue_controller.show()
+
+    def quarantine_source(self):
+        self.quarantine_controller.run()

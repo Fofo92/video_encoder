@@ -18,6 +18,7 @@ class ApplicationControllerTest(unittest.TestCase):
         self.select_project = Mock()
         self.open_editor = Mock()
         self.queue_controller = Mock()
+        self.quarantine_controller = Mock()
 
         self.controller = ApplicationController(
             start_window=self.start_window,
@@ -25,6 +26,9 @@ class ApplicationControllerTest(unittest.TestCase):
             select_project=self.select_project,
             open_editor=self.open_editor,
             queue_controller=self.queue_controller,
+            quarantine_controller=(
+                self.quarantine_controller
+            ),
             start_controller_class=(
                 self.start_controller_class
             ),
@@ -73,6 +77,11 @@ class ApplicationControllerTest(unittest.TestCase):
         self.controller.show_queue()
 
         self.queue_controller.show.assert_called_once_with()
+
+    def test_quarantines_a_source(self):
+        self.controller.quarantine_source()
+
+        self.quarantine_controller.run.assert_called_once_with()
 
     def test_shows_the_start_window(self):
         self.controller.show()

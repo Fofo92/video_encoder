@@ -72,6 +72,22 @@ class StartWindowTest(unittest.TestCase):
         open_requested.assert_called_once_with()
         queue_requested.assert_called_once_with()
 
+    def test_requests_source_quarantine(self):
+        quarantine_requested = Mock()
+
+        self.window.quarantine_requested.connect(
+            quarantine_requested
+        )
+
+        self.assertEqual(
+            self.window.quarantine_button.text(),
+            "Mettre une source en quarantaine…"
+        )
+
+        self.window.quarantine_button.click()
+
+        quarantine_requested.assert_called_once_with()
+
     def test_keeps_editing_actions_available(self):
         self.assertTrue(
             self.window.new_project_button.isEnabled()

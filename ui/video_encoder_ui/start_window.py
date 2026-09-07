@@ -5,6 +5,7 @@ class StartWindow(QtWidgets.QWidget):
     new_project_requested = QtCore.Signal()
     open_project_requested = QtCore.Signal()
     queue_requested = QtCore.Signal()
+    quarantine_requested = QtCore.Signal()
 
     def __init__(self):
         super().__init__()
@@ -33,6 +34,11 @@ class StartWindow(QtWidgets.QWidget):
             self,
         )
 
+        self.quarantine_button = QtWidgets.QPushButton(
+            "Mettre une source en quarantaine…",
+            self,
+        )
+
         self.new_project_button.clicked.connect(
             self.new_project_requested
         )
@@ -42,14 +48,18 @@ class StartWindow(QtWidgets.QWidget):
         self.queue_button.clicked.connect(
             self.queue_requested
         )
+        self.quarantine_button.clicked.connect(
+            self.quarantine_requested
+        )
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(32, 32, 32, 32)
         layout.setSpacing(12)
-
         layout.addWidget(title_label)
         layout.addSpacing(12)
         layout.addWidget(self.new_project_button)
         layout.addWidget(self.open_project_button)
         layout.addWidget(self.queue_button)
+        layout.addWidget(self.quarantine_button)
+
         layout.addStretch()

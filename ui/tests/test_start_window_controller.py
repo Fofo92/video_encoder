@@ -32,12 +32,14 @@ class StartWindowControllerTest(unittest.TestCase):
         self.new_project = Mock()
         self.open_project = Mock()
         self.show_queue = Mock()
+        self.quarantine_source = Mock()
 
         self.controller = StartWindowController(
             window=self.window,
             new_project=self.new_project,
             open_project=self.open_project,
             show_queue=self.show_queue,
+            quarantine_source=self.quarantine_source,
         )
 
     def tearDown(self):
@@ -48,10 +50,12 @@ class StartWindowControllerTest(unittest.TestCase):
         self.window.new_project_button.click()
         self.window.open_project_button.click()
         self.window.queue_button.click()
+        self.window.quarantine_button.click()
 
         self.new_project.assert_called_once_with()
         self.open_project.assert_called_once_with()
         self.show_queue.assert_called_once_with()
+        self.quarantine_source.assert_called_once_with()
 
     def test_shows_the_start_window(self):
         self.controller.show()

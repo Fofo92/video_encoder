@@ -60,6 +60,12 @@ from .application_controller import (
 from .editor_window_controller import (
     EditorWindowController,
 )
+from .source_quarantine_client import (
+    SourceQuarantineClient,
+)
+from .source_quarantine_controller import (
+    SourceQuarantineController,
+)
 
 PREVIEW_WIDTH = 640
 PREVIEW_HEIGHT = 360
@@ -2967,6 +2973,29 @@ def select_media_path():
         .resolve()
     )
 
+def select_quarantine_source_path():
+    selected_path, _selected_filter = (
+        QtWidgets.QFileDialog.getOpenFileName(
+            None,
+            "Mettre une source en quarantaine",
+            "",
+            (
+                "Enregistrements TV "
+                "(*.m2t *.mts *.ts);;"
+                "Tous les fichiers (*)"
+            ),
+        )
+    )
+
+    if not selected_path:
+        return None
+
+    return (
+        Path(selected_path)
+        .expanduser()
+        .resolve()
+    )
+
 def select_project_path():
     selected_path, _selected_filter = (
         QtWidgets.QFileDialog.getOpenFileName(
@@ -3147,6 +3176,67 @@ def main():
 
     queue_client = TrimExportQueueClient()
     queue_runner = TrimExportQueueRunner()
+
+    def confirm_quarantine(source_path):
+        answer = QtWidgets.QMessageBox.question(
+            start_window,
+            "Confirmer la mise en quarantaine",
+            (
+                "Cette source peut contenir plusieurs "
+                "films ou épisodes.\n\n"
+                "Confirme que tous les montages utiles "
+                "ont été réalisés :\n"
+                f"{source_path}\n\n"
+                "La source sera déplacée vers le dossier "
+                "de quarantaine. Elle ne sera pas supprimée."
+            ),
+            (
+                QtWidgets.QMessageBox.StandardButton.Yes
+                | QtWidgets.QMessageBox.StandardButton.No
+            ),
+            QtWidgets.QMessageBox.StandardButton.No,
+        )
+
+        return (
+            answer
+            == QtWidgets.QMessageBox.StandardButton.Yes
+        )
+
+    def report_quarantine_success(source_path):
+        QtWidgets.QMessageBox.information(
+            start_window,
+            "Source mise en quarantaine",
+            (
+                "La source a été déplacée vers "
+                "le dossier de quarantaine.\n\n"
+                "Source traitée :\n"
+                f"{source_path}"
+            ),
+        )
+
+    def report_quarantine_failure(message):
+        QtWidgets.QMessageBox.warning(
+            start_window,
+            "Mise en quarantaine impossible",
+            message,
+        )
+
+    quarantine_controller = (
+        SourceQuarantineController(
+            client=SourceQuarantineClient(),
+            select_source=(
+                select_quarantine_source_path
+            ),
+            confirm=confirm_quarantine,
+            report_success=(
+                report_quarantine_success
+            ),
+            report_failure=(
+                report_quarantine_failure
+            ),
+        )
+    )
+
     queue_controller = TrimExportQueueController(
         client=queue_client,
         runner=queue_runner,
@@ -3179,6 +3269,9 @@ def main():
         select_project=select_project_path,
         open_editor=editor_controller.open,
         queue_controller=queue_controller,
+            quarantine_controller=(
+            quarantine_controller
+        ),
     )
 
     try:
