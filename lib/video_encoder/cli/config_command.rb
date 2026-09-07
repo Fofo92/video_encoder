@@ -9,18 +9,33 @@ module VideoEncoder
       end
 
       def run
+        print_database
+        print_directories
+        print_ffmpeg
+      end
+
+      private
+
+      attr_reader :config
+
+      def print_database
         puts "Database: #{config.database}"
         puts "Encoder:  #{config.encoder}"
         puts
+      end
 
+      def print_directories
         puts 'Directories'
         puts '-----------'
         puts "Incoming: #{config.directories.incoming}"
         puts "Queue:    #{config.directories.queue}"
         puts "Encoded:  #{config.directories.encoded}"
         puts "Archive:  #{config.directories.archive}"
+        puts "Quarantine: #{config.directories.quarantine}"
         puts
+      end
 
+      def print_ffmpeg
         puts 'FFmpeg'
         puts '-------'
         puts "Container:   #{config.ffmpeg.container}"
@@ -31,10 +46,6 @@ module VideoEncoder
         puts "CQ:          #{config.ffmpeg.cq}"
         puts "Audio codec: #{config.ffmpeg.audio_codec}"
       end
-
-      private
-
-      attr_reader :config
     end
   end
 end

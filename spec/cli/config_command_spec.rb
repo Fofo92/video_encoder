@@ -10,7 +10,8 @@ RSpec.describe VideoEncoder::CLI::ConfigCommand do
         incoming: '/media/incoming',
         queue: '/media/queue',
         encoded: '/media/encoded',
-        archive: '/media/archive'
+        archive: '/media/archive',
+        quarantine: '/media/quarantine'
       )
 
       ffmpeg = double(
@@ -44,6 +45,7 @@ RSpec.describe VideoEncoder::CLI::ConfigCommand do
           'Queue:    /media/queue',
           'Encoded:  /media/encoded',
           'Archive:  /media/archive',
+          'Quarantine: /media/quarantine',
           'Container:   mkv',
           'Video codec: hevc_nvenc',
           'Preset:      p6',

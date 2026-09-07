@@ -10,6 +10,7 @@ directories:
   encoding: /commun/Encoding
   encoded: /commun/Encoded
   archive: /commun/Archive
+  quarantine: /commun/Quarantaine
 
 # Profil validé sur des films TNT HD 1080i.
 # Objectif : qualité visuelle satisfaisante et taille ≈ 1 à 2 Go pour un film de 2 h.

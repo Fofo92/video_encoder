@@ -18,13 +18,17 @@ module VideoEncoder
     def encoding
       @data['encoding']
     end
-    
+
     def encoded
       @data['encoded']
     end
 
     def archive
       @data['archive']
+    end
+
+    def quarantine
+      @data['quarantine']
     end
   end
 end
