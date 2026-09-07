@@ -32,29 +32,34 @@ l’interface.
 
 L’application peut être lancée sans argument :
 
-```bash
-bin/video_encoder_ui
-```
+    bin/video_encoder_ui
 
-Elle demande alors de sélectionner une vidéo ou un fichier JSON de découpage.
+Elle affiche alors une fenêtre d’accueil proposant trois parcours :
 
-Elle accepte également directement l’un de ces chemins :
+- créer un nouveau montage à partir d’une source vidéo ;
+- ouvrir un projet de découpage JSON existant ;
+- consulter et lancer la file des montages.
 
-```bash
-bin/video_encoder_ui /chemin/source.m2t
-bin/video_encoder_ui /chemin/decoupage.json
-```
+La consultation de la file ne nécessite pas l’ouverture préalable d’une source.
+MLT n’est initialisé qu’au moment où un éditeur doit réellement être créé.
 
-Une vidéo ouvre une nouvelle session. Un fichier JSON restaure les sources et les segments enregistrés,
-puis positionne le moniteur sur le début du premiersegment.
+Un chemin peut également être fourni directement :
 
-L’éditeur ne prend actuellement en charge que les découpages mono-source. Le lecteur sait reconstruire
+    bin/video_encoder_ui /chemin/source.m2t
+    bin/video_encoder_ui /chemin/decoupage.json
+
+Une vidéo ouvre une nouvelle session. Un fichier JSON restaure les sources et les segments enregistrés, 
+puis positionne le moniteur sur le début du premier segment.
+
+La fermeture de l’éditeur rend la main à la fenêtre d’accueil, sans terminer l’application.
+
+L’éditeur ne prend actuellement en charge que les découpages mono-source. Le lecteur sait reconstruire 
 les références de plusieurs sources, mais le démarrage de l’IHM refuse encore un tel projet.
 
 ## Document de découpage
 
-Le format persistant canonique reste le document Ruby `video_encoder.trim_project`,
-actuellement en version 1.
+Le format persistant canonique reste le document Ruby `video_encoder.trim_project`, actuellement en 
+version 2. Les documents historiques en version 1 restent lisibles.
 
 Lors de l’enregistrement, l’IHM transmet sa session au pont `TrimProjectBridge`.
 Le moteur Ruby la valide, sonde les sources et produit le document persistant.
@@ -62,7 +67,7 @@ Le moteur Ruby la valide, sonde les sources et produit le document persistant.
 Lors de l’ouverture, `TrimProjectFileReader` lit directement ce document dans l’IHM.
 Il valide le format et sa version, restaure les segments et déduplique les chemins des sources.
 
-Les gaps présents dans un document sont actuellement refusés par l’éditeur, car la session Python
+Les gaps présents dans un document sont actuellement refusés par l’éditeur, car la session Python 
 ne sait pas encore les représenter.
 
 Le JSON constitue une recette de montage transitoire. Il est utile pour :
@@ -70,15 +75,23 @@ Le JSON constitue une recette de montage transitoire. Il est utile pour :
 - reprendre un montage non terminé ;
 - préparer un export différé ;
 - conserver un travail ayant échoué ;
-- alimenter la future file d’attente.
+- alimenter la file persistante des montages.
 
 À terme, après un export réussi et la synchronisation des informations utiles
 dans `vidb`, sa conservation ne sera pas obligatoire.
 
 ## Export
 
-Avant l’export, l’IHM enregistre le découpage puis lance un contrôle audio. La confirmation de l’utilisateur
-déclenche ensuite la commande Ruby `export` dans un `QProcess` séparé.
+Avant l’export, l’IHM enregistre le découpage puis lance un contrôle audio.
+Après confirmation de l’utilisateur, le JSON est archivé à côté du futur MKV.
+L’utilisateur peut alors démarrer immédiatement l’export ou ajouter le montage à la file persistante.
+
+Différer l’archivage jusqu’à cette confirmation évite de laisser un JSON orphelin dans le répertoire de 
+destination lorsqu’un contrôle audio échoue ou que l’utilisateur abandonne l’opération.
+
+Le contrôle audio mesure la présence d’un signal sur les pistes retenues. Les erreurs récupérables de 
+paquets MPEG-TS n’interrompent pas le contrôle lorsque FFmpeg parvient malgré tout à analyser des 
+échantillons.
 
 L’IHM interprète les événements structurés émis par le moteur afin d’afficher :
 
@@ -87,24 +100,39 @@ L’IHM interprète les événements structurés émis par le moteur afin d’af
 - les avertissements relatifs aux pistes ;
 - le succès, l’échec ou l’annulation.
 
-Le processus d’export est placé dans une nouvelle session Unix. Son annulation termine ainsi le groupe de
+Le processus d’export est placé dans une nouvelle session Unix. Son annulation termine ainsi le groupe de 
 processus, y compris les outils externes qu’il a lancés.
 
-Lorsque `/usr/bin/systemd-inhibit` est disponible, l’export est exécuté sousune inhibition `sleep` en mode `block`. La suspension et l’hibernation du système sont donc empêchées pendant l’encodage, sans
-bloquer l’extinction ni le verrouillage de l’écran.
+Lorsque `/usr/bin/systemd-inhibit` est disponible, l’export est exécuté sous une inhibition `sleep` en 
+mode `block`. La suspension et l’hibernation du système sont empêchées pendant l’encodage, sans bloquer 
+l’extinction ni le verrouillage de l’écran.
+
+## File des montages
+
+La file graphique utilise la même base SQLite et les mêmes travaux que la CLI Ruby. Elle permet :
+
+- de consulter les montages préparés et leur état ;
+- d’ajouter plusieurs projets sans les lancer immédiatement ;
+- de démarrer ultérieurement leur exécution séquentielle ;
+- d’actualiser automatiquement l’affichage pendant une exécution ;
+- de conserver le nombre de tentatives et le diagnostic des échecs.
+
+Les exports ne sont pas exécutés en parallèle. Un montage ajouté pendant l’exécution reste disponible 
+pour un traitement ultérieur selon l’étendue du lancement en cours.
+
+Lorsque la file est lancée depuis la fenêtre d’accueil, l’ouverture d’un éditeur et la fermeture de l’application 
+sont désactivées jusqu’à la fin du processus.
 
 ## Évolutions prévues
 
-La file d’attente graphique sera implémentée dans un composant distinct de la
-fenêtre principale. Elle devra :
+Les prochaines évolutions de la file devront :
 
-- conserver plusieurs travaux préparés ;
-- exécuter les exports successivement, sans parallélisme ;
-- persister leur état ;
-- permettre la reprise après le redémarrage de l’application ;
-- conserver les diagnostics des échecs ;
-- supprimer les recettes transitoires devenues inutiles selon la politique
-  retenue.
+- afficher le diagnostic complet d’un travail en échec ;
+- permettre sa relance explicite sans reprise automatique risquée ;
+- distinguer clairement l’échec historique de la nouvelle tentative ;
+- définir une politique contrôlée de validation puis de suppression des
+  sources TV après export réussi.
 
 Le montage multi-source viendra ensuite compléter l’éditeur avec plusieurs
-sources et des moniteurs adaptés, sans modifier le format persistant du moteur.
+sources, une couleur propre à chacune et des moniteurs adaptés, sans modifier
+les responsabilités du moteur Ruby.

@@ -128,8 +128,11 @@ L’interface graphique peut être lancée sans argument :
 bin/video_encoder_ui
 ```
 
-Elle demande alors de sélectionner un enregistrement vidéo ou un fichier JSON
-de découpage.
+Elle affiche une fenêtre d’accueil permettant :
+
+- de créer un montage à partir d’une source vidéo ;
+- d’ouvrir un projet de découpage JSON ;
+- de consulter et de lancer la file des montages sans ouvrir de source.
 
 Un chemin peut également être fourni directement :
 
@@ -138,8 +141,9 @@ bin/video_encoder_ui /chemin/vers/un-media.m2t
 bin/video_encoder_ui /chemin/vers/un-decoupage.json
 ```
 
-L’ouverture d’une vidéo crée une nouvelle session de montage. L’ouverture d’un découpage JSON restaure
-les segments enregistrés et positionne le moniteur sur le début du premier segment.
+L’ouverture d’une vidéo crée une nouvelle session de montage. L’ouverture d’un découpage JSON restaure 
+les segments enregistrés et positionne le moniteur sur le début du premier segment. La fermeture de 
+l’éditeur rend ensuite la main à la fenêtre d’accueil.
 
 Le titre de la fenêtre indique la source active et, lorsqu’il existe, le fichier de découpage associé.
 
@@ -156,14 +160,19 @@ L’interface permet actuellement :
 - de reprendre ultérieurement un découpage mono-source ;
 - de contrôler la présence d’un signal sur les pistes audio sélectionnées ;
 - de lancer, suivre et annuler l’export ;
-- d’afficher les étapes mesurables ou non mesurables et les avertissements du
-  moteur.
+- d’ajouter un montage à une file persistante sans le lancer immédiatement ;
+- de consulter puis de lancer les exports séquentiels depuis l’accueil ;
+- d’afficher les étapes mesurables ou non mesurables et les avertissements du moteur.
 
 Le ShuttleXpress est réservé exclusivement par l’interface pendant son exécution afin que sa couronne ne
 fasse pas défiler les autres applications. Il est libéré à la fermeture.
 
 Lorsqu’un export est en cours et que `/usr/bin/systemd-inhibit` est disponible, la suspension et
 l’hibernation du système sont bloquées. L’extinction et le verrouillage de l’écran restent autorisés.
+
+La file des montages conserve dans SQLite l’état, le nombre de tentatives et le diagnostic de chaque travail. 
+Elle exécute les exports successivement, sans parallélisme. Lorsqu’elle est lancée depuis l’accueil, 
+l’ouverture d’un montage et la fermeture de l’application sont désactivées jusqu’à la fin du processus.
 
 L’éditeur graphique est actuellement limité aux découpages mono-source et ne prend pas encore en
 charge les gaps présents dans un document persistant. Le moteur Ruby sait déjà exporter des montages
@@ -190,12 +199,18 @@ bin/video_encoder run --once
 bin/video_encoder run
 bin/video_encoder watch --once
 bin/video_encoder watch
+bin/video_encoder enqueue-trim-export projet.json --output montage.mkv
+bin/video_encoder run-trim-exports --once
+bin/video_encoder list --json
+bin/video_encoder preflight-audio projet.json
+bin/video_encoder inspect-media /chemin/vers/un-media.m2t
 ```
 
-`run --once` traite un seul travail disponible. Sans `--once`, le worker continue à traiter la file jusqu’à son
-interruption.
-
-`watch --once` effectue un seul balayage du répertoire d’entrée. Sans `--once`, la surveillance reste active.
+- `run --once` traite un seul travail disponible. Sans `--once`, le worker continue à traiter la file jusqu’à son interruption.
+- `enqueue-trim-export` enregistre un projet de découpage dans la file persistante. `run-trim-exports `
+  `--once` traite séquentiellement les montages actuellement en attente puis s’arrête.
+- `watch --once` effectue un seul balayage du répertoire d’entrée. Sans `--once`, la surveillance reste 
+  active.
 
 ### Exporter un projet de montage
 
@@ -238,12 +253,12 @@ CCEXTRACTOR_EXECUTABLE="$PWD/bin/video_encoder_ccextractor" \
 ```
 
 Un autre exécutable compatible peut également être fourni directement avec
-CCEXTRACTOR_EXECUTABLE`.
+`CCEXTRACTOR_EXECUTABLE`.
 
 Avant de démarrer un traitement, la CLI vérifie les dépendances externes nécessaires à la commande :
 
 - `run` vérifie la présence de `ffmpeg` et `ffprobe` lorsque l’encodeur FFmpeg est configuré ;
-- ``export` vérifie `ffmpeg`, `ffprobe`, `melt-7` et l’exécutable CCExtractor configuré, puis s’assure que ce
+- `export` vérifie `ffmpeg`, `ffprobe`, `melt-7` et l’exécutable CCExtractor configuré, puis s’assure que ce
     dernier peut être exécuté avec `--version`.
 
 Si une dépendance manque, la commande s’arrête avec un code de sortie non nul avant de créer le
@@ -254,11 +269,20 @@ Le format persistant est un document JSON versionné :
 ```json
 {
   "format": "video_encoder.trim_project",
-  "version": 1,
+  "version": 2,
+  "sources": [
+    {
+      "id": "source",
+      "path": "/commun/video/source.m2t",
+      "inspection": {
+        "duration": 3600
+      }
+    }
+  ],
   "timeline": [
     {
       "type": "segment",
-      "source": "/commun/video/source.m2t",
+      "source_id": "source",
       "start_frame": 30000,
       "end_frame": 31499
     },
@@ -270,9 +294,12 @@ Le format persistant est un document JSON versionné :
 }
 ```
 
-Les bornes `start_frame` et `end_frame` sont inclusives. Les métadonnées techniques du média — durée,
-cadence et pistes — ne sont pas dupliquées dans le document : elles sont recalculées depuis chaque
-source lors du chargement.
+Les bornes `start_frame` et `end_frame` sont inclusives.
+
+La version 2 identifie chaque source une seule fois et conserve un instantané `inspection` de ses 
+caractéristiques techniques au moment de l’enregistrement du projet. Ces informations pourront être 
+réévaluées ultérieurement depuis le fichier physique, notamment pour assurer la cohérence avec `vidb`. 
+Les anciens documents en version 1 restent lisibles.
 Une même source réutilisée dans plusieurs segments n’est sondée qu’une fois.
 
 ## Contrôle qualité
@@ -309,12 +336,6 @@ utilisateur générique.
 
 Version actuelle : **0.2.0**
 
-Le pipeline d’encodage dispose d’une CLI. Le domaine de montage multi-source et son export sont
-fonctionnels, mais leur intégration dans une interface utilisateur reste à réaliser.
-
-Deux précisions importantes :
-
-- l’OCR est nécessaire aux exports qui convertissent des sous-titres DVB, tandis que le pipeline historique
-  d’encodage peut fonctionner sans CCExtractor ;
-- Docker est requis lorsque le lanceur `bin/video_encoder_ccextractor` est utilisé, mais le cœur de
-  l’application continue d’accepter tout exécutable compatible configuré avec `CCEXTRACTOR_EXECUTABLE`.
+Le pipeline d’encodage dispose d’une CLI. Le domaine de montage multi-source et son export sont 
+fonctionnels. L’interface mono-source et la file graphique d’exports sont opérationnelles. L’adaptation de 
+l’éditeur au montage multi-source reste à réaliser.
