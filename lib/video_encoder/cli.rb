@@ -6,6 +6,7 @@ require_relative 'cli/preflight_audio_command'
 require_relative 'cli/job_presenter'
 require_relative 'cli/job_serializer'
 require_relative 'cli/source_usage_command'
+require_relative 'cli/quarantine_source_command'
 require_relative 'cli/list_jobs_command'
 require_relative 'cli/enqueue_trim_export_command'
 require_relative 'cli/run_trim_exports_command'
@@ -28,7 +29,8 @@ module VideoEncoder
     'export' => :export_trim_project,
     'preflight-audio' => :preflight_audio,
     'inspect-media' => :inspect_media,
-    'source-usage' => :show_source_usage
+    'source-usage' => :show_source_usage,
+    'quarantine-source' => :quarantine_source
   }.freeze
 
   CLI_USAGE = <<~TEXT
@@ -47,6 +49,7 @@ module VideoEncoder
       video_encoder inspect-media <file>
       video_encoder source-usage <source>
       video_encoder failed
+      video_encoder quarantine-source <source> --confirm
   TEXT
 
   # Provides the command-line interface for VideoEncoder.
@@ -110,6 +113,10 @@ module VideoEncoder
       SourceUsageCommand.build(argv: @argv, repo: repo).run
     end
 
+    def quarantine_source
+      QuarantineSourceCommand.build(argv: @argv, repo: repo, config: config).run
+    end
+
     def config
       @config
     end
@@ -151,10 +158,6 @@ module VideoEncoder
       job = repo.find(id)
       return puts('Job not found') unless job
 
-      print_job_status(job)
-    end
-
-    def print_job_status(job)
       puts job_presenter.details(job)
     end
 

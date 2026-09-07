@@ -5,9 +5,10 @@ require 'pathname'
 module VideoEncoder
   # Moves an eligible source into quarantine without overwriting.
   class QuarantineSource
-    class UnsafeSource < StandardError; end
-    class MissingDirectory < StandardError; end
-    class DestinationExists < StandardError; end
+    class Error < StandardError; end
+    class UnsafeSource < Error; end
+    class MissingDirectory < Error; end
+    class DestinationExists < Error; end
 
     def initialize(
       check:,
