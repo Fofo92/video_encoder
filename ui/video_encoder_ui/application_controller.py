@@ -48,8 +48,3 @@ class ApplicationController:
 
     def show_queue(self):
         self.queue_controller.show()
-
-    def queue_status_changed(self, status):
-        self.start_window.set_queue_running(
-            status == "running"
-        )

@@ -1689,6 +1689,13 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.set_project_modified()
         self.refresh_segment_list()
 
+    def start_new_project_from_current_source(self):
+        self.trim_session.clear_segments()
+        self.project_path = None
+        self.clear_active_markers()
+        self.refresh_segment_list()
+        self.set_project_modified(False)
+
     def clear_all_segments(self):
         if self.export_status in {
             "running",
@@ -2205,18 +2212,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
                     f"{output_path}"
                 ),
             )
-            self.close()
-            return
-
-            self.export_status_changed("queued")
-            QtWidgets.QMessageBox.information(
-                self,
-                "Montage ajouté à la file",
-                (
-                    "Le montage sera exporté vers :\n"
-                    f"{output_path}"
-                ),
-            )
+            self.start_new_project_from_current_source()
             return
 
         try:
@@ -3183,10 +3179,6 @@ def main():
         select_project=select_project_path,
         open_editor=editor_controller.open,
         queue_controller=queue_controller,
-    )
-
-    queue_runner.status_changed.connect(
-        application_controller.queue_status_changed
     )
 
     try:

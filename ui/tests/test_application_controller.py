@@ -1,6 +1,6 @@
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, call
+from unittest.mock import Mock
 
 from video_encoder_ui.application_controller import (
     ApplicationController,
@@ -78,31 +78,6 @@ class ApplicationControllerTest(unittest.TestCase):
         self.controller.show()
 
         self.start_controller.show.assert_called_once_with()
-
-    def test_disables_editing_while_queue_runs(self):
-        self.controller.queue_status_changed(
-            "running"
-        )
-
-        self.start_window.set_queue_running.assert_called_once_with(
-            True
-        )
-
-    def test_enables_editing_when_queue_stops(self):
-        self.controller.queue_status_changed(
-            "succeeded"
-        )
-        self.controller.queue_status_changed(
-            "failed"
-        )
-
-        self.assertEqual(
-            self.start_window.set_queue_running.call_args_list,
-            [
-                call(False),
-                call(False),
-            ],
-        )
 
 if __name__ == "__main__":
     unittest.main()

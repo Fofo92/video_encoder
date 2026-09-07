@@ -50,6 +50,27 @@ class ApplicationSegmentsTest(unittest.TestCase):
         monitor.clear_active_markers.assert_called_once_with()
         monitor.refresh_segment_list.assert_called_once_with()
         monitor.set_project_modified.assert_called_once_with()
+
+    def test_starts_a_new_project_from_current_source(
+        self
+    ):
+        monitor = self.make_monitor()
+        monitor.project_path = "/output/first-film.json"
+
+        MltFrameMonitor.start_new_project_from_current_source(
+            monitor
+        )
+
+        monitor.trim_session.clear_segments\
+            .assert_called_once_with()
+        monitor.clear_active_markers\
+            .assert_called_once_with()
+        monitor.refresh_segment_list\
+            .assert_called_once_with()
+        monitor.set_project_modified\
+            .assert_called_once_with(False)
+        self.assertIsNone(monitor.project_path)
+
     def test_keeps_segments_when_confirmation_is_declined(self):
         monitor = self.make_monitor()
 

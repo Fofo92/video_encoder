@@ -28,7 +28,6 @@ class StartWindowTest(unittest.TestCase):
         self.window = StartWindow()
 
     def tearDown(self):
-        self.window.set_queue_running(False)
         self.window.close()
         self.window.deleteLater()
 
@@ -73,45 +72,12 @@ class StartWindowTest(unittest.TestCase):
         open_requested.assert_called_once_with()
         queue_requested.assert_called_once_with()
 
-    def test_disables_editing_while_queue_runs(self):
-        self.window.set_queue_running(True)
-
-        self.assertFalse(
-            self.window.new_project_button.isEnabled()
-        )
-        self.assertFalse(
-            self.window.open_project_button.isEnabled()
-        )
-
-        self.window.set_queue_running(False)
-
+    def test_keeps_editing_actions_available(self):
         self.assertTrue(
             self.window.new_project_button.isEnabled()
         )
         self.assertTrue(
             self.window.open_project_button.isEnabled()
-        )
-
-    def test_prevents_closing_while_queue_runs(self):
-        event = Mock()
-        self.window.set_queue_running(True)
-
-        with patch(
-            "video_encoder_ui.start_window."
-            "QtWidgets.QMessageBox.information"
-        ) as information:
-            self.window.closeEvent(event)
-
-        event.ignore.assert_called_once_with()
-        information.assert_called_once_with(
-            self.window,
-            "File en cours",
-            (
-                "La file des montages est en cours "
-                "d’exécution.\n"
-                "Attends sa fin avant de fermer "
-                "video_encoder."
-            ),
         )
 
 if __name__ == "__main__":
