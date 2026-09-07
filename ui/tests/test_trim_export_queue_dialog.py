@@ -173,6 +173,32 @@ class TrimExportQueueDialogTest(unittest.TestCase):
             dialog.refresh_timer.isActive()
         )
 
+    def test_displays_the_selected_job_error(self):
+        error = (
+            "command failed: ffmpeg\n"
+            "Invalid data found when processing input"
+        )
+        dialog = TrimExportQueueDialog(
+            [
+                {
+                    "id": "trim-1",
+                    "kind": "trim_export",
+                    "input_path": "/projects/movie.json",
+                    "output_path": "/videos/movie.mkv",
+                    "status": "failed",
+                    "attempts": 1,
+                    "error": error,
+                }
+            ]
+        )
+
+        dialog.jobs_table.selectRow(0)
+
+        self.assertEqual(
+            dialog.error_details.toPlainText(),
+            error,
+        )
+
     def test_displays_the_last_refresh_time(self):
         dialog = TrimExportQueueDialog([])
 
@@ -182,6 +208,37 @@ class TrimExportQueueDialogTest(unittest.TestCase):
             dialog.refresh_status_label.text(),
             "Dernière actualisation : 09:42:17",
         )
+    def test_requests_retry_for_selected_failed_job(
+        self
+    ):
+        job = {
+            "id": "trim-1",
+            "kind": "trim_export",
+            "input_path": "/projects/movie.json",
+            "output_path": "/videos/movie.mkv",
+            "status": "failed",
+            "attempts": 1,
+            "error": "ffmpeg failed",
+        }
+        dialog = TrimExportQueueDialog([job])
+        retry_requested = Mock()
+        dialog.retry_requested.connect(
+            retry_requested
+        )
+
+        self.assertFalse(
+            dialog.retry_button.isEnabled()
+        )
+
+        dialog.jobs_table.selectRow(0)
+
+        self.assertTrue(
+            dialog.retry_button.isEnabled()
+        )
+
+        dialog.retry_button.click()
+
+        retry_requested.assert_called_once_with(job)
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,6 +6,7 @@ from PySide6 import QtCore, QtWidgets
 class TrimExportQueueDialog(QtWidgets.QDialog):
     refresh_requested = QtCore.Signal()
     start_requested = QtCore.Signal()
+    retry_requested = QtCore.Signal(object)
 
     STATUS_LABELS = {
         "queued": "En attente",
@@ -83,6 +84,29 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             QtWidgets.QHeaderView.ResizeMode.ResizeToContents,
         )
 
+        error_label = QtWidgets.QLabel(
+            "Erreur du travail sélectionné",
+            self,
+        )
+        layout.addWidget(error_label)
+
+        self.error_details = QtWidgets.QPlainTextEdit(
+            self
+        )
+        self.error_details.setReadOnly(True)
+        self.error_details.setPlaceholderText(
+            "Sélectionne un travail en échec "
+            "pour afficher son erreur."
+        )
+        self.error_details.setMaximumHeight(110)
+        layout.addWidget(self.error_details)
+
+        self.jobs_table.itemSelectionChanged.connect(
+            self.update_error_details
+        )
+        self.jobs_table.itemSelectionChanged.connect(
+            self.update_retry_button
+        )
         layout.addWidget(self.jobs_table)
 
         buttons = QtWidgets.QDialogButtonBox(
@@ -96,6 +120,15 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         )
         self.start_button.clicked.connect(
             self.start_requested
+        )
+
+        self.retry_button = buttons.addButton(
+            "Relancer le travail",
+            QtWidgets.QDialogButtonBox.ButtonRole.ActionRole,
+        )
+        self.retry_button.setEnabled(False)
+        self.retry_button.clicked.connect(
+            self.request_selected_retry
         )
 
         self.refresh_button = buttons.addButton(
@@ -118,12 +151,14 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
     def set_jobs(self, jobs):
         self.jobs = list(jobs)
+        self.error_details.clear()
         self.update_start_button()
 
         self.jobs_table.setRowCount(0)
 
         for job in self.jobs:
             self.add_job(job)
+        self.update_retry_button()
 
     def set_running(self, running):
         self.running = bool(running)
@@ -150,6 +185,69 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             if self.running
             else "Lancer la file"
         )
+
+    def selected_job(self):
+        selected_rows = (
+            self.jobs_table.selectionModel()
+            .selectedRows()
+        )
+
+        if not selected_rows:
+            return None
+
+        row = selected_rows[0].row()
+
+        if not 0 <= row < len(self.jobs):
+            return None
+
+        return self.jobs[row]
+
+    def update_retry_button(self):
+        job = self.selected_job()
+
+        self.retry_button.setEnabled(
+            job is not None
+            and job.get("status") == "failed"
+        )
+
+    def request_selected_retry(self):
+        job = self.selected_job()
+
+        if (
+            job is not None
+            and job.get("status") == "failed"
+        ):
+            self.retry_requested.emit(job)
+
+    def update_error_details(self):
+        job = self.selected_job()
+
+        if job is None:
+            self.error_details.clear()
+            return
+
+        self.error_details.setPlainText(
+            job.get("error") or ""
+        )
+
+    # def update_error_details(self):
+    #     selected_rows = (
+    #         self.jobs_table.selectionModel()
+    #         .selectedRows()
+    #     )
+
+    #     if not selected_rows:
+    #         self.error_details.clear()
+    #         return
+
+    #     row = selected_rows[0].row()
+
+    #     if not 0 <= row < len(self.jobs):
+    #         self.error_details.clear()
+    #         return
+
+    #     error = self.jobs[row].get("error") or ""
+    #     self.error_details.setPlainText(error)
 
     def add_job(self, job):
         row = self.jobs_table.rowCount()

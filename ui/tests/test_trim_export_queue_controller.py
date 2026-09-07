@@ -106,6 +106,119 @@ class TrimExportQueueControllerTest(
             True
         )
 
+    def test_does_not_retry_when_confirmation_is_declined(
+        self
+    ):
+        client = Mock()
+        dialog = Mock()
+        job = {
+            "input_path": "/projects/movie.json",
+            "output_path": "/videos/movie.mkv",
+        }
+
+        controller = TrimExportQueueController(
+            client=client,
+            runner=Mock(),
+            dialog_class=Mock(),
+        )
+
+        with patch(
+            "video_encoder_ui."
+            "trim_export_queue_controller."
+            "QtWidgets.QMessageBox.question",
+            return_value=(
+                QtWidgets.QMessageBox.StandardButton.No
+            ),
+        ):
+            controller.retry(dialog, job)
+
+        client.enqueue.assert_not_called()
+
+    def test_reports_a_retry_failure(self):
+        client = Mock()
+        client.enqueue.side_effect = (
+            TrimExportQueueError(
+                "output already exists"
+            )
+        )
+        dialog = Mock()
+        parent = Mock()
+        job = {
+            "input_path": "/projects/movie.json",
+            "output_path": "/videos/movie.mkv",
+        }
+
+        controller = TrimExportQueueController(
+            client=client,
+            runner=Mock(),
+            dialog_class=Mock(),
+            parent=parent,
+        )
+        controller.refresh = Mock()
+
+        with (
+            patch(
+                "video_encoder_ui."
+                "trim_export_queue_controller."
+                "QtWidgets.QMessageBox.question",
+                return_value=(
+                    QtWidgets.QMessageBox.StandardButton.Yes
+                ),
+            ),
+            patch(
+                "video_encoder_ui."
+                "trim_export_queue_controller."
+                "QtWidgets.QMessageBox.warning"
+            ) as warning,
+        ):
+            controller.retry(dialog, job)
+
+        warning.assert_called_once_with(
+            parent,
+            "Relance impossible",
+            "output already exists",
+        )
+        controller.refresh.assert_not_called()
+
+    def test_requeues_a_failed_job_after_confirmation(
+        self
+    ):
+        job = {
+            "id": "trim-1",
+            "input_path": "/projects/movie.json",
+            "output_path": "/videos/movie.mkv",
+            "status": "failed",
+        }
+        client = Mock()
+        dialog = Mock()
+        parent = Mock()
+
+        controller = TrimExportQueueController(
+            client=client,
+            runner=Mock(),
+            dialog_class=Mock(),
+            parent=parent,
+        )
+        controller.refresh = Mock()
+
+        with patch(
+            "video_encoder_ui."
+            "trim_export_queue_controller."
+            "QtWidgets.QMessageBox.question",
+            return_value=(
+                QtWidgets.QMessageBox.StandardButton.Yes
+            ),
+        ):
+            controller.retry(dialog, job)
+
+        client.enqueue.assert_called_once_with(
+            "/projects/movie.json",
+            "/videos/movie.mkv",
+        )
+        controller.refresh.assert_called_once_with(
+            dialog
+        )
+
     def test_reports_a_queue_listing_failure(self):
         client = Mock()
         client.list_jobs.side_effect = (
