@@ -5,6 +5,7 @@ require_relative 'cli/config_command'
 require_relative 'cli/preflight_audio_command'
 require_relative 'cli/job_presenter'
 require_relative 'cli/job_serializer'
+require_relative 'cli/source_usage_command'
 require_relative 'cli/list_jobs_command'
 require_relative 'cli/enqueue_trim_export_command'
 require_relative 'cli/run_trim_exports_command'
@@ -26,7 +27,8 @@ module VideoEncoder
     'watch' => :watch,
     'export' => :export_trim_project,
     'preflight-audio' => :preflight_audio,
-    'inspect-media' => :inspect_media
+    'inspect-media' => :inspect_media,
+    'source-usage' => :show_source_usage
   }.freeze
 
   CLI_USAGE = <<~TEXT
@@ -43,6 +45,7 @@ module VideoEncoder
       video_encoder export <project.json> --output <movie.mkv>
       video_encoder preflight-audio <project.json>
       video_encoder inspect-media <file>
+      video_encoder source-usage <source>
       video_encoder failed
   TEXT
 
@@ -101,6 +104,10 @@ module VideoEncoder
 
     def inspect_media
       InspectMediaCommand.new(argv: @argv, dependency_checker:).run
+    end
+
+    def show_source_usage
+      SourceUsageCommand.build(argv: @argv, repo: repo).run
     end
 
     def config
