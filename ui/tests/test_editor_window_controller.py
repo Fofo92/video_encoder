@@ -37,7 +37,6 @@ class EditorWindowControllerTest(
             self.controller.editor_window,
             self.editor_window,
         )
-        self.editor_window.setAttribute.assert_called_once()
 
     def test_returns_to_start_when_editor_closes(
         self

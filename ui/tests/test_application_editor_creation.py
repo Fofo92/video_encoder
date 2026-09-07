@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 try:
     import mlt7
-    from PySide6 import QtWidgets
+    from PySide6 import QtCore, QtWidgets
 except ModuleNotFoundError:
     QtWidgets = None
 
@@ -51,6 +51,11 @@ class ApplicationEditorCreationTest(
             trim_session=None,
             project_path=None,
         )
+        editor.setAttribute.assert_called_once_with(
+            QtCore.Qt.WidgetAttribute.WA_DeleteOnClose,
+            True,
+        )
+
         single_shot.assert_called_once()
         self.assertIs(created, editor)
 

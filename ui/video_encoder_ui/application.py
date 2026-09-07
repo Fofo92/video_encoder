@@ -3111,6 +3111,11 @@ def create_editor_window(
         project_path=project_path,
     )
 
+    window.setAttribute(
+        QtCore.Qt.WidgetAttribute.WA_DeleteOnClose,
+        True,
+    )
+
     if (
         trim_session is not None
         and trim_session.segments

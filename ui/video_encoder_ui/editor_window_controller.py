@@ -1,5 +1,3 @@
-from PySide6 import QtCore
-
 class EditorWindowController:
     def __init__(
         self,
@@ -19,10 +17,7 @@ class EditorWindowController:
             return
 
         self.editor_window = editor_window
-        editor_window.setAttribute(
-            QtCore.Qt.WidgetAttribute.WA_DeleteOnClose,
-            True,
-        )
+
         editor_window.destroyed.connect(
             self.editor_closed
         )

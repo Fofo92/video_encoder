@@ -2,13 +2,6 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from video_encoder_ui.application import (
-    load_startup_selection,
-    select_media_path,
-    select_project_path,
-    select_source_path,
-)
-
 try:
     import mlt7
     from PySide6 import QtWidgets
@@ -18,9 +11,10 @@ except ModuleNotFoundError:
 if QtWidgets is not None:
     from video_encoder_ui.application import (
         load_startup_selection,
+        select_media_path,
+        select_project_path,
         select_source_path,
     )
-
 
 @unittest.skipIf(
     QtWidgets is None,
