@@ -8,6 +8,7 @@ module VideoEncoder
     TIMING_LINE = /(#{TIMESTAMP}) --> (#{TIMESTAMP})/
 
     def call(srt, offset: 0, start_at: nil, end_at: nil)
+      srt = srt.scrub
       offset_in_milliseconds = (offset * 1_000).round
       start_at_in_milliseconds = (start_at * 1_000).round if start_at
       end_at_in_milliseconds = (end_at * 1_000).round if end_at

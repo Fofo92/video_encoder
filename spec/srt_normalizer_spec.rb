@@ -36,6 +36,21 @@ RSpec.describe VideoEncoder::SrtNormalizer do
         '00:01:00,970 --> 00:01:02,049'
       )
     end
+
+    it 'replaces invalid UTF-8 bytes from OCR output' do
+      srt = [
+        '1',
+        '00:00:00,320 --> 00:00:01,399',
+        "Texte OCR invalide : \xFF."
+      ].join("\n").force_encoding(Encoding::UTF_8)
+
+      normalized = described_class.new.call(srt)
+
+      expect(normalized).to include(
+        'Texte OCR invalide : �.'
+      )
+      expect(normalized).to be_valid_encoding
+    end
   end
 
   it 'clips a subtitle at the end of its output segment' do
