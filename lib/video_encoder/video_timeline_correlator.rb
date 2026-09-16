@@ -1,65 +1,57 @@
 # frozen_string_literal: true
 
 module VideoEncoder
-  # Calculates the best time offset between two audio streams by comparing
-  # overlapping samples and finding the shift with the highest correlation.
-  class AudioTimelineCorrelator
-    # Raised when no valid audio correlation can be computed for the given
-    # source and rendered audio.
-    class CorrelationUnavailable < StandardError; end
-
+  # Measures temporal alignment between two video frame sequences.
+  class VideoTimelineCorrelator
     def initialize(
-      interval_seconds:,
+      frame_rate:,
       maximum_shift_seconds:
     )
-      @interval_seconds = interval_seconds
+      @frame_rate = frame_rate
       @maximum_shift_seconds = maximum_shift_seconds
     end
 
     def call(source:, rendered:)
-      best_result = correlations(
+      best_shift, best_confidence = correlations(
         source,
         rendered
       ).max_by { |_shift, confidence| confidence }
 
-      if best_result.nil?
-        raise CorrelationUnavailable,
-              'audio correlation is unavailable'
-      end
-
-      best_shift, best_confidence = best_result
-
       {
-        offset_seconds: best_shift * interval_seconds,
+        offset_seconds: best_shift.fdiv(frame_rate),
         confidence: best_confidence
       }
     end
 
     private
 
-    attr_reader :interval_seconds,
+    attr_reader :frame_rate,
                 :maximum_shift_seconds
 
     def correlations(source, rendered)
       maximum_shift = (
-        maximum_shift_seconds / interval_seconds
+        maximum_shift_seconds * frame_rate
       ).round
 
       (-maximum_shift..maximum_shift).filter_map do |shift|
-        left, right = overlapping_samples(
+        left, right = overlapping_frames(
           source,
           rendered,
           shift
         )
 
-        confidence = correlation(left, right)
+        confidence = correlation(
+          left.flatten,
+          right.flatten
+        )
+
         next if confidence.nil?
 
         [shift, confidence]
       end
     end
 
-    def overlapping_samples(source, rendered, shift)
+    def overlapping_frames(source, rendered, shift)
       if shift.negative?
         left = source.drop(-shift)
         right = rendered.first(left.length)
@@ -68,7 +60,10 @@ module VideoEncoder
         left = source.first(right.length)
       end
 
-      length = [left.length, right.length].min
+      length = [
+        left.length,
+        right.length
+      ].min
 
       [
         left.first(length),
@@ -97,11 +92,13 @@ module VideoEncoder
 
       return if denominator.zero?
 
-      numerator = left_differences
-                  .zip(right_differences)
-                  .sum do |left_value, right_value|
-                    left_value * right_value
-                  end
+      pairs = left_differences.zip(
+        right_differences
+      )
+
+      numerator = pairs.sum do |left_value, right_value|
+        left_value * right_value
+      end
 
       numerator / denominator
     end

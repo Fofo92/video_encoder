@@ -2,34 +2,41 @@
 
 require 'spec_helper'
 
-RSpec.describe VideoEncoder::AudioTimelineOffsetProbe do
-  it 'compares source and rendered audio envelopes' do
-    source_envelope = [0.1, 0.4, 0.2, 0.8]
-    rendered_envelope = [0.4, 0.2, 0.8, 0.0]
+RSpec.describe VideoEncoder::VideoTimelineOffsetProbe do
+  it 'compares source and rendered frame sequences' do
+    source_frames = [
+      [0, 1],
+      [2, 3]
+    ]
+
+    rendered_frames = [
+      [2, 3],
+      [0, 0]
+    ]
 
     extractor = instance_double(
-      VideoEncoder::AudioEnvelopeExtractor
+      VideoEncoder::VideoFrameSequenceExtractor
     )
 
     correlator = instance_double(
-      VideoEncoder::AudioTimelineCorrelator
+      VideoEncoder::VideoTimelineCorrelator
     )
 
     allow(extractor).to receive(:call)
       .and_return(
-        source_envelope,
-        rendered_envelope
+        source_frames,
+        rendered_frames
       )
 
     result = {
-      offset_seconds: -0.1,
+      offset_seconds: -0.04,
       confidence: 0.99
     }
 
     allow(correlator).to receive(:call)
       .with(
-        source: source_envelope,
-        rendered: rendered_envelope
+        source: source_frames,
+        rendered: rendered_frames
       )
       .and_return(result)
 
@@ -42,8 +49,8 @@ RSpec.describe VideoEncoder::AudioTimelineOffsetProbe do
     expect(
       probe.call(
         source_path: '/commun/source.m2t',
-        source_stream_index: 1,
-        source_start_seconds: 850.36,
+        source_stream_index: 0,
+        source_start_seconds: 10.0,
         rendered_path: '/tmp/video.mkv',
         rendered_stream_index: 0,
         rendered_start_seconds: 0.0
@@ -52,8 +59,8 @@ RSpec.describe VideoEncoder::AudioTimelineOffsetProbe do
 
     expect(extractor).to have_received(:call).with(
       path: '/commun/source.m2t',
-      stream_index: 1,
-      start_seconds: 850.36,
+      stream_index: 0,
+      start_seconds: 10.0,
       duration_seconds: 12.0
     )
 

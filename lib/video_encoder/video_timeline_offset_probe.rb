@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 module VideoEncoder
-  # Probes the offset between the source and rendered audio timelines.
-  class AudioTimelineOffsetProbe
+  # Compares source and rendered video timeline positions.
+  class VideoTimelineOffsetProbe
     def initialize(
       extractor:,
       correlator:,
@@ -21,13 +21,13 @@ module VideoEncoder
       rendered_stream_index:,
       rendered_start_seconds:
     )
-      source = envelope(
+      source = frames(
         path: source_path,
         stream_index: source_stream_index,
         start_seconds: source_start_seconds
       )
 
-      rendered = envelope(
+      rendered = frames(
         path: rendered_path,
         stream_index: rendered_stream_index,
         start_seconds: rendered_start_seconds
@@ -45,7 +45,7 @@ module VideoEncoder
                 :extractor,
                 :sample_duration_seconds
 
-    def envelope(path:, stream_index:, start_seconds:)
+    def frames(path:, stream_index:, start_seconds:)
       extractor.call(
         path: path,
         stream_index: stream_index,
