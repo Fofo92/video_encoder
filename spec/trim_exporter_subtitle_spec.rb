@@ -62,7 +62,8 @@ RSpec.describe VideoEncoder::TrimExporter do
       expect(subtitle_exporter).to have_received(:call).with(
         trim_project: project,
         video_tracks_by_source: video_tracks_by_source,
-        subtitle_tracks_by_source: subtitle_tracks_by_source
+        subtitle_tracks_by_source: subtitle_tracks_by_source,
+        rendered_video_path: 'tmp/video.mkv'
       )
 
       expect(remuxer).to have_received(:remux).with(

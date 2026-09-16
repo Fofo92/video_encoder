@@ -8,7 +8,10 @@ RSpec.describe VideoEncoder::SubtitleProjectProcessor do
       extractor: extractor,
       concatenator: concatenator,
       ocr: ocr,
-      normalizer: normalizer,
+      synchronization_probe:
+        synchronization_probe,
+      timeline_normalizer:
+        timeline_normalizer,
       reader: reader,
       synchronization_delay: 0
     )
@@ -23,7 +26,17 @@ RSpec.describe VideoEncoder::SubtitleProjectProcessor do
   end
 
   let(:ocr) { instance_double(VideoEncoder::CcextractorOcr) }
-  let(:normalizer) { instance_double(VideoEncoder::SrtNormalizer) }
+  let(:synchronization_probe) do
+    instance_double(
+      VideoEncoder::SubtitleSegmentSynchronizationProbe
+    )
+  end
+
+  let(:timeline_normalizer) do
+    instance_double(
+      VideoEncoder::SubtitleTimelineNormalizer
+    )
+  end
   let(:reader) { instance_double('SrtReader') }
 
   describe '#call' do
@@ -42,6 +55,7 @@ RSpec.describe VideoEncoder::SubtitleProjectProcessor do
 
       video_track = instance_double(
         VideoEncoder::VideoTrack,
+        index: 0,
         frame_rate: Rational(25, 1)
       )
 
@@ -56,15 +70,28 @@ RSpec.describe VideoEncoder::SubtitleProjectProcessor do
         .with('/tmp/subtitle_project_0.srt')
         .and_return("raw project srt\n")
 
-      allow(normalizer)
+      allow(synchronization_probe)
+        .to receive(:call)
+        .and_return(
+          offset_seconds: 0,
+          confidence: 1.0
+        )
+
+      allow(timeline_normalizer)
         .to receive(:call)
         .with(
           "raw project srt\n",
-          offset: 60,
-          start_at: 60,
-          end_at: 120
+          timeline_start: 60,
+          segments: [
+            {
+              duration: Rational(60, 1),
+              offset_seconds: 0
+            }
+          ]
         )
-        .and_return("normalized project srt\n")
+        .and_return(
+          "normalized project srt\n"
+        )
 
       result = processor.call(
         segments: [
@@ -76,6 +103,7 @@ RSpec.describe VideoEncoder::SubtitleProjectProcessor do
           }
         ],
         timeline_start: 60,
+        rendered_video_path: '/tmp/video.mkv',
         manifest_path: '/tmp/subtitle_project_0.ffconcat',
         transport_path: '/tmp/subtitle_project_0.ts',
         srt_path: '/tmp/subtitle_project_0.srt'

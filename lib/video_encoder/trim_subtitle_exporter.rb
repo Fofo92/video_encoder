@@ -27,7 +27,8 @@ module VideoEncoder
     def call(
       trim_project:,
       video_tracks_by_source:,
-      subtitle_tracks_by_source:
+      subtitle_tracks_by_source:,
+      rendered_video_path:
     )
       runs = build_subtitle_runs(
         trim_project,
@@ -38,7 +39,12 @@ module VideoEncoder
       missing_groups = []
 
       normalized_runs = runs.each_with_index.filter_map do |run, index|
-        process_run(run, index, missing_groups)
+        process_run(
+          run,
+          index,
+          missing_groups,
+          rendered_video_path
+        )
       end
 
       subtitle_path = write_composed_subtitles(normalized_runs)
@@ -97,10 +103,16 @@ module VideoEncoder
       subtitle_runs
     end
 
-    def process_run(run, index, missing_groups)
+    def process_run(
+      run,
+      index,
+      missing_groups,
+      rendered_video_path
+    )
       processor.call(
         segments: run.fetch(:segments),
         timeline_start: run.fetch(:timeline_start),
+        rendered_video_path: rendered_video_path,
         manifest_path: workspace.subtitle_manifest_path(index),
         transport_path: workspace.subtitle_project_transport_path(index),
         srt_path: workspace.subtitle_project_srt_path(index)

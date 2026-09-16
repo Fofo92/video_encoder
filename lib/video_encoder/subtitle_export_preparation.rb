@@ -12,7 +12,8 @@ module VideoEncoder
       trim_project:,
       video_tracks_by_source:,
       subtitle_tracks_by_source:,
-      audio_output_tracks:
+      audio_output_tracks:,
+      rendered_video_path:
     )
       return [nil, audio_output_tracks] unless exporter
 
@@ -25,7 +26,8 @@ module VideoEncoder
       subtitle_path = extract_subtitles(
         trim_project: trim_project,
         video_tracks_by_source: video_tracks_by_source,
-        subtitle_tracks_by_source: subtitle_tracks_by_source
+        subtitle_tracks_by_source: subtitle_tracks_by_source,
+        rendered_video_path: rendered_video_path
       )
 
       [

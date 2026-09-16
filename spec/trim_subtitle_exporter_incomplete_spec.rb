@@ -92,7 +92,8 @@ RSpec.describe VideoEncoder::TrimSubtitleExporter, 'incomplete subtitles' do
         },
         subtitle_tracks_by_source: {
           captioned_source => subtitle_track
-        }
+        },
+        rendered_video_path: '/tmp/video.mkv'
       )
     end.to raise_error(
       VideoEncoder::TrimSubtitleExporter::IncompleteSubtitles
@@ -137,7 +138,8 @@ RSpec.describe VideoEncoder::TrimSubtitleExporter, 'incomplete subtitles' do
         },
         subtitle_tracks_by_source: {
           captioned_source => subtitle_track
-        }
+        },
+        rendered_video_path: '/tmp/video.mkv'
       )
     end.to raise_error(
       VideoEncoder::TrimSubtitleExporter::IncompleteSubtitles
@@ -171,7 +173,8 @@ RSpec.describe VideoEncoder::TrimSubtitleExporter, 'incomplete subtitles' do
         },
         subtitle_tracks_by_source: {
           captioned_source => subtitle_track
-        }
+        },
+        rendered_video_path: '/tmp/video.mkv'
       )
     end.to raise_error(RuntimeError) { |error|
       expect(error).to equal(failure)

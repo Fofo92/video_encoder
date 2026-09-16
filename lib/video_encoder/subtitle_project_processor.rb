@@ -7,14 +7,16 @@ module VideoEncoder
       extractor:,
       concatenator:,
       ocr:,
-      normalizer:,
+      synchronization_probe:,
+      timeline_normalizer:,
       reader:,
       synchronization_delay:
     )
       @extractor = extractor
       @concatenator = concatenator
       @ocr = ocr
-      @normalizer = normalizer
+      @synchronization_probe = synchronization_probe
+      @timeline_normalizer = timeline_normalizer
       @reader = reader
       @synchronization_delay = synchronization_delay
     end
@@ -22,6 +24,7 @@ module VideoEncoder
     def call(
       segments:,
       timeline_start:,
+      rendered_video_path:,
       manifest_path:,
       transport_path:,
       srt_path:
@@ -29,6 +32,13 @@ module VideoEncoder
       transports = segments.map do |item|
         extract_segment(item)
       end
+
+      corrections = measure_corrections(
+        segments,
+        transports,
+        timeline_start,
+        rendered_video_path
+      )
 
       concatenator.call(
         segments: transports,
@@ -41,15 +51,10 @@ module VideoEncoder
         output_path: srt_path
       )
 
-      duration = transports.sum do |transport|
-        transport.fetch(:duration)
-      end
-
-      normalizer.call(
+      timeline_normalizer.call(
         reader.read(srt_path),
-        offset: timeline_start + synchronization_delay,
-        start_at: timeline_start,
-        end_at: timeline_start + duration
+        timeline_start: timeline_start,
+        segments: corrections
       )
     end
 
@@ -58,21 +63,33 @@ module VideoEncoder
     attr_reader :extractor,
                 :concatenator,
                 :ocr,
-                :normalizer,
                 :reader,
-                :synchronization_delay
+                :synchronization_delay,
+                :synchronization_probe,
+                :timeline_normalizer
 
     def extract_segment(item)
       segment = item.fetch(:segment)
       video_track = item.fetch(:video_track)
-      duration = segment_duration(segment, video_track)
-      transport_path = item.fetch(:transport_path)
+      duration = segment_duration(
+        segment,
+        video_track
+      )
+
+      transport_path = item.fetch(
+        :transport_path
+      )
 
       extractor.call(
         source_path: segment.source.path,
         video_track: video_track,
-        subtitle_track: item.fetch(:subtitle_track),
-        start_time: segment_start_time(segment, video_track),
+        subtitle_track:
+          item.fetch(:subtitle_track),
+        start_time:
+          segment_start_time(
+            segment,
+            video_track
+          ),
         duration: duration,
         output_path: transport_path
       )
@@ -83,14 +100,76 @@ module VideoEncoder
       }
     end
 
+    def measure_corrections(
+      segments,
+      transports,
+      timeline_start,
+      rendered_video_path
+    )
+      rendered_start = timeline_start
+
+      segments.zip(transports).map do |item, transport|
+        correction = measure_correction(
+          item,
+          transport,
+          rendered_video_path,
+          rendered_start
+        )
+
+        rendered_start += transport.fetch(
+          :duration
+        )
+
+        {
+          duration: transport.fetch(:duration),
+          offset_seconds:
+            correction.fetch(:offset_seconds) +
+              synchronization_delay
+        }
+      end
+    end
+
+    def measure_correction(
+      item,
+      transport,
+      rendered_video_path,
+      rendered_start
+    )
+      segment = item.fetch(:segment)
+      video_track = item.fetch(:video_track)
+
+      synchronization_probe.call(
+        source_path: segment.source.path,
+        source_stream_index:
+          video_track.index,
+        source_start_seconds:
+          segment_start_time(
+            segment,
+            video_track
+          ),
+        transport_path:
+          transport.fetch(:path),
+        rendered_video_path:
+          rendered_video_path,
+        rendered_start_seconds:
+          rendered_start
+      )
+    end
+
     def segment_start_time(segment, video_track)
-      Rational(segment.start_frame, 1) / video_track.frame_rate
+      Rational(segment.start_frame, 1) /
+        video_track.frame_rate
     end
 
     def segment_duration(segment, video_track)
-      frame_count = segment.end_frame - segment.start_frame + 1
+      frame_count = (
+        segment.end_frame -
+        segment.start_frame +
+        1
+      )
 
-      Rational(frame_count, 1) / video_track.frame_rate
+      Rational(frame_count, 1) /
+        video_track.frame_rate
     end
   end
 end

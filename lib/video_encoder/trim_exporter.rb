@@ -52,7 +52,9 @@ module VideoEncoder
         subtitle_tracks_by_source:
           subtitle_tracks_by_source,
         audio_output_tracks:
-          selected_audio_tracks
+          selected_audio_tracks,
+        rendered_video_path:
+          workspace.video_path
       )
 
       audio_inputs = render_audio_tracks(

@@ -85,7 +85,8 @@ RSpec.describe VideoEncoder::TrimExporter do
         video_tracks_by_source:
           video_tracks_by_source,
         subtitle_tracks_by_source:
-          subtitle_tracks_by_source
+          subtitle_tracks_by_source,
+        rendered_video_path: 'tmp/video.mkv'
       )
       .ordered
       .and_return(nil)

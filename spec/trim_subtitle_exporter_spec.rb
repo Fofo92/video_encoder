@@ -89,7 +89,8 @@ RSpec.describe VideoEncoder::TrimSubtitleExporter do
         },
         subtitle_tracks_by_source: {
           media_with_subtitles => subtitle
-        }
+        },
+        rendered_video_path: '/tmp/video.mkv'
       )
 
       expect(processor).to have_received(:call).with(
@@ -102,6 +103,7 @@ RSpec.describe VideoEncoder::TrimSubtitleExporter do
           }
         ],
         timeline_start: 60,
+        rendered_video_path: '/tmp/video.mkv',
         manifest_path: '/tmp/subtitle_project_0.ffconcat',
         transport_path: '/tmp/subtitle_project_0.ts',
         srt_path: '/tmp/subtitle_project_0.srt'
@@ -128,7 +130,8 @@ RSpec.describe VideoEncoder::TrimSubtitleExporter do
       result = exporter.call(
         trim_project: project,
         video_tracks_by_source: {},
-        subtitle_tracks_by_source: {}
+        subtitle_tracks_by_source: {},
+        rendered_video_path: '/tmp/video.mkv'
       )
 
       expect(workspace).not_to have_received(:write_subtitles)

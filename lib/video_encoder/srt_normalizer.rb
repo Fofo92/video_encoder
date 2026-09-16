@@ -7,18 +7,39 @@ module VideoEncoder
     TIMESTAMP = /\d{2,}:\d{2}:\d{2},\d{3}/
     TIMING_LINE = /(#{TIMESTAMP}) --> (#{TIMESTAMP})/
 
-    def call(srt, offset: 0, start_at: nil, end_at: nil)
+    def call(
+      srt,
+      offset: 0,
+      start_at: nil,
+      end_at: nil,
+      input_start_at: nil,
+      input_end_at: nil
+    )
       srt = srt.scrub
       offset_in_milliseconds = (offset * 1_000).round
       start_at_in_milliseconds = (start_at * 1_000).round if start_at
       end_at_in_milliseconds = (end_at * 1_000).round if end_at
+
+      if input_start_at
+        input_start_at_in_milliseconds = (
+          input_start_at * 1_000
+        ).round
+      end
+
+      if input_end_at
+        input_end_at_in_milliseconds = (
+          input_end_at * 1_000
+        ).round
+      end
 
       entries = srt.split(/\r?\n\r?\n/).filter_map do |entry|
         normalize_entry(
           entry,
           offset_in_milliseconds,
           start_at_in_milliseconds,
-          end_at_in_milliseconds
+          end_at_in_milliseconds,
+          input_start_at_in_milliseconds,
+          input_end_at_in_milliseconds
         )
       end
 
@@ -29,14 +50,40 @@ module VideoEncoder
 
     private
 
-    def normalize_entry(entry, offset, start_at, end_at)
+    def normalize_entry(
+      entry,
+      offset,
+      start_at,
+      end_at,
+      input_start_at,
+      input_end_at
+    )
       normalized = entry.gsub(FONT_TAG, '')
       timing = TIMING_LINE.match(normalized)
 
       return normalized unless timing
 
-      start_time = parse_timestamp(timing[1]) + offset
-      end_time = parse_timestamp(timing[2]) + offset
+      start_time = parse_timestamp(timing[1])
+      end_time = parse_timestamp(timing[2])
+
+      if input_start_at
+        start_time = [
+          start_time,
+          input_start_at
+        ].max
+      end
+
+      if input_end_at
+        end_time = [
+          end_time,
+          input_end_at
+        ].min
+      end
+
+      return if end_time <= start_time
+
+      start_time += offset
+      end_time += offset
 
       start_time = [start_time, start_at].max if start_at
       end_time = [end_time, end_at].min if end_at

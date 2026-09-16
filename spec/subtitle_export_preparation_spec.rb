@@ -80,7 +80,8 @@ RSpec.describe VideoEncoder::SubtitleExportPreparation do
       subtitle_tracks_by_source: {
         source => normal_track
       },
-      audio_output_tracks: []
+      audio_output_tracks: [],
+      rendered_video_path: 'tmp/video.mkv'
     )
 
     expect(result).to eq(
@@ -110,7 +111,8 @@ RSpec.describe VideoEncoder::SubtitleExportPreparation do
         subtitle_tracks_by_source: {
           source => normal_track
         },
-        audio_output_tracks: []
+        audio_output_tracks: [],
+        rendered_video_path: 'tmp/video.mkv'
       )
     end.to raise_error(
       VideoEncoder::CcextractorOcr::TechnicalFailure

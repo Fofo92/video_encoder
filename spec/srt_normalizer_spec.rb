@@ -123,4 +123,38 @@ RSpec.describe VideoEncoder::SrtNormalizer do
     expect(normalized).to include('Sous-titre valide.')
     expect(normalized).not_to include('Sous-titre invalide.')
   end
+
+  it 'selects an input interval before shifting timestamps' do
+    srt = <<~SRT
+      1
+      00:00:09,000 --> 00:00:09,800
+      Sous-titre du segment précédent.
+
+      2
+      00:00:13,000 --> 00:00:15,000
+      Sous-titre du segment courant.
+
+    SRT
+
+    normalized = described_class.new.call(
+      srt,
+      offset: -2,
+      input_start_at: 10,
+      input_end_at: 20,
+      start_at: 10,
+      end_at: 20
+    )
+
+    expect(normalized).not_to include(
+      'Sous-titre du segment précédent.'
+    )
+
+    expect(normalized).to include(
+      'Sous-titre du segment courant.'
+    )
+
+    expect(normalized).to include(
+      '00:00:11,000 --> 00:00:13,000'
+    )
+  end
 end

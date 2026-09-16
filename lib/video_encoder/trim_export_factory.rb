@@ -60,7 +60,10 @@ module VideoEncoder
           runner: runner,
           executable: ccextractor_executable
         ),
-        normalizer: SrtNormalizer.new,
+        synchronization_probe:
+          build_subtitle_synchronization_probe,
+        timeline_normalizer:
+          build_subtitle_timeline_normalizer,
         reader: File,
         synchronization_delay: synchronization_delay
       )
@@ -69,6 +72,38 @@ module VideoEncoder
         processor: processor,
         composer: SrtComposer.new,
         workspace: workspace
+      )
+    end
+
+    def build_subtitle_synchronization_probe
+      SubtitleSegmentSynchronizationProbe.new(
+        timeline_probe: VideoTimelineOffsetProbe.new(
+          extractor: build_video_frame_sequence_extractor,
+          correlator: VideoTimelineCorrelator.new(
+            frame_rate: 25,
+            maximum_shift_seconds: 3.0
+          ),
+          sample_duration_seconds: 12.0
+        ),
+        correction: SubtitleSynchronizationCorrection.new(
+          minimum_confidence: 0.95
+        )
+      )
+    end
+
+    def build_video_frame_sequence_extractor
+      VideoFrameSequenceExtractor.new(
+        width: 32,
+        height: 18,
+        frame_rate: 25,
+        seek_preroll_seconds: 5.0
+      )
+    end
+
+    def build_subtitle_timeline_normalizer
+      SubtitleTimelineNormalizer.new(
+        normalizer: SrtNormalizer.new,
+        composer: SrtComposer.new
       )
     end
   end
