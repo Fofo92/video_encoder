@@ -32,22 +32,27 @@ module VideoEncoder
         output_track.complete_for?(sources)
       end
 
-      subtitle_path, selected_audio_tracks = SubtitleExportPreparation.new(
-        exporter: subtitle_exporter,
-        progress_reporter: progress_reporter
-      ).call(
-        trim_project: trim_project,
-        video_tracks_by_source: video_tracks_by_source,
-        subtitle_tracks_by_source: subtitle_tracks_by_source,
-        audio_output_tracks: selected_audio_tracks
+      total_steps = total_steps_for(
+        selected_audio_tracks
       )
-
-      total_steps = total_steps_for(selected_audio_tracks)
 
       render_video(
         trim_project,
         video_tracks_by_source,
         total_steps
+      )
+
+      subtitle_path, selected_audio_tracks = SubtitleExportPreparation.new(
+        exporter: subtitle_exporter,
+        progress_reporter: progress_reporter
+      ).call(
+        trim_project: trim_project,
+        video_tracks_by_source:
+          video_tracks_by_source,
+        subtitle_tracks_by_source:
+          subtitle_tracks_by_source,
+        audio_output_tracks:
+          selected_audio_tracks
       )
 
       audio_inputs = render_audio_tracks(
@@ -66,7 +71,6 @@ module VideoEncoder
         output_path: output_path
       }
       args[:subtitle_path] = subtitle_path if subtitle_path
-
       @remuxer.remux(**args)
     end
 
@@ -88,7 +92,7 @@ module VideoEncoder
     def render_video(trim_project, video_tracks_by_source, total_steps)
       report_progress(
         :video,
-        step: subtitle_exporter ? 2 : 1,
+        step: 1,
         total: total_steps
       )
 

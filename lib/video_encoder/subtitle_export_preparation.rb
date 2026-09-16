@@ -18,7 +18,7 @@ module VideoEncoder
 
       progress_reporter&.call(
         stage: :subtitles,
-        step: 1,
+        step: 2,
         total: audio_output_tracks.length + 3
       )
 

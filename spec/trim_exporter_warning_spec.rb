@@ -134,7 +134,7 @@ RSpec.describe VideoEncoder::TrimExporter, 'subtitle warnings' do
       output_path: 'movie.mkv'
     )
 
-    expect(steps).to eq(%i[subtitles video audio remux])
+    expect(steps).to eq(%i[video subtitles audio remux])
     expect(renderer).to have_received(:render_audio).with(
       project_path: 'tmp/project.mlt',
       output_path: 'tmp/french.mka'
