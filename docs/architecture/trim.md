@@ -202,24 +202,55 @@ DVB dans Matroska.
 
 Pour chaque groupe continu de segments admissibles :
 
-1. `FfmpegSubtitleSegmentExtractor` produit un transport vidéo et DVB pour
-   chaque segment ;
-2. `FfmpegSubtitleProjectConcatenator` place ces transports sur la chronologie
-   du projet ;
-3. `CcextractorOcr` effectue une seule passe OCR sur le transport concaténé ;
-4. `SrtNormalizer` retire les balises de présentation et borne les événements ;
-5. `SrtComposer` rassemble et renumérote les résultats ;
-6. `FfmpegRemuxer` ajoute la piste SubRip française au média final.
+1. `TrimExporter` rend d’abord la vidéo finale avec MLT ;
+2. `FfmpegSubtitleSegmentExtractor` produit un transport vidéo et DVB pour chaque segment ;
+3. `SubtitleSegmentSynchronizationProbe` mesure la position temporelle du segment dans la vidéo
+   finale et dans son transport intermédiaire ;
+4. `FfmpegSubtitleProjectConcatenator` place les transports sur la chronologie du projet ;
+5. `CcextractorOcr` effectue une seule passe OCR sur le transport concaténé ;
+6. `SubtitleTimelineNormalizer` applique la correction propre à chaque segment, borne les événements
+   et délègue leur nettoyage à `SrtNormalizer` ;
+7. `SrtComposer` rassemble et renumérote les résultats ;
+8. `FfmpegRemuxer` ajoute la piste SubRip française au média final.
 
-Le traitement OCR est effectué sur un transport intermédiaire placé sur la
-chronologie du montage. Sa synchronisation doit être vérifiée sur les médias
-traités : elle ne peut pas être déduite du seul succès de CCExtractor.
+### Synchronisation par segment
 
-Lors d’un diagnostic, l’OCR direct d’un enregistrement original produisait
-un SRT en avance d’environ dix secondes. L’export d’un extrait de trois minutes
-par la chaîne de montage ne présentait pas ce décalage important. Ce résultat
-ne justifie ni une compensation globale de dix secondes, ni une garantie
-générale de synchronisation sur les montages longs.
+La synchronisation n’est pas déduite des seuls horodatages déclarés par les conteneurs. Certains
+enregistrements DVB et certains rendus MLT présentent un décalage effectif qui dépend de la source et de
+son décodage.
+
+Pour chaque segment, `VideoTimelineOffsetProbe` compare des séquences d’images normalisées :
+
+- entre la source et la vidéo finale rendue ;
+- entre la source et le transport intermédiaire destiné à l’OCR.
+
+La correction des sous-titres est la différence entre ces deux alignements.
+Elle est donc propre au segment et ne constitue pas une compensation globale appliquée arbitrairement à
+tous les médias.
+
+Les comparaisons utilisent des images en niveaux de gris de 32 × 18 pixels à 25 images par seconde, sur un
+échantillon de douze secondes. Une prélecture de cinq secondes fiabilise le décodage des sources H.264.
+
+Une mesure n’est acceptée que si les deux corrélations atteignent une confiance minimale de 0,95. Lorsque
+le début d’un segment est visuellement peu discriminant, le système essaie successivement les positions 0,
+15, 30, 60 et 120 secondes, sans dépasser la durée disponible. Il s’arrête dès la première mesure
+suffisamment fiable. Si aucune position ne convient, l’export échoue au lieu d’appliquer une correction
+incertaine.
+
+`SubtitleTimelineNormalizer` applique ensuite chaque correction uniquement aux événements OCR
+appartenant à l’intervalle du segment correspondant. Cette restriction empêche un événement situé près
+d’une coupure de déborder dans le segment voisin.
+
+### Validation réelle
+
+Le mécanisme a été validé sur un montage DVB réel composé de trois segments.
+Les premier et troisième segments ont été corrélés dès leur début avec une confiance proche de 1. Le
+début du deuxième segment était ambigu (`0,837`) ; la mesure effectuée quinze secondes plus tard a
+atteint `1,000`.
+
+La correction obtenue était stable, de l’ordre de `−1,96 s` pour les trois segments. L’export complet a été
+contrôlé visuellement avant, entre et après les coupures : vidéo, audio et sous-titres étaient synchrones. Le
+workspace a ensuite été supprimé normalement.
 
 ## Erreurs et conservation des résultats
 
