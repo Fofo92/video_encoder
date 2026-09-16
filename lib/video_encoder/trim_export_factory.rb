@@ -87,7 +87,15 @@ module VideoEncoder
         ),
         correction: SubtitleSynchronizationCorrection.new(
           minimum_confidence: 0.95
-        )
+        ),
+        sample_offsets_seconds: [
+          0,
+          15,
+          30,
+          60,
+          120
+        ],
+        sample_duration_seconds: 12
       )
     end
 

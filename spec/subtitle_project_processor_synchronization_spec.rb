@@ -63,6 +63,7 @@ RSpec.describe VideoEncoder::SubtitleProjectProcessor do
         source_path: Pathname('/media/movie.m2t'),
         source_stream_index: 0,
         source_start_seconds: Rational(1_200, 1),
+        duration_seconds: 60,
         transport_path: '/tmp/subtitle_segment_1.ts',
         rendered_video_path: '/tmp/video.mkv',
         rendered_start_seconds: 60

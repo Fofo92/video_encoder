@@ -147,6 +147,8 @@ module VideoEncoder
             segment,
             video_track
           ),
+        duration_seconds:
+            transport.fetch(:duration),
         transport_path:
           transport.fetch(:path),
         rendered_video_path:

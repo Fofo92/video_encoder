@@ -99,7 +99,15 @@ RSpec.describe VideoEncoder::TrimExportFactory do
         ),
         correction: an_instance_of(
           VideoEncoder::SubtitleSynchronizationCorrection
-        )
+        ),
+        sample_offsets_seconds: [
+          0,
+          15,
+          30,
+          60,
+          120
+        ],
+        sample_duration_seconds: 12
       )
     end
   end
