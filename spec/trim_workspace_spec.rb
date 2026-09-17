@@ -4,6 +4,26 @@ require 'spec_helper'
 require 'tmpdir'
 
 RSpec.describe VideoEncoder::TrimWorkspace do
+  describe '.directory_for' do
+    it 'builds a workspace directory beside the output' do
+      expect(
+        described_class.directory_for('/exports/movie.mkv')
+      ).to eq(
+        '/exports/video_encoder_movie_workspace'
+      )
+    end
+
+    it 'sanitizes characters unsafe for an MLT project path' do
+      expect(
+        described_class.directory_for(
+          '/exports/question?fragment#percent%.mkv'
+        )
+      ).to eq(
+        '/exports/video_encoder_question_fragment_percent__workspace'
+      )
+    end
+  end
+
   describe '#write_mlt' do
     it 'writes the MLT project' do
       Dir.mktmpdir do |directory|

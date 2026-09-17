@@ -5,6 +5,22 @@ require 'fileutils'
 module VideoEncoder
   # Workspace for writing a trim project's MLT file.
   class TrimWorkspace
+    def self.directory_for(output_path)
+      expanded_output = File.expand_path(
+        output_path.to_s
+      )
+      basename = File.basename(
+        expanded_output,
+        File.extname(expanded_output)
+      )
+      safe_basename = basename.gsub(/[?#%]/, '_')
+
+      File.join(
+        File.dirname(expanded_output),
+        "video_encoder_#{safe_basename}_workspace"
+      )
+    end
+
     def initialize(directory:)
       @directory = directory
     end

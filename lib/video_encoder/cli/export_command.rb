@@ -43,7 +43,7 @@ module VideoEncoder
       def service_for(output_path)
         return @service if @service
 
-        workspace_directory = workspace_directory_for(output_path)
+        workspace_directory = TrimWorkspace.directory_for(output_path)
         FileUtils.mkdir_p(workspace_directory)
 
         @service = TrimProjectFileExportFactory.new(
@@ -57,20 +57,6 @@ module VideoEncoder
           )
         ).build(
           workspace_directory: workspace_directory
-        )
-      end
-
-      def workspace_directory_for(output_path)
-        expanded_output = File.expand_path(output_path)
-        basename = File.basename(
-          expanded_output,
-          File.extname(expanded_output)
-        )
-        safe_basename = basename.gsub(/[?#%]/, '_')
-
-        File.join(
-          File.dirname(expanded_output),
-          "video_encoder_#{safe_basename}_workspace"
         )
       end
 

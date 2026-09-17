@@ -21,7 +21,7 @@ module VideoEncoder
               "output already exists: #{job.output_path}"
       end
 
-      workspace_directory = workspace_directory_for(
+      workspace_directory = TrimWorkspace.directory_for(
         job.output_path
       )
 
@@ -38,21 +38,5 @@ module VideoEncoder
     private
 
     attr_reader :service_factory, :file, :filesystem
-
-    def workspace_directory_for(output_path)
-      expanded_output = File.expand_path(
-        output_path.to_s
-      )
-      basename = File.basename(
-        expanded_output,
-        File.extname(expanded_output)
-      )
-      safe_basename = basename.gsub(/[?#%]/, '_')
-
-      File.join(
-        File.dirname(expanded_output),
-        "video_encoder_#{safe_basename}_workspace"
-      )
-    end
   end
 end
