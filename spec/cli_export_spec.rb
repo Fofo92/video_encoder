@@ -186,5 +186,45 @@ RSpec.describe VideoEncoder::CLI do
 
       expect(FileUtils).not_to have_received(:mkdir_p)
     end
+
+    it 'sanitizes MLT-reserved characters in the workspace path' do
+      factory = instance_double(
+        VideoEncoder::TrimProjectFileExportFactory
+      )
+      service = instance_double(
+        VideoEncoder::ExportTrimProjectFile
+      )
+
+      allow(VideoEncoder::TrimProjectFileExportFactory)
+        .to receive(:new)
+        .and_return(factory)
+
+      allow(factory).to receive(:build)
+        .with(
+          workspace_directory:
+            '/exports/video_encoder_Esprit, es-tu là __workspace'
+        )
+        .and_return(service)
+
+      allow(service).to receive(:call)
+      allow(FileUtils).to receive(:mkdir_p)
+
+      cli = described_class.new(
+        [
+          'export',
+          '/projects/movie.json',
+          '--output',
+          '/exports/Esprit, es-tu là ?.mkv'
+        ],
+        dependency_checker: dependency_checker,
+        command_probe: command_probe
+      )
+
+      cli.run
+
+      expect(FileUtils).to have_received(:mkdir_p).with(
+        '/exports/video_encoder_Esprit, es-tu là __workspace'
+      )
+    end
   end
 end
