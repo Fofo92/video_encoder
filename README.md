@@ -228,6 +228,10 @@ Le workspace est créé à côté du fichier de sortie. Pour un fichier `montage
 `video_encoder_montage_workspace`. Il est supprimé après un export réussi et conservé lorsqu’une erreur
 interrompt le traitement.
 
+Les caractères `?`, `#` et `%` du nom de sortie sont remplacés par `_`uniquement dans le nom du workspace,
+car MLT ne peut pas charger de projet depuis certains chemins contenant ces caractères. Le nom du fichier
+MKV final reste inchangé.
+
 Avant de créer le workspace, la CLI exécute CCExtractor avec `--version`. Avec le lanceur fourni, cette
 sonde vérifie que Docker fonctionne et que l’image configurée peut démarrer. En cas d’échec, l’export
 s’arrête sans créer de média ni de workspace.
