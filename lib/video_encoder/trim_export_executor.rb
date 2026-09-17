@@ -47,10 +47,11 @@ module VideoEncoder
         expanded_output,
         File.extname(expanded_output)
       )
+      safe_basename = basename.gsub(/[?#%]/, '_')
 
       File.join(
         File.dirname(expanded_output),
-        "video_encoder_#{basename}_workspace"
+        "video_encoder_#{safe_basename}_workspace"
       )
     end
   end

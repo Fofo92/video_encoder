@@ -75,5 +75,34 @@ RSpec.describe VideoEncoder::TrimExportExecutor do
           'output already exists: /exports/movie.mkv'
         )
     end
+
+    it 'sanitizes MLT-reserved characters in the workspace path' do
+      special_job = VideoEncoder::TrimExportJob.new(
+        project_path: '/projects/movie.json',
+        output_path: '/exports/Esprit, es-tu là ?.mkv'
+      )
+
+      workspace_directory =
+        '/exports/video_encoder_Esprit, es-tu là __workspace'
+
+      allow(file).to receive(:exist?)
+        .with(special_job.output_path)
+        .and_return(false)
+
+      expect(filesystem).to receive(:mkdir_p)
+        .with(workspace_directory)
+
+      expect(service_factory).to receive(:build)
+        .with(workspace_directory: workspace_directory)
+        .and_return(service)
+
+      expect(service).to receive(:call)
+        .with(
+          project_path: '/projects/movie.json',
+          output_path: '/exports/Esprit, es-tu là ?.mkv'
+        )
+
+      executor.call(special_job)
+    end
   end
 end
