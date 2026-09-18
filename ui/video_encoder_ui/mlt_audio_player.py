@@ -38,15 +38,32 @@ class MltAudioPlayer:
         )
 
         self.is_playing = False
+        self.playback_start_position = 0
 
     @property
     def position(self):
-        return self.producer.position()
+        consumer_position = (
+            self.consumer.position()
+        )
+        producer_position = (
+            self.producer.position()
+        )
+
+        if (
+            consumer_position
+            < self.playback_start_position
+            or consumer_position
+            > producer_position
+        ):
+            return self.playback_start_position
+
+        return consumer_position
 
     def start(self, position):
         if self.is_playing:
             return
 
+        self.playback_start_position = position
         self.producer.set_speed(0)
         self.producer.seek(position)
 
@@ -58,7 +75,7 @@ class MltAudioPlayer:
         if not self.is_playing:
             return None
 
-        position = self.producer.position()
+        position = self.position
 
         self.producer.set_speed(0)
         self.consumer.stop()
