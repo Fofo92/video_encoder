@@ -1,10 +1,20 @@
 import unittest
 from unittest.mock import Mock
 
-from video_encoder_ui.mlt_audio_player import (
-    MltAudioPlayer,
-)
+try:
+    import mlt7
+except ModuleNotFoundError:
+    mlt7 = None
 
+if mlt7 is not None:
+    from video_encoder_ui.mlt_audio_player import (
+        MltAudioPlayer,
+    )
+
+@unittest.skipIf(
+    mlt7 is None,
+    "MLT Python bindings are unavailable",
+)
 
 class MltAudioPlayerTest(unittest.TestCase):
     def build_player(
