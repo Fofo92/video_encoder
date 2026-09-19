@@ -52,6 +52,43 @@ Le correctif a supprimé le crash observé. Il ne crée pas de sous-titres
 lorsqu’aucun texte n’a été extrait : CCExtractor peut alors terminer avec
 le code 10 et supprimer son fichier SRT vide.
 
+## Synchronisation de l’OCR avec la vidéo rendue
+
+Le pipeline manipule trois repères temporels distincts :
+
+- l’horloge de la piste DVB dans le transport intermédiaire ;
+- les horodatages SRT produits par CCExtractor après OCR ;
+- la chronologie de la vidéo rendue par MLT.
+
+CCExtractor peut produire deux formes d’horodatage selon le transport :
+
+- les horodatages OCR incluent déjà l’origine temporelle de la piste DVB ;
+- les horodatages OCR commencent avant cette origine et doivent être replacés sur l’horloge du
+  transport.
+
+`SubtitleTransportTimingProbe` lit avec FFprobe le `start_time` de la première piste de sous-titres du
+transport concaténé.
+
+`SubtitleOcrTimingCorrection` compare cette origine au premier horodatage du SRT OCR. Une tolérance
+de 80 ms absorbe les arrondis et les écarts de quelques images.
+
+Lorsque le SRT OCR inclut déjà l’origine, seule la correction d’alignement entre le transport et la vidéo
+rendue est appliquée.
+
+Lorsque l’origine est absente, la correction finale additionne :
+
+- l’origine de la piste DVB ;
+- la correction d’alignement vidéo ;
+- l’éventuel délai de synchronisation configuré.
+
+Le délai configuré reste appliqué une seule fois dans les deux situations.
+
+Une origine ou un horodatage OCR indisponible interrompt l’export au lieu d’appliquer une compensation
+arbitraire.
+
+Le comportement a été vérifié sur plusieurs extraits présentant les deux formes d’horodatage CCExtractor,
+ainsi que sur un extrait déjà synchronisé utilisé comme test de non-régression.
+
 ## Résultats de diagnostic
 
 Sur « 47 Meters Down », aucun texte exploitable n’a été extrait de la piste
