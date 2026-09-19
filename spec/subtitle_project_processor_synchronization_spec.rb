@@ -20,6 +20,10 @@ RSpec.describe VideoEncoder::SubtitleProjectProcessor do
       VideoEncoder::SubtitleSegmentSynchronizationProbe
     )
 
+    ocr_timing_correction = instance_double(
+      VideoEncoder::SubtitleOcrTimingCorrection
+    )
+
     timeline_normalizer = instance_double(
       VideoEncoder::SubtitleTimelineNormalizer
     )
@@ -57,6 +61,16 @@ RSpec.describe VideoEncoder::SubtitleProjectProcessor do
       .with('/tmp/subtitle_project_0.srt')
       .and_return("raw project srt\n")
 
+    allow(ocr_timing_correction)
+      .to receive(:call)
+      .with(
+        srt: "raw project srt\n",
+        transport_path:
+          '/tmp/subtitle_project_0.ts',
+        alignment_offset: -0.48
+      )
+      .and_return(2.58)
+
     allow(synchronization_probe)
       .to receive(:call)
       .with(
@@ -69,7 +83,7 @@ RSpec.describe VideoEncoder::SubtitleProjectProcessor do
         rendered_start_seconds: 60
       )
       .and_return(
-        offset_seconds: -1.96,
+        offset_seconds: -0.48,
         confidence: 0.99
       )
 
@@ -81,7 +95,7 @@ RSpec.describe VideoEncoder::SubtitleProjectProcessor do
         segments: [
           {
             duration: Rational(60, 1),
-            offset_seconds: -1.96
+            offset_seconds: 2.58
           }
         ]
       )
@@ -91,10 +105,9 @@ RSpec.describe VideoEncoder::SubtitleProjectProcessor do
       extractor: extractor,
       concatenator: concatenator,
       ocr: ocr,
-      synchronization_probe:
-        synchronization_probe,
-      timeline_normalizer:
-        timeline_normalizer,
+      ocr_timing_correction: ocr_timing_correction,
+      synchronization_probe: synchronization_probe,
+      timeline_normalizer: timeline_normalizer,
       reader: reader,
       synchronization_delay: 0
     )

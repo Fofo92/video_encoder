@@ -8,12 +8,20 @@ RSpec.describe VideoEncoder::SubtitleProjectProcessor do
       extractor: extractor,
       concatenator: concatenator,
       ocr: ocr,
+      ocr_timing_correction:
+        ocr_timing_correction,
       synchronization_probe:
         synchronization_probe,
       timeline_normalizer:
         timeline_normalizer,
       reader: reader,
       synchronization_delay: 0
+    )
+  end
+
+  let(:ocr_timing_correction) do
+    instance_double(
+      VideoEncoder::SubtitleOcrTimingCorrection
     )
   end
 
@@ -26,6 +34,7 @@ RSpec.describe VideoEncoder::SubtitleProjectProcessor do
   end
 
   let(:ocr) { instance_double(VideoEncoder::CcextractorOcr) }
+
   let(:synchronization_probe) do
     instance_double(
       VideoEncoder::SubtitleSegmentSynchronizationProbe
@@ -69,6 +78,16 @@ RSpec.describe VideoEncoder::SubtitleProjectProcessor do
         .to receive(:read)
         .with('/tmp/subtitle_project_0.srt')
         .and_return("raw project srt\n")
+
+      allow(ocr_timing_correction)
+        .to receive(:call)
+        .with(
+          srt: "raw project srt\n",
+          transport_path:
+            '/tmp/subtitle_project_0.ts',
+          alignment_offset: 0
+        )
+        .and_return(0)
 
       allow(synchronization_probe)
         .to receive(:call)

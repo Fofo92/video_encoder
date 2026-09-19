@@ -7,6 +7,7 @@ module VideoEncoder
       extractor:,
       concatenator:,
       ocr:,
+      ocr_timing_correction:,
       synchronization_probe:,
       timeline_normalizer:,
       reader:,
@@ -15,6 +16,7 @@ module VideoEncoder
       @extractor = extractor
       @concatenator = concatenator
       @ocr = ocr
+      @ocr_timing_correction = ocr_timing_correction
       @synchronization_probe = synchronization_probe
       @timeline_normalizer = timeline_normalizer
       @reader = reader
@@ -51,8 +53,23 @@ module VideoEncoder
         output_path: srt_path
       )
 
+      raw_srt = reader.read(srt_path)
+
+      corrections = corrections.map do |correction|
+        correction.merge(
+          offset_seconds:
+            ocr_timing_correction.call(
+              srt: raw_srt,
+              transport_path: transport_path,
+              alignment_offset:
+                correction.fetch(:offset_seconds)
+            ) +
+              synchronization_delay
+        )
+      end
+
       timeline_normalizer.call(
-        reader.read(srt_path),
+        raw_srt,
         timeline_start: timeline_start,
         segments: corrections
       )
@@ -66,7 +83,8 @@ module VideoEncoder
                 :reader,
                 :synchronization_delay,
                 :synchronization_probe,
-                :timeline_normalizer
+                :timeline_normalizer,
+                :ocr_timing_correction
 
     def extract_segment(item)
       segment = item.fetch(:segment)
@@ -123,8 +141,7 @@ module VideoEncoder
         {
           duration: transport.fetch(:duration),
           offset_seconds:
-            correction.fetch(:offset_seconds) +
-              synchronization_delay
+            correction.fetch(:offset_seconds)
         }
       end
     end

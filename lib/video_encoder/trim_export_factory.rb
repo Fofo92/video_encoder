@@ -60,6 +60,12 @@ module VideoEncoder
           runner: runner,
           executable: ccextractor_executable
         ),
+        ocr_timing_correction:
+          SubtitleOcrTimingCorrection.new(
+            timing_probe:
+              SubtitleTransportTimingProbe.new,
+            tolerance_seconds: 0.08
+          ),
         synchronization_probe:
           build_subtitle_synchronization_probe,
         timeline_normalizer:
