@@ -7,12 +7,14 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
     refresh_requested = QtCore.Signal()
     start_requested = QtCore.Signal()
     retry_requested = QtCore.Signal(object)
+    stop_requested = QtCore.Signal()
 
     STATUS_LABELS = {
         "queued": "En attente",
         "running": "En cours",
         "done": "Terminé",
         "failed": "Échec",
+        "interrupted": "Interrompu",
     }
 
     HEADERS = (
@@ -95,8 +97,8 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         )
         self.error_details.setReadOnly(True)
         self.error_details.setPlaceholderText(
-            "Sélectionne un travail en échec "
-            "pour afficher son erreur."
+            "Sélectionne un travail en échec ou "
+            "interrompu pour afficher le détail."
         )
         self.error_details.setMaximumHeight(110)
         layout.addWidget(self.error_details)
@@ -120,6 +122,15 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         )
         self.start_button.clicked.connect(
             self.start_requested
+        )
+
+        self.stop_button = buttons.addButton(
+            "Interrompre la file",
+            QtWidgets.QDialogButtonBox.ButtonRole.ActionRole,
+        )
+        self.stop_button.setEnabled(False)
+        self.stop_button.clicked.connect(
+            self.stop_requested
         )
 
         self.retry_button = buttons.addButton(
@@ -169,13 +180,13 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             self.refresh_timer.stop()
 
         self.update_start_button()
+        self.update_stop_button()
 
     def update_start_button(self):
         has_queued_jobs = any(
             job.get("status") == "queued"
             for job in self.jobs
         )
-
         self.start_button.setEnabled(
             has_queued_jobs
             and not self.running
@@ -184,6 +195,11 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             "File en cours…"
             if self.running
             else "Lancer la file"
+        )
+
+    def update_stop_button(self):
+        self.stop_button.setEnabled(
+            self.running
         )
 
     def selected_job(self):
@@ -207,7 +223,8 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
         self.retry_button.setEnabled(
             job is not None
-            and job.get("status") == "failed"
+            and job.get("status")
+            in ("failed", "interrupted")
         )
 
     def request_selected_retry(self):
@@ -215,7 +232,8 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
         if (
             job is not None
-            and job.get("status") == "failed"
+            and job.get("status")
+            in ("failed", "interrupted")
         ):
             self.retry_requested.emit(job)
 
@@ -229,25 +247,6 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.error_details.setPlainText(
             job.get("error") or ""
         )
-
-    # def update_error_details(self):
-    #     selected_rows = (
-    #         self.jobs_table.selectionModel()
-    #         .selectedRows()
-    #     )
-
-    #     if not selected_rows:
-    #         self.error_details.clear()
-    #         return
-
-    #     row = selected_rows[0].row()
-
-    #     if not 0 <= row < len(self.jobs):
-    #         self.error_details.clear()
-    #         return
-
-    #     error = self.jobs[row].get("error") or ""
-    #     self.error_details.setPlainText(error)
 
     def add_job(self, job):
         row = self.jobs_table.rowCount()

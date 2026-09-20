@@ -27,11 +27,43 @@ RSpec.describe VideoEncoder::CLI::RunTrimExportsCommand do
     )
   end
 
+  let(:recovery) do
+    instance_double(
+      VideoEncoder::StaleTrimExportRecovery
+    )
+  end
+
   before do
     allow(dependency_checker).to receive(:call)
     allow(command_probe).to receive(:call)
     allow(worker).to receive(:run_once)
     allow(worker).to receive(:run)
+    allow(recovery).to receive(:call)
+      .and_return(true)
+  end
+
+  it 'refuses to start while another worker is active' do
+    allow(recovery).to receive(:call)
+      .and_return(false)
+
+    command = described_class.new(
+      argv: ['--once'],
+      repo: repo,
+      dependency_checker: dependency_checker,
+      command_probe: command_probe,
+      recovery: recovery,
+      worker: worker
+    )
+
+    expect do
+      command.run
+    end.to raise_error(
+      SystemExit,
+      'trim export worker is already running'
+    )
+
+    expect(worker).not_to have_received(:run_once)
+    expect(worker).not_to have_received(:run)
   end
 
   it 'processes the queued exports once' do
@@ -40,6 +72,7 @@ RSpec.describe VideoEncoder::CLI::RunTrimExportsCommand do
       repo: repo,
       dependency_checker: dependency_checker,
       command_probe: command_probe,
+      recovery: recovery,
       worker: worker
     )
 
@@ -55,6 +88,7 @@ RSpec.describe VideoEncoder::CLI::RunTrimExportsCommand do
       repo: repo,
       dependency_checker: dependency_checker,
       command_probe: command_probe,
+      recovery: recovery,
       worker: worker
     )
 
@@ -64,12 +98,29 @@ RSpec.describe VideoEncoder::CLI::RunTrimExportsCommand do
     expect(worker).not_to have_received(:run_once)
   end
 
+  it 'recovers stale exports before processing' do
+    command = described_class.new(
+      argv: ['--once'],
+      repo: repo,
+      dependency_checker: dependency_checker,
+      command_probe: command_probe,
+      recovery: recovery,
+      worker: worker
+    )
+
+    expect(recovery).to receive(:call).ordered
+    expect(worker).to receive(:run_once).ordered
+
+    command.run
+  end
+
   it 'rejects unsupported arguments' do
     command = described_class.new(
       argv: ['unexpected'],
       repo: repo,
       dependency_checker: dependency_checker,
       command_probe: command_probe,
+      recovery: recovery,
       worker: worker
     )
 

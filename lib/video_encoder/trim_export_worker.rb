@@ -48,6 +48,13 @@ module VideoEncoder
 
       repo.mark_done(job)
       log("Done trim export #{job.id}")
+    rescue Interrupt
+      repo.mark_interrupted(
+        job,
+        'trim export interrupted'
+      )
+      log("Interrupted trim export #{job.id}")
+      raise
     rescue StandardError => e
       repo.mark_failed(job, e.message)
       log(

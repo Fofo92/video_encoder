@@ -19,6 +19,9 @@ class TrimExportQueueController:
         self.runner.succeeded.connect(
             self.succeeded
         )
+        self.runner.interrupted.connect(
+            self.interrupted
+        )
         self.runner.failed.connect(
             self.failed
         )
@@ -50,6 +53,10 @@ class TrimExportQueueController:
         )
         dialog.start_requested.connect(
             lambda: self.start(dialog)
+        )
+
+        dialog.stop_requested.connect(
+            lambda: self.stop(dialog)
         )
 
         dialog.retry_requested.connect(
@@ -85,10 +92,10 @@ class TrimExportQueueController:
             "Relancer le montage",
             (
                 "Créer un nouveau travail à partir "
-                "du montage en échec ?\n\n"
+                "du montage non terminé ?\n\n"
                 f"Projet : {job['input_path']}\n"
                 f"Sortie : {job['output_path']}\n\n"
-                "Le travail en échec restera dans "
+                "Le travail précédent restera dans "
                 "l’historique."
             ),
             (
@@ -132,6 +139,38 @@ class TrimExportQueueController:
 
         dialog.set_running(True)
 
+    def stop(self, dialog):
+        answer = QtWidgets.QMessageBox.question(
+            self.parent,
+            "Interrompre la file",
+            (
+                "Interrompre le montage en cours ?\n\n"
+                "Le travail courant sera marqué comme "
+                "interrompu. Les autres montages "
+                "resteront en attente."
+            ),
+            (
+                QtWidgets.QMessageBox.StandardButton.Yes
+                | QtWidgets.QMessageBox.StandardButton.No
+            ),
+            QtWidgets.QMessageBox.StandardButton.No,
+        )
+
+        if (
+            answer
+            != QtWidgets.QMessageBox.StandardButton.Yes
+        ):
+            return
+
+        try:
+            self.runner.stop()
+        except RuntimeError as error:
+            QtWidgets.QMessageBox.warning(
+                self.parent,
+                "Interruption impossible",
+                str(error),
+            )
+
     def succeeded(self):
         dialog = self.dialog
 
@@ -145,6 +184,22 @@ class TrimExportQueueController:
             (
                 "Tous les montages en attente "
                 "ont été traités."
+            ),
+        )
+
+    def interrupted(self):
+        dialog = self.dialog
+
+        if dialog is not None:
+            dialog.set_running(False)
+            self.refresh(dialog)
+
+        QtWidgets.QMessageBox.information(
+            self.parent,
+            "File interrompue",
+            (
+                "Le montage en cours a été interrompu. "
+                "Les autres montages restent en attente."
             ),
         )
 

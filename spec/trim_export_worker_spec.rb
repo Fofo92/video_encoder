@@ -83,5 +83,26 @@ RSpec.describe VideoEncoder::TrimExportWorker do
 
       worker.run_once
     end
+
+    it 'marks the current job as interrupted and stops' do
+      allow(repo).to receive(:mark_running)
+
+      allow(executor).to receive(:call)
+        .with(job)
+        .and_raise(Interrupt)
+
+      expect(repo).to receive(:mark_interrupted)
+        .with(
+          job,
+          'trim export interrupted'
+        )
+
+      expect(repo).not_to receive(:mark_done)
+      expect(repo).not_to receive(:mark_failed)
+
+      expect do
+        worker.run_once
+      end.to raise_error(Interrupt)
+    end
   end
 end

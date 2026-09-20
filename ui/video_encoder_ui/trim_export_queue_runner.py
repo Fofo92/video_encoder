@@ -1,23 +1,28 @@
+import os
+import signal
 from pathlib import Path
-
 from PySide6 import QtCore
 
 
 DEFAULT_INHIBITOR_EXECUTABLE = Path(
     "/usr/bin/systemd-inhibit"
 )
-
+DEFAULT_SESSION_EXECUTABLE = Path(
+    "/usr/bin/setsid"
+)
 
 class TrimExportQueueRunner(QtCore.QObject):
     status_changed = QtCore.Signal(str)
     output_received = QtCore.Signal(str)
     succeeded = QtCore.Signal()
+    interrupted = QtCore.Signal()
     failed = QtCore.Signal(str)
 
     def __init__(
         self,
         executable=None,
         inhibitor_executable=None,
+        session_executable=None,
         ccextractor_executable=None,
     ):
         super().__init__()
@@ -52,6 +57,15 @@ class TrimExportQueueRunner(QtCore.QObject):
                 DEFAULT_INHIBITOR_EXECUTABLE
             )
 
+        if (
+            session_executable is None
+            and uses_default_executable
+            and DEFAULT_SESSION_EXECUTABLE.is_file()
+        ):
+            session_executable = (
+                DEFAULT_SESSION_EXECUTABLE
+            )
+
         self.executable = Path(executable)
         self.ccextractor_executable = Path(
             ccextractor_executable
@@ -62,8 +76,15 @@ class TrimExportQueueRunner(QtCore.QObject):
             else None
         )
 
+        self.session_executable = (
+            Path(session_executable)
+            if session_executable is not None
+            else None
+        )
+
         self.standard_error = ""
         self.completed = False
+        self.stop_requested = False
 
         self.process = QtCore.QProcess(self)
         self.process.setProcessChannelMode(
@@ -97,6 +118,7 @@ class TrimExportQueueRunner(QtCore.QObject):
 
         self.standard_error = ""
         self.completed = False
+        self.stop_requested = False
 
         environment = (
             QtCore.QProcessEnvironment.systemEnvironment()
@@ -126,11 +148,49 @@ class TrimExportQueueRunner(QtCore.QObject):
             ]
             program = self.inhibitor_executable
 
+        if self.session_executable is not None:
+            arguments = [
+                str(program),
+                *arguments,
+            ]
+            program = self.session_executable
+
         self.process.setProgram(str(program))
         self.process.setArguments(arguments)
 
         self.status_changed.emit("running")
         self.process.start()
+
+    def stop(self):
+        if not self.is_running:
+            raise RuntimeError(
+                "the trim export queue is not running"
+            )
+
+        if self.session_executable is None:
+            raise RuntimeError(
+                "the trim export queue has no "
+                "dedicated process session"
+            )
+
+        process_id = int(self.process.processId())
+
+        if process_id <= 0:
+            raise RuntimeError(
+                "the trim export queue has not started"
+            )
+
+        try:
+            os.killpg(
+                process_id,
+                signal.SIGINT,
+            )
+        except OSError as error:
+            raise RuntimeError(
+                "could not interrupt the trim export queue"
+            ) from error
+
+        self.stop_requested = True
 
     def read_standard_output(self):
         output = bytes(
@@ -158,6 +218,12 @@ class TrimExportQueueRunner(QtCore.QObject):
     ):
         self.read_standard_output()
         self.read_standard_error()
+
+        if self.stop_requested:
+            self.completed = True
+            self.status_changed.emit("interrupted")
+            self.interrupted.emit()
+            return
 
         if (
             exit_status

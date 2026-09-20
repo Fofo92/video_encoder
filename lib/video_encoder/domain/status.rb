@@ -6,5 +6,6 @@ module VideoEncoder
     RUNNING = 'running'
     DONE    = 'done'
     FAILED  = 'failed'
+    INTERRUPTED = 'interrupted'
   end
 end

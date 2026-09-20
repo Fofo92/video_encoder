@@ -30,10 +30,27 @@ module VideoEncoder
         build_job(row)
       end
 
-      def mark_running(job)
+      def running(kind:)
+        @jobs
+          .where(
+            status: Status::RUNNING,
+            kind: kind
+          )
+          .order(:id)
+          .all
+          .map do |row|
+            build_job(row)
+          end
+      end
+
+      def mark_running(
+        job,
+        worker_pid: Process.pid
+      )
         @jobs.where(job_id: job.id).update(
           status: Status::RUNNING,
           started_at: Time.now,
+          worker_pid: worker_pid,
           attempts: Sequel[:attempts] + 1
         )
       end
@@ -41,6 +58,7 @@ module VideoEncoder
       def mark_done(job)
         @jobs.where(job_id: job.id).update(
           status: Status::DONE,
+          worker_pid: nil,
           finished_at: Time.now
         )
       end
@@ -50,7 +68,18 @@ module VideoEncoder
           status: Status::FAILED,
           error: error,
           finished_at: Time.now,
+          worker_pid: nil,
           attempts: Sequel[:attempts] # pas d'incrément ici
+        )
+      end
+
+      def mark_interrupted(job, error)
+        @jobs.where(job_id: job.id).update(
+          status: Status::INTERRUPTED,
+          error: error,
+          finished_at: Time.now,
+          worker_pid: nil,
+          attempts: Sequel[:attempts]
         )
       end
 
@@ -61,6 +90,7 @@ module VideoEncoder
           error: nil,
           started_at: nil,
           finished_at: nil,
+          worker_pid: nil,
           created_at: Time.now
         )
       end
@@ -115,7 +145,8 @@ module VideoEncoder
           created_at: row[:created_at],
           started_at: row[:started_at],
           finished_at: row[:finished_at],
-          error: row[:error]
+          error: row[:error],
+          worker_pid: row[:worker_pid]
         }
 
         case row[:kind]

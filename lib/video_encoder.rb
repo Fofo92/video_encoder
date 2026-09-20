@@ -26,6 +26,7 @@ require_relative 'video_encoder/encoding_monitor'
 require_relative 'video_encoder/encoding_monitor_factory'
 
 require_relative 'video_encoder/worker'
+require_relative 'video_encoder/stale_trim_export_recovery'
 require_relative 'video_encoder/trim_export_worker'
 require_relative 'video_encoder/cli'
 require_relative 'video_encoder/loggable'

@@ -14,6 +14,7 @@ module VideoEncoder
         repo:,
         dependency_checker:,
         command_probe:,
+        recovery: nil,
         worker: nil,
         logger: Logger.new($stdout)
       )
@@ -21,12 +22,18 @@ module VideoEncoder
         @repo = repo
         @dependency_checker = dependency_checker
         @command_probe = command_probe
+        @recovery = recovery
         @worker = worker
         @logger = logger
       end
 
       def run
         validate_arguments
+        unless recovery.call
+          abort(
+            'trim export worker is already running'
+          )
+        end
         check_dependencies
 
         if argv == ['--once']
@@ -62,6 +69,12 @@ module VideoEncoder
         command_probe.call(
           ccextractor_executable,
           '--version'
+        )
+      end
+
+      def recovery
+        @recovery ||= StaleTrimExportRecovery.new(
+          repo: repo
         )
       end
 

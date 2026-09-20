@@ -114,11 +114,24 @@ La file graphique utilise la même base SQLite et les mêmes travaux que la CLI 
 - de consulter les montages préparés et leur état ;
 - d’ajouter plusieurs projets sans les lancer immédiatement ;
 - de démarrer ultérieurement leur exécution séquentielle ;
+- d’interrompre explicitement le montage en cours sans lancer les suivants ;
 - d’actualiser automatiquement l’affichage pendant une exécution ;
-- de conserver le nombre de tentatives et le diagnostic des échecs.
+- de conserver le nombre de tentatives et le diagnostic des échecs ou interruptions ;
+- de créer une nouvelle tentative depuis un travail échoué ou interrompu.
 
 Les exports ne sont pas exécutés en parallèle. Un montage ajouté pendant l’exécution reste disponible 
 pour un traitement ultérieur selon l’étendue du lancement en cours.
+
+La file s’exécute dans une session Unix dédiée. Une interruption confirmée envoie `SIGINT` à tout le
+groupe de processus afin d’arrêter également FFmpeg, MLT, Docker et CCExtractor. Le travail courant
+prend alors le statut `interrupted`, tandis que les autres travaux conservent le statut `queued`.
+
+Chaque travail en cours mémorise le PID de son worker. Au démarrage suivant, un travail resté `running`
+dont le PID n’existe plus est reclassé `interrupted` avec un diagnostic d’arrêt inattendu. Un PID encore
+actif empêche le lancement d’un second worker.
+
+La relance depuis l’interface crée un nouveau travail. Le travail interrompu ou échoué reste dans
+l’historique avec son diagnostic et son nombre de tentatives.
 
 Lorsque la file est lancée depuis la fenêtre d’accueil, l’ouverture d’un éditeur et la fermeture de l’application 
 sont désactivées jusqu’à la fin du processus.
@@ -127,11 +140,9 @@ sont désactivées jusqu’à la fin du processus.
 
 Les prochaines évolutions de la file devront :
 
-- afficher le diagnostic complet d’un travail en échec ;
-- permettre sa relance explicite sans reprise automatique risquée ;
-- distinguer clairement l’échec historique de la nouvelle tentative ;
-- définir une politique contrôlée de validation puis de suppression des
-  sources TV après export réussi.
+- ajouter un verrou exclusif atomique avant qu’un orchestrateur externe tel que `vidb` puisse lancer
+  plusieurs workers simultanément ;
+- définir une politique contrôlée de validation puis de suppression des sources TV après export réussi.
 
 Le montage multi-source viendra ensuite compléter l’éditeur avec plusieurs
 sources, une couleur propre à chacune et des moniteurs adaptés, sans modifier

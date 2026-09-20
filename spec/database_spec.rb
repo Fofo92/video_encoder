@@ -17,7 +17,8 @@ RSpec.describe VideoEncoder::Persistence::Database do
           :kind,
           :source,
           :project_path,
-          :output_path
+          :output_path,
+          :worker_pid
         )
 
         database[:jobs].insert(

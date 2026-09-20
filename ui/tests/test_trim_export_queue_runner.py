@@ -1,4 +1,6 @@
+import signal
 import unittest
+from unittest.mock import Mock, patch
 
 try:
     from PySide6 import QtCore, QtWidgets
@@ -60,6 +62,123 @@ class TrimExportQueueRunnerTest(unittest.TestCase):
 
         runner.process.kill()
         self.wait_for_runner(runner)
+
+    def test_starts_the_queue_in_a_dedicated_session(self):
+        runner = TrimExportQueueRunner(
+            executable="/app/video_encoder",
+            inhibitor_executable="/usr/bin/systemd-inhibit",
+            session_executable="/usr/bin/setsid",
+            ccextractor_executable=(
+                "/app/video_encoder_ccextractor"
+            ),
+        )
+
+        runner.start()
+
+        self.assertEqual(
+            runner.process.program(),
+            "/usr/bin/setsid",
+        )
+        self.assertEqual(
+            runner.process.arguments(),
+            [
+                "/usr/bin/systemd-inhibit",
+                "--what=sleep",
+                "--who=video_encoder",
+                "--why=File d’export video_encoder en cours",
+                "--mode=block",
+                "/app/video_encoder",
+                "run-trim-exports",
+                "--once",
+            ],
+        )
+
+        runner.process.kill()
+        self.wait_for_runner(runner)
+
+    @patch(
+        "video_encoder_ui."
+        "trim_export_queue_runner.os.killpg"
+    )
+
+    def test_interrupts_the_process_group(
+        self,
+        kill_process_group,
+    ):
+        runner = TrimExportQueueRunner(
+            executable="/app/video_encoder",
+            session_executable="/usr/bin/setsid",
+            ccextractor_executable="/bin/true",
+        )
+        process = Mock()
+        process.state.return_value = (
+            QtCore.QProcess.ProcessState.Running
+        )
+        process.processId.return_value = 12_345
+        runner.process = process
+
+        runner.stop()
+
+        kill_process_group.assert_called_once_with(
+            12_345,
+            signal.SIGINT,
+        )
+        self.assertTrue(runner.stop_requested)
+
+    def test_refuses_to_stop_without_a_dedicated_session(
+        self
+    ):
+        runner = TrimExportQueueRunner(
+            executable="/app/video_encoder",
+            ccextractor_executable="/bin/true",
+        )
+        process = Mock()
+        process.state.return_value = (
+            QtCore.QProcess.ProcessState.Running
+        )
+        runner.process = process
+
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "dedicated process session",
+        ):
+            runner.stop()
+
+        self.assertFalse(runner.stop_requested)
+
+    def test_reports_a_requested_interruption(self):
+        statuses = []
+        interrupted = []
+
+        runner = TrimExportQueueRunner(
+            executable="/bin/false",
+            ccextractor_executable="/bin/true",
+        )
+        runner.status_changed.connect(
+            statuses.append
+        )
+        runner.interrupted.connect(
+            lambda: interrupted.append(True)
+        )
+        runner.stop_requested = True
+
+        runner.read_standard_output = Mock()
+        runner.read_standard_error = Mock()
+
+        runner.process_finished(
+            130,
+            QtCore.QProcess.ExitStatus.CrashExit,
+        )
+
+        self.assertEqual(
+            statuses,
+            ["interrupted"],
+        )
+        self.assertEqual(
+            interrupted,
+            [True],
+        )
+        self.assertTrue(runner.completed)
 
     def wait_for_runner(self, runner):
         self.assertTrue(

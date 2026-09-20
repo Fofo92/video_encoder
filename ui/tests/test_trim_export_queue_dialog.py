@@ -240,5 +240,82 @@ class TrimExportQueueDialogTest(unittest.TestCase):
 
         retry_requested.assert_called_once_with(job)
 
+    def test_displays_an_interrupted_job(self):
+        dialog = TrimExportQueueDialog(
+            [
+                {
+                    "id": "trim-1",
+                    "kind": "trim_export",
+                    "input_path": "movie.json",
+                    "output_path": "movie.mkv",
+                    "status": "interrupted",
+                    "attempts": 1,
+                    "error": "trim export interrupted",
+                }
+            ]
+        )
+
+        self.assertEqual(
+            dialog.jobs_table.item(0, 2).text(),
+            "Interrompu",
+        )
+
+    def test_requests_queue_interruption_while_running(
+        self
+    ):
+        dialog = TrimExportQueueDialog([])
+        stop_requested = Mock()
+        dialog.stop_requested.connect(
+            stop_requested
+        )
+
+        self.assertFalse(
+            dialog.stop_button.isEnabled()
+        )
+
+        dialog.set_running(True)
+
+        self.assertTrue(
+            dialog.stop_button.isEnabled()
+        )
+
+        dialog.stop_button.click()
+
+        stop_requested.assert_called_once_with()
+
+        dialog.set_running(False)
+
+        self.assertFalse(
+            dialog.stop_button.isEnabled()
+        )
+
+    def test_requests_retry_for_selected_interrupted_job(
+        self
+    ):
+        job = {
+            "id": "trim-1",
+            "kind": "trim_export",
+            "input_path": "movie.json",
+            "output_path": "movie.mkv",
+            "status": "interrupted",
+            "attempts": 1,
+            "error": "trim export interrupted",
+        }
+        dialog = TrimExportQueueDialog([job])
+        retry_requested = Mock()
+        dialog.retry_requested.connect(
+            retry_requested
+        )
+
+        dialog.jobs_table.selectRow(0)
+
+        self.assertTrue(
+            dialog.retry_button.isEnabled()
+        )
+
+        dialog.retry_button.click()
+
+        retry_requested.assert_called_once_with(job)
+
 if __name__ == "__main__":
     unittest.main()

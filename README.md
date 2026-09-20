@@ -162,6 +162,10 @@ L’interface permet actuellement :
 - de lancer, suivre et annuler l’export ;
 - d’ajouter un montage à une file persistante sans le lancer immédiatement ;
 - de consulter puis de lancer les exports séquentiels depuis l’accueil ;
+
+- d’interrompre le montage en cours en conservant les autres travaux en attente ;
+- de relancer explicitement un travail échoué ou interrompu sans effacer son historique ;
+
 - d’afficher les étapes mesurables ou non mesurables et les avertissements du moteur.
 
 Le ShuttleXpress est réservé exclusivement par l’interface pendant son exécution afin que sa couronne ne
@@ -170,9 +174,15 @@ fasse pas défiler les autres applications. Il est libéré à la fermeture.
 Lorsqu’un export est en cours et que `/usr/bin/systemd-inhibit` est disponible, la suspension et
 l’hibernation du système sont bloquées. L’extinction et le verrouillage de l’écran restent autorisés.
 
-La file des montages conserve dans SQLite l’état, le nombre de tentatives et le diagnostic de chaque travail. 
-Elle exécute les exports successivement, sans parallélisme. Lorsqu’elle est lancée depuis l’accueil, 
-l’ouverture d’un montage et la fermeture de l’application sont désactivées jusqu’à la fin du processus.
+La file des montages conserve dans SQLite l’état, le nombre de tentatives et le diagnostic de chaque
+travail. Elle exécute les exports successivement, sans parallélisme. Le travail courant peut être interrompu
+depuis l’interface ; l’ensemble de ses sous-processus est alors arrêté et son état devient `interrupted`,
+tandis que les travaux suivants restent en attente. Au lancement suivant, un ancien travail resté
+`running` sans processus propriétaire actif est également reclassé `interrupted`.
+
+Lorsqu’elle est lancée depuis l’accueil, l’ouverture d’un montage et la fermeture de l’application sont
+désactivées jusqu’à la fin ou à l’interruption du processus. Une relance crée un nouveau travail et conserve
+l’ancienne tentative dans l’historique.
 
 L’éditeur graphique est actuellement limité aux découpages mono-source et ne prend pas encore en
 charge les gaps présents dans un document persistant. Le moteur Ruby sait déjà exporter des montages

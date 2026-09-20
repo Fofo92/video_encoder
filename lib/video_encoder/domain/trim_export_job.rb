@@ -17,7 +17,8 @@ module VideoEncoder
                 :attempts,
                 :started_at,
                 :finished_at,
-                :error
+                :error,
+                :worker_pid
 
     def initialize(project_path:, output_path:, **kwargs)
       @id = kwargs.fetch(:id, nil) ||
@@ -42,6 +43,10 @@ module VideoEncoder
         nil
       )
       @error = kwargs.fetch(:error, nil)
+      @worker_pid = kwargs.fetch(
+        :worker_pid,
+        nil
+      )
     end
 
     def kind
@@ -62,6 +67,10 @@ module VideoEncoder
 
     def failed?
       status == Status::FAILED
+    end
+
+    def interrupted?
+      status == Status::INTERRUPTED
     end
 
     def start!
