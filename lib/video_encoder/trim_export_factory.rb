@@ -70,7 +70,7 @@ module VideoEncoder
           build_subtitle_synchronization_probe,
         timeline_normalizer:
           build_subtitle_timeline_normalizer,
-        reader: File,
+        reader: SubtitleTextReader.new,
         synchronization_delay: synchronization_delay
       )
 

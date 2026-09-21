@@ -41,6 +41,7 @@ RSpec.describe VideoEncoder::TrimExportFactory do
         VideoEncoder::VideoTimelineOffsetProbe,
         VideoEncoder::SubtitleSynchronizationCorrection,
         VideoEncoder::SubtitleOcrTimingCorrection,
+        VideoEncoder::SubtitleTextReader,
         VideoEncoder::SubtitleSegmentSynchronizationProbe
       ].each do |component|
         allow(component)
@@ -67,6 +68,10 @@ RSpec.describe VideoEncoder::TrimExportFactory do
         ),
         tolerance_seconds: 0.08
       )
+
+      expect(
+        VideoEncoder::SubtitleTextReader
+      ).to have_received(:new)
 
       expect(
         VideoEncoder::SubtitleTransportTimingProbe
