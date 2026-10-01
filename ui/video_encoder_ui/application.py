@@ -71,6 +71,8 @@ from .source_quarantine_controller import (
 PREVIEW_WIDTH = 640
 PREVIEW_HEIGHT = 360
 INITIAL_FRAME = 1500
+DEFAULT_SOURCE_DIRECTORY = Path("/commun/to_be_cut")
+DEFAULT_VIDEO_DIRECTORY = Path("/videos")
 
 SHUTTLE_DEVICE_PATH = (
     "/dev/input/by-id/"
@@ -1964,9 +1966,10 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         destination = self.project_path
 
         if destination is None:
-            suggested_path = Path(
-                self.source_path
-            ).with_suffix(".json")
+            suggested_path = (
+                DEFAULT_VIDEO_DIRECTORY
+                / self.source_path.with_suffix(".json").name
+            )
 
             selected_path, _selected_filter = (
                 QtWidgets.QFileDialog.getSaveFileName(
@@ -2031,38 +2034,12 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             )
             return
 
-        suggested_output = Path(
-            self.source_path
-        ).with_suffix(".mkv")
-
-        output_path, _selected_filter = (
-            QtWidgets.QFileDialog.getSaveFileName(
-                self,
-                "Exporter le montage",
-                str(suggested_output),
-                (
-                    "Vidéo Matroska (*.mkv);;"
-                    "Tous les fichiers (*)"
-                )
-            )
-        )
-
-        if not output_path:
-            return
-
-        project_path = self.project_path
-
-        if project_path is None:
-            project_path = Path(
-                output_path
-            ).with_suffix(".json")
-
-        project_path = self.write_project(
-            project_path
-        )
+        project_path = self.save_project()
 
         if project_path is None:
             return
+
+        output_path = Path(project_path).with_suffix(".mkv")
 
         self.pending_export_mode = (
             "queued"
@@ -2956,7 +2933,7 @@ def select_media_path():
         QtWidgets.QFileDialog.getOpenFileName(
             None,
             "Nouveau montage",
-            "",
+            str(DEFAULT_SOURCE_DIRECTORY),
             (
                 "Fichiers vidéo "
                 "(*.m2t *.mts *.ts *.mkv *.mp4);;"
@@ -3002,7 +2979,7 @@ def select_project_path():
         QtWidgets.QFileDialog.getOpenFileName(
             None,
             "Ouvrir un projet de découpage",
-            "",
+            str(DEFAULT_VIDEO_DIRECTORY),
             (
                 "Projets de montage (*.json);;"
                 "Tous les fichiers (*)"

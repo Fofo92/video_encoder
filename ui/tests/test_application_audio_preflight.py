@@ -39,7 +39,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
 
     def test_checks_audio_before_starting_the_export(self):
         project_path = Path("/projects/movie.json")
-        output_path = "/output/movie.mkv"
+        output_path = Path("/projects/movie.mkv")
 
         exporter = Mock(is_running=False)
         preflight = Mock(is_running=False)
@@ -51,19 +51,12 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             trim_project_exporter=exporter,
             audio_preflight_runner=preflight,
             pending_export=None,
-            write_project=Mock(return_value=project_path),
+            save_project=Mock(return_value=project_path),
         )
 
-        with patch(
-            "video_encoder_ui.application."
-            "QtWidgets.QFileDialog.getSaveFileName",
-            return_value=(output_path, ""),
-        ):
-            MltFrameMonitor.export_project(monitor)
+        MltFrameMonitor.export_project(monitor)
 
-        monitor.write_project.assert_called_once_with(
-            project_path
-        )
+        monitor.save_project.assert_called_once_with()
         preflight.start.assert_called_once_with(project_path)
         exporter.start.assert_not_called()
         self.assertEqual(
@@ -76,7 +69,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
         archived_project_path = Path(
             "/output/movie.json"
         )
-        output_path = "/output/movie.mkv"
+        output_path = Path("/projects/movie.mkv")
 
         exporter = Mock(is_running=False)
         preflight = Mock(is_running=False)
@@ -92,24 +85,17 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             audio_preflight_runner=preflight,
             trim_project_archiver=project_archiver,
             pending_export=None,
-            write_project=Mock(
+            save_project=Mock(
                 return_value=project_path
             ),
         )
 
-        with patch(
-            "video_encoder_ui.application."
-            "QtWidgets.QFileDialog.getSaveFileName",
-            return_value=(output_path, ""),
-        ):
-            MltFrameMonitor.export_project(
-                monitor,
-                queued=True,
-            )
-
-        monitor.write_project.assert_called_once_with(
-            project_path
+        MltFrameMonitor.export_project(
+            monitor,
+            queued=True,
         )
+
+        monitor.save_project.assert_called_once_with()
         project_archiver.archive.assert_not_called()
         preflight.start.assert_called_once_with(
             project_path
