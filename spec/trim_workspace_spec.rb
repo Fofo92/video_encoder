@@ -22,6 +22,16 @@ RSpec.describe VideoEncoder::TrimWorkspace do
         '/exports/video_encoder_question_fragment_percent__workspace'
       )
     end
+
+    it 'sanitizes characters unsafe for a Docker bind volume' do
+      expect(
+        described_class.directory_for(
+          '/exports/Meerkat: A Dynasties Special.mkv'
+        )
+      ).to eq(
+        '/exports/video_encoder_Meerkat_ A Dynasties Special_workspace'
+      )
+    end
   end
 
   describe '#write_mlt' do
