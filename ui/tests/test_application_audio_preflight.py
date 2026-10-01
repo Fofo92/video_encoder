@@ -11,6 +11,9 @@ except ModuleNotFoundError:
 
 if QtWidgets is not None:
     from video_encoder_ui.application import MltFrameMonitor
+    from video_encoder_ui.trim_export_queue_client import (
+        TrimExportQueueError,
+    )
 
 
 @unittest.skipIf(
@@ -314,6 +317,69 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
         self.assertIsNone(
             monitor.pending_export_mode
         )
+
+    def test_reports_an_error_when_queueing_fails(self):
+        project_path = Path("/projects/movie.json")
+        archived_project_path = Path(
+            "/output/movie.json"
+        )
+        output_path = "/output/movie.mkv"
+        exporter = Mock()
+        queue_client = Mock()
+        queue_client.enqueue.side_effect = (
+            TrimExportQueueError(
+                "output already exists: /output/movie.mkv"
+            )
+        )
+        project_archiver = Mock()
+        project_archiver.archive.return_value = (
+            archived_project_path
+        )
+        monitor = self.make_monitor(
+            trim_project_archiver=project_archiver,
+            trim_project_exporter=exporter,
+            trim_export_queue_client=queue_client,
+            pending_export=(project_path, output_path),
+            pending_export_mode="queued",
+            start_new_project_from_current_source=Mock(),
+        )
+
+        with (
+            patch(
+                "video_encoder_ui.application."
+                "QtWidgets.QMessageBox.question",
+                return_value=(
+                    QtWidgets.QMessageBox.StandardButton.Yes
+                ),
+            ),
+            patch(
+                "video_encoder_ui.application."
+                "QtWidgets.QMessageBox.warning"
+            ) as warning,
+        ):
+            MltFrameMonitor.audio_preflight_succeeded(
+                monitor,
+                {
+                    "audio_checks": [],
+                },
+            )
+
+        queue_client.enqueue.assert_called_once_with(
+            archived_project_path,
+            output_path,
+        )
+        monitor.export_status_changed.assert_called_with(
+            "failed"
+        )
+        warning.assert_called_once_with(
+            monitor,
+            "Mise en file impossible",
+            "output already exists: /output/movie.mkv",
+        )
+        exporter.start.assert_not_called()
+        monitor.start_new_project_from_current_source.assert_not_called()
+        self.assertIsNone(monitor.pending_export)
+        self.assertIsNone(monitor.pending_export_mode)
 
     def test_discards_pending_export_before_cancelling_preflight(self):
         preflight = Mock(is_running=True)

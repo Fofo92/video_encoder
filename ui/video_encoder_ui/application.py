@@ -32,6 +32,7 @@ from .trim_project_file_reader import (
 )
 from .trim_export_queue_client import (
     TrimExportQueueClient,
+    TrimExportQueueError,
 )
 from .trim_export_queue_dialog import (
     TrimExportQueueDialog,
