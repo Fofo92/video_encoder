@@ -2188,13 +2188,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
                 return
 
             self.export_status_changed("queued")
-            QtWidgets.QMessageBox.information(
-                self,
-                "Montage ajouté à la file",
-                (
-                    "Le montage sera exporté vers :\n"
-                    f"{output_path}"
-                ),
+            self.statusBar().showMessage(
+                f"Montage ajouté à la file : {output_path}",
+                5_000,
             )
             self.start_new_project_from_current_source()
             return

@@ -231,7 +231,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
         )
         self.assertIsNone(monitor.pending_export)
 
-    def test_enqueues_when_queue_mode_is_selected(self):
+    def test_enqueues_without_a_second_modal_confirmation(self):
         project_path = Path("/projects/movie.json")
         archived_project_path = Path(
             "/output/movie.json"
@@ -240,6 +240,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
         exporter = Mock()
         queue_client = Mock()
         project_archiver = Mock()
+        status_bar = Mock()
         project_archiver.archive.return_value = (
             archived_project_path
         )
@@ -251,6 +252,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             pending_export_mode="queued",
             start_new_project_from_current_source=Mock(),
             close=Mock(),
+            statusBar=Mock(return_value=status_bar),
         )
         report = {
             "version": 1,
@@ -288,13 +290,10 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
         monitor.export_status_changed.assert_called_with(
             "queued"
         )
-        information.assert_called_once_with(
-            monitor,
-            "Montage ajouté à la file",
-            (
-                "Le montage sera exporté vers :\n"
-                f"{output_path}"
-            ),
+        information.assert_not_called()
+        status_bar.showMessage.assert_called_once_with(
+            f"Montage ajouté à la file : {output_path}",
+            5_000,
         )
 
         monitor.start_new_project_from_current_source.assert_called_once_with()
