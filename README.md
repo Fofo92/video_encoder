@@ -1,28 +1,14 @@
 # Video Encoder
 
-Pipeline Ruby d’encodage et de montage vidéo, conçu principalement pour des enregistrements TNT.
+Application Ruby de montage et d’encodage vidéo, conçue principalement pour
+des enregistrements TNT.
 
-Le projet comporte actuellement deux chaînes complémentaires :
-
-- une file de travaux pour automatiser l’encodage, la vérification et l’archivage des médias ;
-- un domaine de montage non destructif capable d’assembler des segments issus de plusieurs sources.
+Elle permet de préparer un montage non destructif, de l’exporter immédiatement
+ou de l’ajouter à une file persistante d’exports séquentiels.
 
 ## Fonctionnalités
 
-### Encodage automatique
-
-- surveillance d’un répertoire d’entrée ;
-- mise en file des médias dans SQLite ;
-- encodage avec FFmpeg ;
-- sélection automatique des pistes vidéo, audio et de sous-titres ;
-- vérification du fichier produit ;
-- archivage de la source ;
-- suivi des travaux terminés ou en échec.
-
-Le profil fourni produit un fichier Matroska HEVC en 1280 × 720, avec désentrelacement et audio AAC. Il
-utilise `hevc_nvenc` par défaut et nécessite donc un FFmpeg compatible NVIDIA NVENC.
-
-### Montage multi-source
+### Montage et export
 
 Le domaine de montage permet :
 
@@ -41,8 +27,13 @@ Les segments consécutifs possédant des sous-titres sont d’abord concaténés
 CCExtractor effectue ensuite une seule passe OCR sur cet ensemble, ce qui évite les dérives d’horloge
 observées lors d’un traitement indépendant de chaque segment.
 
-Cette chaîne est exposée par le service `ExportTrimProject` construit par `TrimExportFactory`. Elle pourra
-ainsi être utilisée par une future interface graphique sans dépendre des scripts expérimentaux.
+Cette chaîne est exposée par le service `ExportTrimProject` construit par
+`TrimExportFactory`. La CLI, l’interface graphique et la file persistante
+utilisent les mêmes services applicatifs.
+
+Le profil fourni produit un fichier Matroska HEVC en 1280 × 720, avec
+désentrelacement et audio AAC. Il utilise `hevc_nvenc` par défaut et nécessite
+donc un FFmpeg compatible NVIDIA NVENC.
 
 ## Prérequis
 
@@ -201,14 +192,9 @@ Depuis le dépôt :
 ```bash
 bin/video_encoder version
 bin/video_encoder config
-bin/video_encoder enqueue /chemin/vers/un-media.m2t
 bin/video_encoder list
 bin/video_encoder status IDENTIFIANT
 bin/video_encoder failed
-bin/video_encoder run --once
-bin/video_encoder run
-bin/video_encoder watch --once
-bin/video_encoder watch
 bin/video_encoder enqueue-trim-export projet.json --output montage.mkv
 bin/video_encoder run-trim-exports --once
 bin/video_encoder list --json
@@ -216,11 +202,10 @@ bin/video_encoder preflight-audio projet.json
 bin/video_encoder inspect-media /chemin/vers/un-media.m2t
 ```
 
-- `run --once` traite un seul travail disponible. Sans `--once`, le worker continue à traiter la file jusqu’à son interruption.
 - `enqueue-trim-export` enregistre un projet de découpage dans la file persistante. `run-trim-exports `
   `--once` traite séquentiellement les montages actuellement en attente puis s’arrête.
-- `watch --once` effectue un seul balayage du répertoire d’entrée. Sans `--once`, la surveillance reste 
-  active.
+- `run-trim-exports` sans `--once` attend et traite les nouveaux montages
+  jusqu’à son interruption.
 
 ### Exporter un projet de montage
 
@@ -271,7 +256,6 @@ Un autre exécutable compatible peut également être fourni directement avec
 
 Avant de démarrer un traitement, la CLI vérifie les dépendances externes nécessaires à la commande :
 
-- `run` vérifie la présence de `ffmpeg` et `ffprobe` lorsque l’encodeur FFmpeg est configuré ;
 - `export` vérifie `ffmpeg`, `ffprobe`, `melt-7` et l’exécutable CCExtractor configuré, puis s’assure que ce
     dernier peut être exécuté avec `--version`.
 
@@ -350,6 +334,6 @@ utilisateur générique.
 
 Version actuelle : **0.2.0**
 
-Le pipeline d’encodage dispose d’une CLI. Le domaine de montage multi-source et son export sont 
-fonctionnels. L’interface mono-source et la file graphique d’exports sont opérationnelles. L’adaptation de 
-l’éditeur au montage multi-source reste à réaliser.
+Le domaine de montage multi-source et son export sont fonctionnels. L’interface
+mono-source et la file graphique d’exports sont opérationnelles. L’adaptation
+de l’éditeur au montage multi-source reste à réaliser.

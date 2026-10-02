@@ -4,8 +4,8 @@
 
 ### Contexte
 
-`video_encoder` manipule des objets métier (`Job`) dont l'état doit être
-persisté entre deux exécutions.
+`video_encoder` manipule des `TrimExportJob` dont l’état doit être conservé
+entre deux exécutions.
 
 Le reste de l'application ne doit pas connaître le mécanisme de stockage
 utilisé.
@@ -15,8 +15,8 @@ utilisé.
 La persistance est confiée à `JobRepository`, qui constitue l'unique point
 d'accès aux données des jobs.
 
-Les composants métier manipulent uniquement des objets `Job` et délèguent
-leur sauvegarde ou leur chargement au Repository.
+Les composants applicatifs manipulent uniquement des `TrimExportJob` et
+délèguent leur sauvegarde ou leur chargement au Repository.
 
 ### Motivation
 

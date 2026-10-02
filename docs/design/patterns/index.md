@@ -13,4 +13,4 @@ d'apprentissage (`dev-notes`).
 
 - [Decorator](decorator.md) — nettoyage du workspace après un export réussi ;
 - [Factory](factory.md) — construction des collaborateurs techniques ;
-- [Repository](repository.md) — persistance des travaux d’encodage.
+- [Repository](repository.md) — persistance des exports de montage.
