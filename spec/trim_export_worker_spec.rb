@@ -84,6 +84,40 @@ RSpec.describe VideoEncoder::TrimExportWorker do
       worker.run_once
     end
 
+    it 'stops after completing the current job when requested' do
+      next_job = VideoEncoder::TrimExportJob.new(
+        id: 'trim-2',
+        project_path: 'next.json',
+        output_path: 'next.mkv'
+      )
+
+      graceful_worker = described_class.new(
+        repo: repo,
+        executor: executor,
+        logger: logger,
+        stop_requested: -> { true }
+      )
+
+      allow(repo).to receive(:mark_running)
+      allow(repo).to receive(:mark_done)
+      allow(executor).to receive(:call)
+
+      expect(repo).to receive(:next)
+        .with(
+          kind: VideoEncoder::TrimExportJob::KIND
+        )
+        .once
+        .and_return(job)
+
+      graceful_worker.run_once
+
+      expect(executor).to have_received(:call)
+        .with(job)
+        .once
+      expect(executor).not_to have_received(:call)
+        .with(next_job)
+    end
+
     it 'marks the current job as interrupted and stops' do
       allow(repo).to receive(:mark_running)
 

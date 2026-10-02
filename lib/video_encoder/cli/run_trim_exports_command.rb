@@ -82,8 +82,16 @@ module VideoEncoder
         @worker ||= TrimExportWorker.new(
           repo: repo,
           executor: executor,
-          logger: logger
+          logger: logger,
+          stop_requested:
+            method(:stop_after_current_requested?)
         )
+      end
+
+      def stop_after_current_requested?
+        path = ENV.fetch('VIDEO_ENCODER_STOP_AFTER_CURRENT_FILE', nil)
+
+        path && File.exist?(path)
       end
 
       def executor

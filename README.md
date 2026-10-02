@@ -154,7 +154,9 @@ L’interface permet actuellement :
 - d’ajouter un montage à une file persistante sans le lancer immédiatement ;
 - de consulter puis de lancer les exports séquentiels depuis l’accueil ;
 
-- d’interrompre le montage en cours en conservant les autres travaux en attente ;
+- d’arrêter la file après le montage en cours en conservant les autres travaux
+  en attente ;
+- d’interrompre immédiatement le montage en cours et ses sous-processus ;
 - de relancer explicitement un travail échoué ou interrompu sans effacer son historique ;
 
 - d’afficher les étapes mesurables ou non mesurables et les avertissements du moteur.
@@ -166,10 +168,11 @@ Lorsqu’un export est en cours et que `/usr/bin/systemd-inhibit` est disponible
 l’hibernation du système sont bloquées. L’extinction et le verrouillage de l’écran restent autorisés.
 
 La file des montages conserve dans SQLite l’état, le nombre de tentatives et le diagnostic de chaque
-travail. Elle exécute les exports successivement, sans parallélisme. Le travail courant peut être interrompu
-depuis l’interface ; l’ensemble de ses sous-processus est alors arrêté et son état devient `interrupted`,
-tandis que les travaux suivants restent en attente. Au lancement suivant, un ancien travail resté
-`running` sans processus propriétaire actif est également reclassé `interrupted`.
+travail. Elle exécute les exports successivement, sans parallélisme. L’utilisateur peut demander un arrêt
+après le montage courant : celui-ci se termine normalement et les travaux suivants restent en attente.
+Une interruption immédiate arrête au contraire l’ensemble des sous-processus et attribue au travail
+courant l’état `interrupted`. Au lancement suivant, un ancien travail resté `running` sans processus
+propriétaire actif est également reclassé `interrupted`.
 
 Lorsqu’elle est lancée depuis l’accueil, l’ouverture d’un montage et la fermeture de l’application sont
 désactivées jusqu’à la fin ou à l’interruption du processus. Une relance crée un nouveau travail et conserve

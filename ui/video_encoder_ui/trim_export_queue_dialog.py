@@ -8,6 +8,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
     start_requested = QtCore.Signal()
     retry_requested = QtCore.Signal(object)
     stop_requested = QtCore.Signal()
+    finish_current_requested = QtCore.Signal()
 
     STATUS_LABELS = {
         "queued": "En attente",
@@ -34,6 +35,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
         self.jobs = []
         self.running = False
+        self.finishing_current = False
 
         self.refresh_timer = QtCore.QTimer(self)
         self.refresh_timer.setInterval(5_000)
@@ -133,6 +135,15 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             self.stop_requested
         )
 
+        self.finish_current_button = buttons.addButton(
+            "Arrêter après le montage en cours",
+            QtWidgets.QDialogButtonBox.ButtonRole.ActionRole,
+        )
+        self.finish_current_button.setEnabled(False)
+        self.finish_current_button.clicked.connect(
+            self.finish_current_requested
+        )
+
         self.retry_button = buttons.addButton(
             "Relancer le travail",
             QtWidgets.QDialogButtonBox.ButtonRole.ActionRole,
@@ -174,6 +185,9 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
     def set_running(self, running):
         self.running = bool(running)
 
+        if not self.running:
+            self.finishing_current = False
+
         if self.running:
             self.refresh_timer.start()
         else:
@@ -181,6 +195,11 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
         self.update_start_button()
         self.update_stop_button()
+        self.update_finish_current_button()
+
+    def set_finish_current_requested(self, requested):
+        self.finishing_current = bool(requested)
+        self.update_finish_current_button()
 
     def update_start_button(self):
         has_queued_jobs = any(
@@ -200,6 +219,17 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
     def update_stop_button(self):
         self.stop_button.setEnabled(
             self.running
+        )
+
+    def update_finish_current_button(self):
+        self.finish_current_button.setEnabled(
+            self.running
+            and not self.finishing_current
+        )
+        self.finish_current_button.setText(
+            "Arrêt demandé…"
+            if self.finishing_current
+            else "Arrêter après le montage en cours"
         )
 
     def selected_job(self):

@@ -1,5 +1,7 @@
 import os
 import signal
+import tempfile
+import uuid
 from pathlib import Path
 from PySide6 import QtCore
 
@@ -16,6 +18,7 @@ class TrimExportQueueRunner(QtCore.QObject):
     output_received = QtCore.Signal(str)
     succeeded = QtCore.Signal()
     interrupted = QtCore.Signal()
+    stopped = QtCore.Signal()
     failed = QtCore.Signal(str)
 
     def __init__(
@@ -24,6 +27,7 @@ class TrimExportQueueRunner(QtCore.QObject):
         inhibitor_executable=None,
         session_executable=None,
         ccextractor_executable=None,
+        stop_after_current_path=None,
     ):
         super().__init__()
 
@@ -82,9 +86,23 @@ class TrimExportQueueRunner(QtCore.QObject):
             else None
         )
 
+        if stop_after_current_path is None:
+            stop_after_current_path = (
+                Path(tempfile.gettempdir())
+                / (
+                    "video-encoder-stop-after-current-"
+                    f"{uuid.uuid4().hex}"
+                )
+            )
+
+        self.stop_after_current_path = Path(
+            stop_after_current_path
+        )
+
         self.standard_error = ""
         self.completed = False
         self.stop_requested = False
+        self.finish_current_requested = False
 
         self.process = QtCore.QProcess(self)
         self.process.setProcessChannelMode(
@@ -119,6 +137,8 @@ class TrimExportQueueRunner(QtCore.QObject):
         self.standard_error = ""
         self.completed = False
         self.stop_requested = False
+        self.finish_current_requested = False
+        self.remove_stop_after_current_marker()
 
         environment = (
             QtCore.QProcessEnvironment.systemEnvironment()
@@ -126,6 +146,10 @@ class TrimExportQueueRunner(QtCore.QObject):
         environment.insert(
             "CCEXTRACTOR_EXECUTABLE",
             str(self.ccextractor_executable),
+        )
+        environment.insert(
+            "VIDEO_ENCODER_STOP_AFTER_CURRENT_FILE",
+            str(self.stop_after_current_path),
         )
         self.process.setProcessEnvironment(
             environment
@@ -192,6 +216,24 @@ class TrimExportQueueRunner(QtCore.QObject):
 
         self.stop_requested = True
 
+    def finish_current(self):
+        if not self.is_running:
+            raise RuntimeError(
+                "the trim export queue is not running"
+            )
+
+        try:
+            self.stop_after_current_path.touch(
+                exist_ok=True
+            )
+        except OSError as error:
+            raise RuntimeError(
+                "could not request a stop after "
+                "the current trim export"
+            ) from error
+
+        self.finish_current_requested = True
+
     def read_standard_output(self):
         output = bytes(
             self.process.readAllStandardOutput()
@@ -221,6 +263,7 @@ class TrimExportQueueRunner(QtCore.QObject):
 
         if self.stop_requested:
             self.completed = True
+            self.remove_stop_after_current_marker()
             self.status_changed.emit("interrupted")
             self.interrupted.emit()
             return
@@ -231,6 +274,14 @@ class TrimExportQueueRunner(QtCore.QObject):
             and exit_code == 0
         ):
             self.completed = True
+
+            if self.finish_current_requested:
+                self.remove_stop_after_current_marker()
+                self.status_changed.emit("stopped")
+                self.stopped.emit()
+                return
+
+            self.remove_stop_after_current_marker()
             self.status_changed.emit("succeeded")
             self.succeeded.emit()
             return
@@ -259,5 +310,17 @@ class TrimExportQueueRunner(QtCore.QObject):
             return
 
         self.completed = True
+        self.remove_stop_after_current_marker()
         self.status_changed.emit("failed")
         self.failed.emit(message)
+
+    def remove_stop_after_current_marker(self):
+        try:
+            self.stop_after_current_path.unlink(
+                missing_ok=True
+            )
+        except OSError as error:
+            raise RuntimeError(
+                "could not clear the stop-after-current "
+                "request"
+            ) from error

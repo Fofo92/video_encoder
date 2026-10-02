@@ -3,10 +3,16 @@
 module VideoEncoder
   # Processes queued trim export jobs.
   class TrimExportWorker
-    def initialize(repo:, executor:, logger:)
+    def initialize(
+      repo:,
+      executor:,
+      logger:,
+      stop_requested: -> { false }
+    )
       @repo = repo
       @executor = executor
       @logger = logger
+      @stop_requested = stop_requested
     end
 
     def run_once
@@ -20,6 +26,7 @@ module VideoEncoder
 
         processed += 1
         process_job(job)
+        break if stop_requested.call
       end
 
       log('No queued trim exports') if processed.zero?
@@ -38,7 +45,10 @@ module VideoEncoder
 
     private
 
-    attr_reader :repo, :executor, :logger
+    attr_reader :repo,
+                :executor,
+                :logger,
+                :stop_requested
 
     def process_job(job)
       repo.mark_running(job)

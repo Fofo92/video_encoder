@@ -64,6 +64,7 @@ class TrimExportQueueControllerTest(
         dialog.refresh_requested.connect.assert_called_once()
         dialog.start_requested.connect.assert_called_once()
         dialog.stop_requested.connect.assert_called_once()
+        dialog.finish_current_requested.connect.assert_called_once()
         dialog.exec.assert_called_once_with()
 
     def test_stops_the_queue_after_confirmation(self):
@@ -114,6 +115,60 @@ class TrimExportQueueControllerTest(
 
         runner.stop.assert_not_called()
 
+    def test_requests_a_stop_after_the_current_job(
+        self
+    ):
+        runner = Mock()
+        dialog = Mock()
+        parent = Mock()
+
+        controller = TrimExportQueueController(
+            client=Mock(),
+            runner=runner,
+            dialog_class=Mock(),
+            parent=parent,
+        )
+
+        with patch(
+            "video_encoder_ui."
+            "trim_export_queue_controller."
+            "QtWidgets.QMessageBox.question",
+            return_value=(
+                QtWidgets.QMessageBox.StandardButton.Yes
+            ),
+        ):
+            controller.finish_current(dialog)
+
+        runner.finish_current.assert_called_once_with()
+        dialog.set_finish_current_requested.assert_called_once_with(
+            True
+        )
+
+    def test_keeps_running_when_the_graceful_stop_is_declined(
+        self
+    ):
+        runner = Mock()
+        dialog = Mock()
+
+        controller = TrimExportQueueController(
+            client=Mock(),
+            runner=runner,
+            dialog_class=Mock(),
+        )
+
+        with patch(
+            "video_encoder_ui."
+            "trim_export_queue_controller."
+            "QtWidgets.QMessageBox.question",
+            return_value=(
+                QtWidgets.QMessageBox.StandardButton.No
+            ),
+        ):
+            controller.finish_current(dialog)
+
+        runner.finish_current.assert_not_called()
+        dialog.set_finish_current_requested.assert_not_called()
+
     def test_refreshes_the_queue_after_interruption(self):
         runner = Mock()
         dialog = Mock()
@@ -146,6 +201,42 @@ class TrimExportQueueControllerTest(
             "File interrompue",
             (
                 "Le montage en cours a été interrompu. "
+                "Les autres montages restent en attente."
+            ),
+        )
+
+    def test_refreshes_the_queue_after_a_graceful_stop(self):
+        runner = Mock()
+        dialog = Mock()
+        parent = Mock()
+
+        controller = TrimExportQueueController(
+            client=Mock(),
+            runner=runner,
+            dialog_class=Mock(),
+            parent=parent,
+        )
+        controller.dialog = dialog
+        controller.refresh = Mock()
+
+        with patch(
+            "video_encoder_ui."
+            "trim_export_queue_controller."
+            "QtWidgets.QMessageBox.information"
+        ) as information:
+            controller.stopped()
+
+        dialog.set_running.assert_called_once_with(
+            False
+        )
+        controller.refresh.assert_called_once_with(
+            dialog
+        )
+        information.assert_called_once_with(
+            parent,
+            "File arrêtée",
+            (
+                "Le montage en cours est terminé. "
                 "Les autres montages restent en attente."
             ),
         )

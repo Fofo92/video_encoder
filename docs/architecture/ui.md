@@ -114,6 +114,7 @@ La file graphique utilise la même base SQLite et les mêmes travaux que la CLI 
 - de consulter les montages préparés et leur état ;
 - d’ajouter plusieurs projets sans les lancer immédiatement ;
 - de démarrer ultérieurement leur exécution séquentielle ;
+- d’arrêter la file après la réussite du montage en cours ;
 - d’interrompre explicitement le montage en cours sans lancer les suivants ;
 - d’actualiser automatiquement l’affichage pendant une exécution ;
 - de conserver le nombre de tentatives et le diagnostic des échecs ou interruptions ;
@@ -125,6 +126,10 @@ pour un traitement ultérieur selon l’étendue du lancement en cours.
 La file s’exécute dans une session Unix dédiée. Une interruption confirmée envoie `SIGINT` à tout le
 groupe de processus afin d’arrêter également FFmpeg, MLT, Docker et CCExtractor. Le travail courant
 prend alors le statut `interrupted`, tandis que les autres travaux conservent le statut `queued`.
+
+L’arrêt après le montage courant utilise au contraire un marqueur temporaire transmis au worker. Le
+processus courant termine normalement et prend le statut `done`. Le worker consulte ensuite le marqueur
+avant de réclamer un autre travail, puis quitte en laissant les travaux suivants au statut `queued`.
 
 Chaque travail en cours mémorise le PID de son worker. Au démarrage suivant, un travail resté `running`
 dont le PID n’existe plus est reclassé `interrupted` avec un diagnostic d’arrêt inattendu. Un PID encore

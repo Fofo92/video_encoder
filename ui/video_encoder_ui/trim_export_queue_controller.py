@@ -22,6 +22,9 @@ class TrimExportQueueController:
         self.runner.interrupted.connect(
             self.interrupted
         )
+        self.runner.stopped.connect(
+            self.stopped
+        )
         self.runner.failed.connect(
             self.failed
         )
@@ -57,6 +60,9 @@ class TrimExportQueueController:
 
         dialog.stop_requested.connect(
             lambda: self.stop(dialog)
+        )
+        dialog.finish_current_requested.connect(
+            lambda: self.finish_current(dialog)
         )
 
         dialog.retry_requested.connect(
@@ -171,6 +177,41 @@ class TrimExportQueueController:
                 str(error),
             )
 
+    def finish_current(self, dialog):
+        answer = QtWidgets.QMessageBox.question(
+            self.parent,
+            "Arrêter après le montage en cours",
+            (
+                "Terminer le montage en cours puis "
+                "arrêter la file ?\n\n"
+                "Les autres montages resteront "
+                "en attente."
+            ),
+            (
+                QtWidgets.QMessageBox.StandardButton.Yes
+                | QtWidgets.QMessageBox.StandardButton.No
+            ),
+            QtWidgets.QMessageBox.StandardButton.No,
+        )
+
+        if (
+            answer
+            != QtWidgets.QMessageBox.StandardButton.Yes
+        ):
+            return
+
+        try:
+            self.runner.finish_current()
+        except RuntimeError as error:
+            QtWidgets.QMessageBox.warning(
+                self.parent,
+                "Arrêt différé impossible",
+                str(error),
+            )
+            return
+
+        dialog.set_finish_current_requested(True)
+
     def succeeded(self):
         dialog = self.dialog
 
@@ -199,6 +240,22 @@ class TrimExportQueueController:
             "File interrompue",
             (
                 "Le montage en cours a été interrompu. "
+                "Les autres montages restent en attente."
+            ),
+        )
+
+    def stopped(self):
+        dialog = self.dialog
+
+        if dialog is not None:
+            dialog.set_running(False)
+            self.refresh(dialog)
+
+        QtWidgets.QMessageBox.information(
+            self.parent,
+            "File arrêtée",
+            (
+                "Le montage en cours est terminé. "
                 "Les autres montages restent en attente."
             ),
         )

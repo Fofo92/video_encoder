@@ -289,6 +289,49 @@ class TrimExportQueueDialogTest(unittest.TestCase):
             dialog.stop_button.isEnabled()
         )
 
+    def test_requests_a_stop_after_the_current_job(
+        self
+    ):
+        dialog = TrimExportQueueDialog([])
+        finish_current_requested = Mock()
+        dialog.finish_current_requested.connect(
+            finish_current_requested
+        )
+
+        self.assertFalse(
+            dialog.finish_current_button.isEnabled()
+        )
+
+        dialog.set_running(True)
+
+        self.assertTrue(
+            dialog.finish_current_button.isEnabled()
+        )
+
+        dialog.finish_current_button.click()
+
+        finish_current_requested.assert_called_once_with()
+
+        dialog.set_finish_current_requested(True)
+
+        self.assertFalse(
+            dialog.finish_current_button.isEnabled()
+        )
+        self.assertEqual(
+            dialog.finish_current_button.text(),
+            "Arrêt demandé…",
+        )
+        self.assertTrue(
+            dialog.stop_button.isEnabled()
+        )
+
+        dialog.set_running(False)
+
+        self.assertEqual(
+            dialog.finish_current_button.text(),
+            "Arrêter après le montage en cours",
+        )
+
     def test_requests_retry_for_selected_interrupted_job(
         self
     ):

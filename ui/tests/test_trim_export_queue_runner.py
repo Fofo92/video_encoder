@@ -1,5 +1,7 @@
 import signal
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 try:
@@ -178,6 +180,85 @@ class TrimExportQueueRunnerTest(unittest.TestCase):
             interrupted,
             [True],
         )
+        self.assertTrue(runner.completed)
+
+    def test_requests_a_stop_after_the_current_export(self):
+        with TemporaryDirectory() as directory:
+            marker = (
+                Path(directory)
+                / "stop-after-current"
+            )
+            runner = TrimExportQueueRunner(
+                executable="/app/video_encoder",
+                ccextractor_executable="/bin/true",
+                stop_after_current_path=marker,
+            )
+            process = Mock()
+            process.state.return_value = (
+                QtCore.QProcess.ProcessState.Running
+            )
+            runner.process = process
+
+            runner.finish_current()
+
+            self.assertTrue(marker.is_file())
+            self.assertTrue(
+                runner.finish_current_requested
+            )
+
+    def test_passes_the_stop_marker_to_the_worker(self):
+        with TemporaryDirectory() as directory:
+            marker = (
+                Path(directory)
+                / "stop-after-current"
+            )
+            runner = TrimExportQueueRunner(
+                executable="/bin/true",
+                ccextractor_executable="/bin/true",
+                stop_after_current_path=marker,
+            )
+
+            runner.start()
+
+            self.assertEqual(
+                runner.process.processEnvironment().value(
+                    "VIDEO_ENCODER_STOP_AFTER_CURRENT_FILE"
+                ),
+                str(marker),
+            )
+
+            self.wait_for_runner(runner)
+
+    def test_reports_a_stop_after_the_current_export(self):
+        statuses = []
+        stopped = []
+        succeeded = []
+
+        runner = TrimExportQueueRunner(
+            executable="/bin/true",
+            ccextractor_executable="/bin/true",
+        )
+        runner.status_changed.connect(
+            statuses.append
+        )
+        runner.stopped.connect(
+            lambda: stopped.append(True)
+        )
+        runner.succeeded.connect(
+            lambda: succeeded.append(True)
+        )
+        runner.finish_current_requested = True
+        runner.read_standard_output = Mock()
+        runner.read_standard_error = Mock()
+
+        runner.process_finished(
+            0,
+            QtCore.QProcess.ExitStatus.NormalExit,
+        )
+
+        self.assertEqual(statuses, ["stopped"])
+        self.assertEqual(stopped, [True])
+        self.assertEqual(succeeded, [])
         self.assertTrue(runner.completed)
 
     def wait_for_runner(self, runner):
