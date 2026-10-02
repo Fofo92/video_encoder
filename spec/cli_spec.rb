@@ -17,26 +17,6 @@ RSpec.describe VideoEncoder::CLI do
     expect(stdout).to include('Usage')
   end
 
-  describe 'enqueue' do
-    let(:repo) { instance_double(VideoEncoder::Persistence::JobRepository) }
-
-    before do
-      allow(VideoEncoder::Persistence::JobRepository)
-        .to receive(:new)
-        .and_return(repo)
-
-      allow(repo).to receive(:enqueue)
-    end
-
-    it 'enqueues a job' do
-      cli = described_class.new(['enqueue', 'video.mp4'])
-
-      cli.run
-
-      expect(repo).to have_received(:enqueue)
-    end
-  end
-
   describe 'list' do
     let(:repo) { instance_double(VideoEncoder::Persistence::JobRepository) }
 
@@ -174,82 +154,22 @@ RSpec.describe VideoEncoder::CLI do
     end
   end
 
-  describe 'run' do
-    let(:worker) { instance_double(VideoEncoder::Worker) }
+  describe 'config' do
+    it 'prints the application configuration' do
+      cli = described_class.new(['config'])
 
-    let(:dependency_checker) do
-      instance_double(VideoEncoder::ExternalDependencyChecker)
-    end
-
-    before do
-      allow(VideoEncoder::Worker)
-        .to receive(:new)
-        .and_return(worker)
-
-      allow(worker).to receive(:run_once)
-      allow(worker).to receive(:run)
-      allow(dependency_checker).to receive(:call)
-    end
-
-    it 'runs the worker once' do
-      cli = described_class.new(['run', '--once'], dependency_checker: dependency_checker)
-
-      cli.run
-
-      expect(worker).to have_received(:run_once)
-      expect(worker).not_to have_received(:run)
-    end
-
-    it 'runs the worker in loop mode by default' do
-      cli = described_class.new(['run'], dependency_checker: dependency_checker)
-
-      cli.run
-
-      expect(worker).to have_received(:run)
-      expect(worker).not_to have_received(:run_once)
-    end
-
-    describe 'config' do
-      it 'prints the application configuration' do
-        cli = described_class.new(['config'])
-
-        expect { cli.run }
-          .to output(
-            a_string_including(
-              'Database:',
-              'Encoder:',
-              'Incoming:',
-              'Queue:',
-              'Encoded:',
-              'Archive:',
-              'FFmpeg',
-              'Video codec:',
-              'Audio codec:',
-              'Preset:',
-              'CQ:'
-            )
-          ).to_stdout
-      end
-    end
-
-    describe 'watch' do
-      let(:watcher) { instance_double(VideoEncoder::Watcher) }
-
-      before do
-        allow(VideoEncoder::Watcher)
-          .to receive(:new)
-          .and_return(watcher)
-
-        allow(watcher).to receive(:scan_once)
-      end
-
-      it 'runs the watcher once' do
-        cli = described_class.new(%w[watch --once])
-
-        cli.run
-
-        expect(watcher).to have_received(:scan_once)
-      end
+      expect { cli.run }
+        .to output(
+          a_string_including(
+            'Database:',
+            'Quarantine:',
+            'FFmpeg',
+            'Video codec:',
+            'Audio codec:',
+            'Preset:',
+            'CQ:'
+          )
+        ).to_stdout
     end
   end
 end

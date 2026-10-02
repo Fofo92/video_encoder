@@ -21,10 +21,6 @@ module VideoEncoder
       @data['database']
     end
 
-    def encoder
-      @data['encoder']
-    end
-
     def directories
       Directories.new(@data['directories'])
     end

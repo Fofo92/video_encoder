@@ -1,15 +1,8 @@
 database: video_encoder.db
 
-encoder: ffmpeg
-
 library_root: /commun
 
 directories:
-  incoming: /commun/to_be_encoded
-  queue: /commun/Queue
-  encoding: /commun/Encoding
-  encoded: /commun/Encoded
-  archive: /commun/Archive
   quarantine: /commun/Quarantaine
 
 # Profil validé sur des films TNT HD 1080i.

@@ -20,17 +20,12 @@ module VideoEncoder
 
       def print_database
         puts "Database: #{config.database}"
-        puts "Encoder:  #{config.encoder}"
         puts
       end
 
       def print_directories
         puts 'Directories'
         puts '-----------'
-        puts "Incoming: #{config.directories.incoming}"
-        puts "Queue:    #{config.directories.queue}"
-        puts "Encoded:  #{config.directories.encoded}"
-        puts "Archive:  #{config.directories.archive}"
         puts "Quarantine: #{config.directories.quarantine}"
         puts
       end

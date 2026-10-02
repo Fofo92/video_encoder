@@ -7,26 +7,6 @@ module VideoEncoder
       @data = data
     end
 
-    def incoming
-      @data['incoming']
-    end
-
-    def queue
-      @data['queue']
-    end
-
-    def encoding
-      @data['encoding']
-    end
-
-    def encoded
-      @data['encoded']
-    end
-
-    def archive
-      @data['archive']
-    end
-
     def quarantine
       @data['quarantine']
     end

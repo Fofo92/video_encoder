@@ -11,19 +11,9 @@ RSpec.describe VideoEncoder::Config do
         .to eq('video_encoder.db')
     end
 
-    it 'loads the encoder name' do
-      expect(config.encoder)
-        .to eq('ffmpeg')
-    end
-
     it 'loads directories' do
-      expect(config.directories.incoming).to eq('/commun/to_be_encoded')
-      expect(config.directories.queue).to eq('/commun/Queue')
-      expect(config.directories.encoded).to eq('/commun/Encoded')
-      expect(config.directories.archive).to eq('/commun/Archive')
       expect(config.directories.quarantine)
         .to eq('/commun/Quarantaine')
-      expect(config.directories.encoding).to eq('/commun/Encoding')
     end
 
     it 'loads ffmpeg options' do
