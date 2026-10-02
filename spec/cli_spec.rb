@@ -21,9 +21,10 @@ RSpec.describe VideoEncoder::CLI do
     let(:repo) { instance_double(VideoEncoder::Persistence::JobRepository) }
 
     let(:job) do
-      VideoEncoder::Job.new(
+      VideoEncoder::TrimExportJob.new(
         id: '123',
-        source: 'video.mp4',
+        project_path: 'movie.json',
+        output_path: 'movie.mkv',
         status: VideoEncoder::Status::QUEUED,
         attempts: 0
       )
@@ -42,7 +43,7 @@ RSpec.describe VideoEncoder::CLI do
 
       expect { cli.run }
         .to output(
-          /123 \| encoding \| video\.mp4 \| - \| queued \| attempts=0/
+          /123 \| trim_export \| movie\.json \| movie\.mkv \| queued \| attempts=0/
         ).to_stdout
     end
 
@@ -64,9 +65,10 @@ RSpec.describe VideoEncoder::CLI do
     let(:repo) { instance_double(VideoEncoder::Persistence::JobRepository) }
 
     let(:job) do
-      VideoEncoder::Job.new(
+      VideoEncoder::TrimExportJob.new(
         id: '123',
-        source: 'video.mp4',
+        project_path: 'movie.json',
+        output_path: 'movie.mkv',
         status: VideoEncoder::Status::DONE,
         attempts: 1
       )
@@ -85,7 +87,7 @@ RSpec.describe VideoEncoder::CLI do
 
       expect { cli.run }
         .to output(
-          /ID:\s+123.*Type:\s+encoding.*Input:\s+video\.mp4.*Output:\s+-.*Status:\s+done.*Attempts:\s+1/m
+          /ID:\s+123.*Type:\s+trim_export.*Input:\s+movie\.json.*Output:\s+movie\.mkv.*Status:\s+done.*Attempts:\s+1/m
         ).to_stdout
     end
 
@@ -117,9 +119,10 @@ RSpec.describe VideoEncoder::CLI do
 
     context 'when there are failed jobs' do
       let(:failed_job) do
-        VideoEncoder::Job.new(
+        VideoEncoder::TrimExportJob.new(
           id: '123',
-          source: 'video.mp4',
+          project_path: 'movie.json',
+          output_path: 'movie.mkv',
           status: VideoEncoder::Status::FAILED,
           attempts: 2,
           error: 'boom'
@@ -134,7 +137,7 @@ RSpec.describe VideoEncoder::CLI do
         cli = described_class.new(['failed'])
 
         expect { cli.run }
-          .to output(/123.*video\.mp4.*attempts=2.*boom/m)
+          .to output(/123.*movie\.json.*attempts=2.*boom/m)
           .to_stdout
       end
     end

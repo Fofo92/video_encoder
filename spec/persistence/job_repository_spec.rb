@@ -3,8 +3,7 @@
 RSpec.describe VideoEncoder::Persistence::JobRepository do
   subject(:repo) { described_class.new(test_db) }
 
-  let(:job) { VideoEncoder::Job.new(source: 'video.mp4') }
-  let(:trim_export_job) do
+  let(:job) do
     VideoEncoder::TrimExportJob.new(
       project_path: 'movie.json',
       output_path: 'movie.mkv'
@@ -12,31 +11,16 @@ RSpec.describe VideoEncoder::Persistence::JobRepository do
   end
 
   describe '#enqueue' do
-    it 'stores a job' do
+    it 'stores a trim export job' do
       repo.enqueue(job)
 
       stored_job = repo.find(job.id)
 
-      expect(stored_job).not_to be_nil
-      expect(stored_job.id).to eq(job.id)
-      expect(stored_job.source).to eq(Pathname('video.mp4'))
-      expect(stored_job).to be_queued
-      expect(stored_job.attempts).to eq(0)
-    end
-
-    it 'stores a trim export job' do
-      repo.enqueue(trim_export_job)
-
-      stored_job = repo.find(
-        trim_export_job.id
-      )
-
       expect(stored_job).to be_a(
         VideoEncoder::TrimExportJob
       )
-      expect(stored_job.kind).to eq(
-        'trim_export'
-      )
+      expect(stored_job.id).to eq(job.id)
+      expect(stored_job.kind).to eq('trim_export')
       expect(stored_job.project_path).to eq(
         Pathname('movie.json')
       )
@@ -44,6 +28,7 @@ RSpec.describe VideoEncoder::Persistence::JobRepository do
         Pathname('movie.mkv')
       )
       expect(stored_job).to be_queued
+      expect(stored_job.attempts).to eq(0)
     end
   end
 
@@ -56,9 +41,10 @@ RSpec.describe VideoEncoder::Persistence::JobRepository do
       it 'returns the matching job' do
         found_job = repo.find(job.id)
 
-        expect(found_job).to be_a(VideoEncoder::Job)
+        expect(found_job).to be_a(
+          VideoEncoder::TrimExportJob
+        )
         expect(found_job.id).to eq(job.id)
-        expect(found_job.source).to eq(Pathname('video.mp4'))
         expect(found_job).to be_queued
       end
     end
@@ -76,16 +62,19 @@ RSpec.describe VideoEncoder::Persistence::JobRepository do
     end
 
     it 'returns all stored jobs' do
-      job1 = VideoEncoder::Job.new(source: 'video1.mp4')
-      job2 = VideoEncoder::Job.new(source: 'video2.mp4')
+      first_job = job
+      second_job = VideoEncoder::TrimExportJob.new(
+        project_path: 'second.json',
+        output_path: 'second.mkv'
+      )
 
-      repo.enqueue(job1)
-      repo.enqueue(job2)
+      repo.enqueue(first_job)
+      repo.enqueue(second_job)
 
-      jobs = repo.all
-
-      expect(jobs.size).to eq(2)
-      expect(jobs.map(&:id)).to contain_exactly(job1.id, job2.id)
+      expect(repo.all.map(&:id)).to contain_exactly(
+        first_job.id,
+        second_job.id
+      )
     end
   end
 
@@ -94,14 +83,10 @@ RSpec.describe VideoEncoder::Persistence::JobRepository do
       expect(repo.next).to be_nil
     end
 
-    it 'returns the first queued job' do
+    it 'returns the first queued trim export' do
       repo.enqueue(job)
 
-      next_job = repo.next
-
-      expect(next_job).to be_a(VideoEncoder::Job)
-      expect(next_job.id).to eq(job.id)
-      expect(next_job).to be_queued
+      expect(repo.next.id).to eq(job.id)
     end
 
     it 'does not return jobs that are already running' do
@@ -110,53 +95,39 @@ RSpec.describe VideoEncoder::Persistence::JobRepository do
 
       expect(repo.next).to be_nil
     end
-
-    it 'selects queued jobs by kind' do
-      repo.enqueue(job)
-      repo.enqueue(trim_export_job)
-
-      encoding = repo.next
-      trim_export = repo.next(
-        kind: VideoEncoder::TrimExportJob::KIND
-      )
-
-      expect(encoding).to be_a(
-        VideoEncoder::Job
-      )
-      expect(encoding.id).to eq(job.id)
-
-      expect(trim_export).to be_a(
-        VideoEncoder::TrimExportJob
-      )
-      expect(trim_export.id).to eq(
-        trim_export_job.id
-      )
-    end
   end
 
   describe '#mark_running' do
-    before do
+    it 'marks the job as running and increments attempts' do
       repo.enqueue(job)
-      repo.mark_running(job)
-    end
 
-    it 'marks the job as running' do
+      repo.mark_running(job)
+
       stored_job = repo.find(job.id)
 
       expect(stored_job).to be_running
       expect(stored_job.attempts).to eq(1)
       expect(stored_job.started_at).not_to be_nil
     end
+
+    it 'increments attempts each time the job starts' do
+      repo.enqueue(job)
+
+      repo.mark_running(job)
+      repo.retry(job.id)
+      repo.mark_running(job)
+
+      expect(repo.find(job.id).attempts).to eq(2)
+    end
   end
 
   describe '#mark_done' do
-    before do
+    it 'marks the job as done' do
       repo.enqueue(job)
       repo.mark_running(job)
-      repo.mark_done(job)
-    end
 
-    it 'marks the job as done' do
+      repo.mark_done(job)
+
       stored_job = repo.find(job.id)
 
       expect(stored_job).to be_done
@@ -165,13 +136,12 @@ RSpec.describe VideoEncoder::Persistence::JobRepository do
   end
 
   describe '#mark_failed' do
-    before do
+    it 'marks the job as failed' do
       repo.enqueue(job)
       repo.mark_running(job)
-      repo.mark_failed(job, 'boom')
-    end
 
-    it 'marks the job as failed' do
+      repo.mark_failed(job, 'boom')
+
       stored_job = repo.find(job.id)
 
       expect(stored_job).to be_failed
@@ -182,15 +152,13 @@ RSpec.describe VideoEncoder::Persistence::JobRepository do
   end
 
   describe '#retry' do
-    before do
+    it 'puts the job back in the queue' do
       repo.enqueue(job)
       repo.mark_running(job)
       repo.mark_failed(job, 'boom')
 
       repo.retry(job.id)
-    end
 
-    it 'puts the job back in the queue' do
       stored_job = repo.find(job.id)
 
       expect(stored_job).to be_queued
@@ -201,45 +169,23 @@ RSpec.describe VideoEncoder::Persistence::JobRepository do
     end
   end
 
-  describe '#mark_running' do
-    it 'increments attempts each time the job starts' do
-      repo.enqueue(job)
-
-      repo.mark_running(job)
-      repo.retry(job.id)
-      repo.mark_running(job)
-
-      stored_job = repo.find(job.id)
-
-      expect(stored_job.attempts).to eq(2)
-    end
-  end
-
   describe 'trim export lifecycle' do
     it 'tracks failure, retry and completion' do
-      repo.enqueue(trim_export_job)
+      repo.enqueue(job)
+      repo.mark_running(job)
+      repo.mark_failed(job, 'temporary failure')
 
-      repo.mark_running(trim_export_job)
-      repo.mark_failed(
-        trim_export_job,
-        'temporary failure'
-      )
-
-      failed = repo.find(trim_export_job.id)
+      failed = repo.find(job.id)
 
       expect(failed).to be_failed
-      expect(failed.error).to eq(
-        'temporary failure'
-      )
+      expect(failed.error).to eq('temporary failure')
       expect(failed.attempts).to eq(1)
 
-      repo.retry(trim_export_job.id)
-      repo.mark_running(trim_export_job)
-      repo.mark_done(trim_export_job)
+      repo.retry(job.id)
+      repo.mark_running(job)
+      repo.mark_done(job)
 
-      completed = repo.find(
-        trim_export_job.id
-      )
+      completed = repo.find(job.id)
 
       expect(completed).to be_done
       expect(completed.error).to be_nil

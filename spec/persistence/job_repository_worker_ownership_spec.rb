@@ -8,12 +8,6 @@ RSpec.describe(
 ) do
   subject(:repo) { described_class.new(test_db) }
 
-  let(:encoding_job) do
-    VideoEncoder::Job.new(
-      source: 'video.mp4'
-    )
-  end
-
   let(:trim_export_job) do
     VideoEncoder::TrimExportJob.new(
       project_path: 'movie.json',
@@ -38,14 +32,9 @@ RSpec.describe(
     )
   end
 
-  it 'returns running jobs of the requested kind' do
-    repo.enqueue(encoding_job)
+  it 'returns running trim exports' do
     repo.enqueue(trim_export_job)
 
-    repo.mark_running(
-      encoding_job,
-      worker_pid: 111
-    )
     repo.mark_running(
       trim_export_job,
       worker_pid: 222

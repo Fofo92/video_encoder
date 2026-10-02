@@ -5,13 +5,6 @@ require 'spec_helper'
 RSpec.describe VideoEncoder::CLI::JobPresenter do
   subject(:presenter) { described_class.new }
 
-  let(:encoding_job) do
-    VideoEncoder::Job.new(
-      id: 'encoding-1',
-      source: 'video.m2t'
-    )
-  end
-
   let(:trim_export_job) do
     VideoEncoder::TrimExportJob.new(
       id: 'trim-1',
@@ -21,15 +14,6 @@ RSpec.describe VideoEncoder::CLI::JobPresenter do
   end
 
   describe '#summary' do
-    it 'formats an encoding job' do
-      expect(
-        presenter.summary(encoding_job)
-      ).to eq(
-        'encoding-1 | encoding | ' \
-        'video.m2t | - | queued | attempts=0'
-      )
-    end
-
     it 'formats a trim export job' do
       expect(
         presenter.summary(trim_export_job)

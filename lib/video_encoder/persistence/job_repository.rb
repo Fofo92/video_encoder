@@ -16,7 +16,7 @@ module VideoEncoder
         )
       end
 
-      def next(kind: Job::KIND)
+      def next(kind: TrimExportJob::KIND)
         row = @jobs
               .where(
                 status: Status::QUEUED,
@@ -111,33 +111,29 @@ module VideoEncoder
       private
 
       def persistence_attributes(job)
-        attributes = {
+        unless job.is_a?(TrimExportJob)
+          raise ArgumentError,
+                "unsupported job: #{job.class}"
+        end
+
+        {
           job_id: job.id,
           kind: job.kind,
           status: Status::QUEUED,
           created_at: Time.now,
-          attempts: 0
+          attempts: 0,
+          project_path: job.project_path.to_s,
+          output_path: job.output_path.to_s
         }
-
-        case job
-        when TrimExportJob
-          attributes.merge(
-            project_path:
-              job.project_path.to_s,
-            output_path:
-              job.output_path.to_s
-          )
-        when Job
-          attributes.merge(
-            source: job.source.to_s
-          )
-        else
-          raise ArgumentError,
-                "unsupported job: #{job.class}"
-        end
       end
 
       def build_job(row)
+        unless row[:kind] == TrimExportJob::KIND
+          raise ArgumentError,
+                'unsupported job kind: ' \
+                "#{row[:kind]}"
+        end
+
         attributes = {
           id: row[:job_id],
           status: row[:status],
@@ -149,23 +145,11 @@ module VideoEncoder
           worker_pid: row[:worker_pid]
         }
 
-        case row[:kind]
-        when TrimExportJob::KIND
-          TrimExportJob.new(
-            project_path: row[:project_path],
-            output_path: row[:output_path],
-            **attributes
-          )
-        when Job::KIND, nil
-          Job.new(
-            source: row[:source],
-            **attributes
-          )
-        else
-          raise ArgumentError,
-                'unsupported job kind: ' \
-                "#{row[:kind]}"
-        end
+        TrimExportJob.new(
+          project_path: row[:project_path],
+          output_path: row[:output_path],
+          **attributes
+        )
       end
     end
   end
