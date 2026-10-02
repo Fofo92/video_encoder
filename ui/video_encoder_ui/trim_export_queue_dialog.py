@@ -172,15 +172,63 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         )
 
     def set_jobs(self, jobs):
+        selected_job = self.selected_job()
+        selected_job_id = (
+            selected_job.get("id")
+            if selected_job is not None
+            else None
+        )
+        displayed_error = (
+            self.error_details.toPlainText()
+        )
+
         self.jobs = list(jobs)
-        self.error_details.clear()
         self.update_start_button()
 
+        table_blocker = QtCore.QSignalBlocker(
+            self.jobs_table
+        )
         self.jobs_table.setRowCount(0)
 
         for job in self.jobs:
             self.add_job(job)
+
+        selected_row = (
+            next(
+                (
+                    row
+                    for row, job in enumerate(self.jobs)
+                    if job.get("id") == selected_job_id
+                ),
+                None,
+            )
+            if selected_job_id is not None
+            else None
+        )
+
+        if selected_row is not None:
+            self.jobs_table.selectRow(
+                selected_row
+            )
+        else:
+            self.jobs_table.clearSelection()
+
+        del table_blocker
+
         self.update_retry_button()
+
+        refreshed_job = self.selected_job()
+        refreshed_error = (
+            refreshed_job.get("error") or ""
+            if refreshed_job is not None
+            else ""
+        )
+
+        if (
+            refreshed_job is None
+            or refreshed_error != displayed_error
+        ):
+            self.update_error_details()
 
     def set_running(self, running):
         self.running = bool(running)

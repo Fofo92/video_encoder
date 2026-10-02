@@ -360,5 +360,99 @@ class TrimExportQueueDialogTest(unittest.TestCase):
 
         retry_requested.assert_called_once_with(job)
 
+    def test_preserves_the_selected_job_during_refresh(self):
+        selected_job = {
+            "id": "trim-2",
+            "kind": "trim_export",
+            "input_path": "selected.json",
+            "output_path": "selected.mkv",
+            "status": "failed",
+            "attempts": 1,
+            "error": "ffmpeg failed",
+        }
+        other_job = {
+            "id": "trim-1",
+            "kind": "trim_export",
+            "input_path": "other.json",
+            "output_path": "other.mkv",
+            "status": "done",
+            "attempts": 1,
+        }
+        dialog = TrimExportQueueDialog(
+            [other_job, selected_job]
+        )
+        dialog.jobs_table.selectRow(1)
+
+        refreshed_selected_job = {
+            **selected_job,
+            "attempts": 2,
+        }
+        dialog.set_jobs(
+            [refreshed_selected_job, other_job]
+        )
+
+        self.assertEqual(
+            dialog.selected_job()["id"],
+            "trim-2",
+        )
+        self.assertEqual(
+            dialog.jobs_table.currentRow(),
+            0,
+        )
+
+    def test_preserves_the_error_text_selection_during_refresh(
+        self
+    ):
+        error = "command failed: ffmpeg"
+        job = {
+            "id": "trim-1",
+            "kind": "trim_export",
+            "input_path": "movie.json",
+            "output_path": "movie.mkv",
+            "status": "failed",
+            "attempts": 1,
+            "error": error,
+        }
+        dialog = TrimExportQueueDialog([job])
+        dialog.jobs_table.selectRow(0)
+        dialog.error_details.selectAll()
+
+        dialog.set_jobs(
+            [
+                {
+                    **job,
+                    "attempts": 2,
+                }
+            ]
+        )
+
+        self.assertEqual(
+            dialog.error_details.textCursor().selectedText(),
+            error,
+        )
+
+    def test_clears_the_error_when_selected_job_disappears(
+        self
+    ):
+        job = {
+            "id": "trim-1",
+            "kind": "trim_export",
+            "input_path": "movie.json",
+            "output_path": "movie.mkv",
+            "status": "failed",
+            "attempts": 1,
+            "error": "ffmpeg failed",
+        }
+        dialog = TrimExportQueueDialog([job])
+        dialog.jobs_table.selectRow(0)
+
+        dialog.set_jobs([])
+
+        self.assertIsNone(dialog.selected_job())
+        self.assertEqual(
+            dialog.error_details.toPlainText(),
+            "",
+        )
+
 if __name__ == "__main__":
     unittest.main()
