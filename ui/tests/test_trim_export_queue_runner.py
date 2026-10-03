@@ -267,6 +267,83 @@ class TrimExportQueueRunnerTest(unittest.TestCase):
         )
         self.application.processEvents()
 
+    def test_emits_structured_export_progress(self):
+        runner = TrimExportQueueRunner(
+            executable="/bin/true",
+            ccextractor_executable="/bin/true",
+        )
+        runner.process = Mock()
+        runner.process.readAllStandardOutput.return_value = (
+            b'worker output\n'
+            b'VIDEO_ENCODER_EXPORT_EVENT '
+            b'{"stage":"render","step":42,"total":100}\n'
+        )
+        outputs = []
+        progress = []
+        runner.output_received.connect(outputs.append)
+        runner.progress_changed.connect(progress.append)
+
+        runner.read_standard_output()
+
+        self.assertEqual(
+            outputs,
+            [
+                "worker output\n"
+                "VIDEO_ENCODER_EXPORT_EVENT "
+                '{"stage":"render","step":42,"total":100}\n'
+            ],
+        )
+        self.assertEqual(
+            progress,
+            [
+                {
+                    "stage": "render",
+                    "step": 42,
+                    "total": 100,
+                }
+            ],
+        )
+
+    def test_ignores_non_progress_export_events(self):
+        runner = TrimExportQueueRunner(
+            executable="/bin/true",
+            ccextractor_executable="/bin/true",
+        )
+        runner.process = Mock()
+        runner.process.readAllStandardOutput.return_value = (
+            b'VIDEO_ENCODER_EXPORT_EVENT '
+            b'{"type":"warning","code":"audio"}\n'
+            b'VIDEO_ENCODER_EXPORT_EVENT not-json\n'
+        )
+        progress = []
+        runner.progress_changed.connect(progress.append)
+
+        runner.read_standard_output()
+
+        self.assertEqual(progress, [])
+
+    def test_emits_mlt_percentage_progress(self):
+        runner = TrimExportQueueRunner(
+            executable="/bin/true",
+            ccextractor_executable="/bin/true",
+        )
+        runner.process = Mock()
+        runner.process.readAllStandardError.return_value = (
+            b"Current Frame: 10, percentage: 41\n"
+            b"Current Frame: 11, percentage: 42\n"
+        )
+        percentages = []
+        runner.percentage_changed.connect(
+            percentages.append
+        )
+
+        runner.read_standard_error()
+
+        self.assertEqual(
+            percentages,
+            [41, 42],
+        )
+
     def test_reports_a_successful_queue_run(self):
         statuses = []
         succeeded = []

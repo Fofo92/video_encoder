@@ -28,6 +28,12 @@ class TrimExportQueueController:
         self.runner.failed.connect(
             self.failed
         )
+        self.runner.progress_changed.connect(
+            self.progress_changed
+        )
+        self.runner.percentage_changed.connect(
+            self.percentage_changed
+        )
         self.parent = parent
         self.dialog = None
 
@@ -259,6 +265,18 @@ class TrimExportQueueController:
                 "Les autres montages restent en attente."
             ),
         )
+
+    def progress_changed(self, event):
+        dialog = self.dialog
+
+        if dialog is not None:
+            dialog.set_progress(event)
+
+    def percentage_changed(self, percentage):
+        dialog = self.dialog
+
+        if dialog is not None:
+            dialog.set_percentage(percentage)
 
     def failed(self, message):
         dialog = self.dialog

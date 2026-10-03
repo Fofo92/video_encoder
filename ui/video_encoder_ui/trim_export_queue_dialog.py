@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 from PySide6 import QtCore, QtWidgets
@@ -46,6 +47,10 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.jobs = []
         self.running = False
         self.finishing_current = False
+        self.progress_event = None
+        self.progress_percentage = None
+        self.progress_job_id = None
+        self.progress_started_at = None
         self.source_names = (
             source_names
             if source_names is not None
@@ -56,6 +61,12 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.refresh_timer.setInterval(5_000)
         self.refresh_timer.timeout.connect(
             self.refresh_requested
+        )
+
+        self.progress_timer = QtCore.QTimer(self)
+        self.progress_timer.setInterval(1_000)
+        self.progress_timer.timeout.connect(
+            self.update_running_progress
         )
 
         layout = QtWidgets.QVBoxLayout(self)
@@ -199,6 +210,25 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.jobs = list(jobs)
         self.update_start_button()
 
+        running_job = next(
+            (
+                job
+                for job in self.jobs
+                if job.get("status") == "running"
+            ),
+            None,
+        )
+        running_job_id = (
+            running_job.get("id")
+            if running_job is not None
+            else None
+        )
+
+        if running_job_id != self.progress_job_id:
+            self.reset_progress(
+                job_id=running_job_id
+            )
+
         table_blocker = QtCore.QSignalBlocker(
             self.jobs_table
         )
@@ -249,6 +279,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
         if not self.running:
             self.finishing_current = False
+            self.progress_timer.stop()
 
         if self.running:
             self.refresh_timer.start()
@@ -262,6 +293,106 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
     def set_finish_current_requested(self, requested):
         self.finishing_current = bool(requested)
         self.update_finish_current_button()
+
+    def set_progress(self, event):
+        if self.progress_started_at is None:
+            self.progress_started_at = time.monotonic()
+            self.progress_timer.start()
+
+        self.progress_event = dict(event)
+        self.progress_percentage = None
+        self.update_running_progress()
+
+    def set_percentage(self, percentage):
+        self.progress_percentage = percentage
+        self.update_running_progress()
+
+    def reset_progress(self, job_id=None):
+        self.progress_event = None
+        self.progress_percentage = None
+        self.progress_job_id = job_id
+        self.progress_started_at = None
+        self.progress_timer.stop()
+
+    def update_running_progress(self):
+        for row, job in enumerate(self.jobs):
+            if job.get("status") != "running":
+                continue
+
+            item = self.jobs_table.item(row, 3)
+
+            if item is not None:
+                item.setText(
+                    self.progress_text()
+                )
+            break
+
+    def progress_text(self):
+        event = self.progress_event or {}
+        stage = event.get("stage") or "En cours"
+        stage_label = {
+            "video": "Vidéo",
+            "subtitles": "Sous-titres",
+            "audio": "Audio",
+            "remux": "Remuxage",
+        }.get(stage, str(stage))
+
+        if stage == "audio":
+            track = event.get("track")
+            tracks = event.get("tracks")
+
+            if (
+                isinstance(track, int)
+                and isinstance(tracks, int)
+                and tracks > 1
+            ):
+                stage_label = (
+                    f"{stage_label} "
+                    f"{track}/{tracks}"
+                )
+
+        parts = [stage_label]
+
+        if self.progress_percentage is not None:
+            parts.append(
+                f"{self.progress_percentage} %"
+            )
+
+        if self.progress_started_at is not None:
+            elapsed_seconds = max(
+                0,
+                int(
+                    time.monotonic()
+                    - self.progress_started_at
+                ),
+            )
+            parts.append(
+                self.format_elapsed_time(
+                    elapsed_seconds
+                )
+            )
+
+        return " — ".join(parts)
+
+    @staticmethod
+    def format_elapsed_time(elapsed_seconds):
+        hours, remainder = divmod(
+            elapsed_seconds,
+            3_600,
+        )
+        minutes, seconds = divmod(
+            remainder,
+            60,
+        )
+
+        if hours:
+            return (
+                f"{hours:d}:"
+                f"{minutes:02d}:"
+                f"{seconds:02d}"
+            )
+
+        return f"{minutes:02d}:{seconds:02d}"
 
     def update_start_button(self):
         has_queued_jobs = any(
@@ -349,11 +480,22 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         status = job.get("status") or ""
         attempts = job.get("attempts", 0)
 
+        status_text = self.STATUS_LABELS.get(
+            status,
+            status,
+        )
+
+        if (
+            status == "running"
+            and self.progress_event is not None
+        ):
+            status_text = self.progress_text()
+
         values = (
             Path(project_path).name,
             self.source_names(project_path),
             output_path,
-            self.STATUS_LABELS.get(status, status),
+            status_text,
             str(attempts),
         )
 

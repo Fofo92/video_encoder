@@ -67,6 +67,59 @@ class TrimExportQueueControllerTest(
         dialog.finish_current_requested.connect.assert_called_once()
         dialog.exec.assert_called_once_with()
 
+    def test_forwards_progress_to_the_displayed_dialog(self):
+        runner = Mock()
+        dialog = Mock()
+        controller = TrimExportQueueController(
+            client=Mock(),
+            runner=runner,
+            dialog_class=Mock(),
+        )
+        controller.dialog = dialog
+        event = {
+            "stage": "render",
+            "step": 42,
+            "total": 100,
+        }
+
+        controller.progress_changed(event)
+
+        dialog.set_progress.assert_called_once_with(
+            event
+        )
+
+    def test_forwards_percentage_to_the_displayed_dialog(self):
+        runner = Mock()
+        dialog = Mock()
+        controller = TrimExportQueueController(
+            client=Mock(),
+            runner=runner,
+            dialog_class=Mock(),
+        )
+        controller.dialog = dialog
+
+        controller.percentage_changed(42)
+
+        dialog.set_percentage.assert_called_once_with(
+            42
+        )
+
+    def test_ignores_progress_without_a_displayed_dialog(self):
+        controller = TrimExportQueueController(
+            client=Mock(),
+            runner=Mock(),
+            dialog_class=Mock(),
+        )
+        controller.dialog = None
+
+        controller.progress_changed(
+            {
+                "stage": "render",
+                "step": 42,
+                "total": 100,
+            }
+        )
+
     def test_stops_the_queue_after_confirmation(self):
         runner = Mock()
         dialog = Mock()

@@ -1,9 +1,11 @@
+import json
 import os
 import signal
 import tempfile
 import uuid
 from pathlib import Path
 from PySide6 import QtCore
+from .mlt_progress_parser import MltProgressParser
 
 
 DEFAULT_INHIBITOR_EXECUTABLE = Path(
@@ -14,8 +16,12 @@ DEFAULT_SESSION_EXECUTABLE = Path(
 )
 
 class TrimExportQueueRunner(QtCore.QObject):
+    EXPORT_EVENT_PREFIX = "VIDEO_ENCODER_EXPORT_EVENT "
+
     status_changed = QtCore.Signal(str)
     output_received = QtCore.Signal(str)
+    progress_changed = QtCore.Signal(object)
+    percentage_changed = QtCore.Signal(int)
     succeeded = QtCore.Signal()
     interrupted = QtCore.Signal()
     stopped = QtCore.Signal()
@@ -79,6 +85,7 @@ class TrimExportQueueRunner(QtCore.QObject):
             if inhibitor_executable is not None
             else None
         )
+        self.progress_parser = MltProgressParser()
 
         self.session_executable = (
             Path(session_executable)
@@ -138,6 +145,7 @@ class TrimExportQueueRunner(QtCore.QObject):
         self.completed = False
         self.stop_requested = False
         self.finish_current_requested = False
+        self.progress_parser = MltProgressParser()
         self.remove_stop_after_current_marker()
 
         environment = (
@@ -239,8 +247,30 @@ class TrimExportQueueRunner(QtCore.QObject):
             self.process.readAllStandardOutput()
         ).decode(errors="replace")
 
-        if output:
-            self.output_received.emit(output)
+        if not output:
+            return
+
+        self.output_received.emit(output)
+
+        for line in output.splitlines():
+            if not line.startswith(
+                self.EXPORT_EVENT_PREFIX
+            ):
+                continue
+
+            payload = line[
+                len(self.EXPORT_EVENT_PREFIX):
+            ]
+
+            try:
+                event = json.loads(payload)
+            except json.JSONDecodeError:
+                continue
+
+            if event.get("type") == "warning":
+                continue
+
+            self.progress_changed.emit(event)
 
     def read_standard_error(self):
         output = bytes(
@@ -249,6 +279,15 @@ class TrimExportQueueRunner(QtCore.QObject):
 
         if not output:
             return
+
+        percentages, _diagnostics = (
+            self.progress_parser.feed(output)
+        )
+
+        for percentage in percentages:
+            self.percentage_changed.emit(
+                percentage
+            )
 
         self.standard_error += output
         self.output_received.emit(output)
