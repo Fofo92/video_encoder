@@ -53,16 +53,60 @@ class TrimExportQueueDialogTest(unittest.TestCase):
         )
         self.assertEqual(
             dialog.jobs_table.item(0, 1).text(),
-            "/videos/Folle Amanda.mkv",
+            "Projet indisponible",
         )
         self.assertEqual(
             dialog.jobs_table.item(0, 2).text(),
+            "/videos/Folle Amanda.mkv",
+        )
+        self.assertEqual(
+            dialog.jobs_table.item(0, 3).text(),
             "En cours",
         )
         self.assertEqual(
-            dialog.jobs_table.item(1, 2).text(),
+            dialog.jobs_table.item(1, 3).text(),
             "En attente",
         )
+
+    def test_displays_the_project_source_names(self):
+        source_names = Mock(
+            return_value=(
+                "source-a.m2t · source-b.m2t"
+            )
+        )
+        dialog = TrimExportQueueDialog(
+            [
+                {
+                    "id": "trim-1",
+                    "kind": "trim_export",
+                    "input_path": "/projects/movie.json",
+                    "output_path": "/videos/movie.mkv",
+                    "status": "queued",
+                    "attempts": 0,
+                }
+            ],
+            source_names=source_names,
+        )
+
+        source_names.assert_called_once_with(
+            "/projects/movie.json"
+        )
+        self.assertEqual(
+            dialog.jobs_table.item(0, 1).text(),
+            "source-a.m2t · source-b.m2t",
+        )
+
+    def test_allows_every_column_to_be_resized(self):
+        dialog = TrimExportQueueDialog([])
+        header = dialog.jobs_table.horizontalHeader()
+
+        for column in range(
+            dialog.jobs_table.columnCount()
+        ):
+            self.assertEqual(
+                header.sectionResizeMode(column),
+                QtWidgets.QHeaderView.ResizeMode.Interactive,
+            )
 
     def test_requests_a_queue_refresh(self):
         dialog = TrimExportQueueDialog([])
@@ -256,7 +300,7 @@ class TrimExportQueueDialogTest(unittest.TestCase):
         )
 
         self.assertEqual(
-            dialog.jobs_table.item(0, 2).text(),
+            dialog.jobs_table.item(0, 3).text(),
             "Interrompu",
         )
 

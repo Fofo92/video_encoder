@@ -2,6 +2,10 @@ from pathlib import Path
 
 from PySide6 import QtCore, QtWidgets
 
+from .trim_project_source_names import (
+    TrimProjectSourceNames,
+)
+
 
 class TrimExportQueueDialog(QtWidgets.QDialog):
     refresh_requested = QtCore.Signal()
@@ -20,12 +24,18 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
     HEADERS = (
         "Projet de montage",
+        "Source(s)",
         "Fichier de sortie",
         "État",
         "Tentatives",
     )
 
-    def __init__(self, jobs, parent=None):
+    def __init__(
+        self,
+        jobs,
+        parent=None,
+        source_names=None,
+    ):
         super().__init__(parent)
 
         self.setWindowTitle(
@@ -36,6 +46,11 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.jobs = []
         self.running = False
         self.finishing_current = False
+        self.source_names = (
+            source_names
+            if source_names is not None
+            else TrimProjectSourceNames()
+        )
 
         self.refresh_timer = QtCore.QTimer(self)
         self.refresh_timer.setInterval(5_000)
@@ -71,22 +86,21 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.jobs_table.verticalHeader().setVisible(False)
 
         header = self.jobs_table.horizontalHeader()
-        header.setSectionResizeMode(
-            0,
-            QtWidgets.QHeaderView.ResizeMode.ResizeToContents,
-        )
-        header.setSectionResizeMode(
-            1,
-            QtWidgets.QHeaderView.ResizeMode.Stretch,
-        )
-        header.setSectionResizeMode(
-            2,
-            QtWidgets.QHeaderView.ResizeMode.ResizeToContents,
-        )
-        header.setSectionResizeMode(
-            3,
-            QtWidgets.QHeaderView.ResizeMode.ResizeToContents,
-        )
+        header.setMinimumSectionSize(70)
+
+        for column in range(len(self.HEADERS)):
+            header.setSectionResizeMode(
+                column,
+                QtWidgets.QHeaderView.ResizeMode.Interactive,
+            )
+
+        for column, width in enumerate(
+            (220, 220, 320, 100, 90)
+        ):
+            header.resizeSection(
+                column,
+                width,
+            )
 
         error_label = QtWidgets.QLabel(
             "Erreur du travail sélectionné",
@@ -337,6 +351,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
         values = (
             Path(project_path).name,
+            self.source_names(project_path),
             output_path,
             self.STATUS_LABELS.get(status, status),
             str(attempts),
@@ -345,7 +360,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         for column, value in enumerate(values):
             item = QtWidgets.QTableWidgetItem(value)
 
-            if column in (2, 3):
+            if column in (3, 4):
                 item.setTextAlignment(
                     QtCore.Qt.AlignmentFlag.AlignCenter
                 )
