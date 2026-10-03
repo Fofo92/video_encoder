@@ -78,23 +78,29 @@ class ClickableSlider(QtWidgets.QSlider):
         if self.maximum() == self.minimum():
             return 0
 
-        return QtWidgets.QStyle.sliderPositionFromValue(
+        style_option = QtWidgets.QStyleOptionSlider()
+        self.initStyleOption(style_option)
+        handle = self.style().subControlRect(
+            QtWidgets.QStyle.ComplexControl.CC_Slider,
+            style_option,
+            QtWidgets.QStyle.SubControl.SC_SliderHandle,
+            self
+        )
+        slider_length = handle.width()
+        slider_min = slider_length / 2
+        slider_max = self.width() - slider_length / 2
+
+        position = QtWidgets.QStyle.sliderPositionFromValue(
             self.minimum(),
             self.maximum(),
             value,
-            self.width() - 1,
+            round(slider_max - slider_min),
             self.invertedAppearance()
         )
+        return slider_min + position
 
     def paintEvent(self, event):
         super().paintEvent(event)
-
-        if (
-            not self.segments
-            and self.in_position is None
-            and self.out_position is None
-        ):
-            return
 
         style_option = QtWidgets.QStyleOptionSlider()
         self.initStyleOption(style_option)
@@ -105,10 +111,35 @@ class ClickableSlider(QtWidgets.QSlider):
             QtWidgets.QStyle.SubControl.SC_SliderGroove,
             self
         )
+        handle = self.style().subControlRect(
+            QtWidgets.QStyle.ComplexControl.CC_Slider,
+            style_option,
+            QtWidgets.QStyle.SubControl.SC_SliderHandle,
+            self
+        )
 
         painter = QtGui.QPainter(self)
         painter.setRenderHint(
             QtGui.QPainter.RenderHint.Antialiasing
+        )
+
+        painter.setPen(QtCore.Qt.PenStyle.NoPen)
+        painter.setBrush(self.palette().color(
+            QtGui.QPalette.ColorRole.Window
+        ))
+        painter.drawRect(handle)
+
+        groove_option = QtWidgets.QStyleOptionSlider()
+        self.initStyleOption(groove_option)
+        groove_option.subControls = (
+            QtWidgets.QStyle.SubControl.SC_SliderGroove
+            | QtWidgets.QStyle.SubControl.SC_SliderTickmarks
+        )
+        self.style().drawComplexControl(
+            QtWidgets.QStyle.ComplexControl.CC_Slider,
+            groove_option,
+            painter,
+            self
         )
 
         def draw_range(
@@ -207,18 +238,37 @@ class ClickableSlider(QtWidgets.QSlider):
         draw_marker(self.in_position)
         draw_marker(self.out_position)
 
-        handle_option = QtWidgets.QStyleOptionSlider()
-        self.initStyleOption(handle_option)
-        handle_option.subControls = (
-            QtWidgets.QStyle.SubControl.SC_SliderHandle
+        position_x = self.pixel_for_value(self.value())
+        position_tip_y = groove.top()
+        position_base_y = position_tip_y + 12
+
+        position_triangle = QtGui.QPolygonF(
+            [
+                QtCore.QPointF(
+                    position_x - 9,
+                    position_base_y
+                ),
+                QtCore.QPointF(
+                    position_x + 9,
+                    position_base_y
+                ),
+                QtCore.QPointF(
+                    position_x,
+                    position_tip_y
+                ),
+            ]
         )
 
-        self.style().drawComplexControl(
-            QtWidgets.QStyle.ComplexControl.CC_Slider,
-            handle_option,
-            painter,
-            self
+        position_color = QtGui.QColor(
+            35,
+            95,
+            155
         )
+        painter.setPen(
+            QtGui.QPen(position_color, 1)
+        )
+        painter.setBrush(position_color)
+        painter.drawPolygon(position_triangle)
 
         painter.end()
 

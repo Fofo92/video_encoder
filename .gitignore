@@ -8,3 +8,5 @@
 /video_encoder*.db*
 __pycache__/
 *.py[cod]
+
+/patches/
