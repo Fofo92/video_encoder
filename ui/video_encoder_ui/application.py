@@ -2086,23 +2086,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
                 else "cancelled"
             )
 
-    def audio_preflight_succeeded(self, report):
-        if self.audio_preflight_cancel_prompt_active:
-            self.deferred_audio_preflight_result = (
-                "succeeded",
-                report,
-            )
-            return
-
-        if self.pending_export is None:
-            return
-
-        pending_export = self.pending_export
-
-        pending_export_mode = (
-            self.pending_export_mode
-        )
-
+    def confirm_audio_preflight(self, report, mode):
         status_labels = {
             "signal_detected": "signal détecté",
             "inconclusive": "résultat non concluant",
@@ -2125,23 +2109,57 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         if not summary:
             summary = "Aucune piste audio à contrôler."
 
-        answer = QtWidgets.QMessageBox.question(
-            self,
-            "Contrôle audio avant export",
+        message_box = QtWidgets.QMessageBox(self)
+        message_box.setWindowTitle("Contrôle audio avant export")
+        message_box.setIcon(
+            QtWidgets.QMessageBox.Icon.Question
+        )
+        message_box.setText(
+            "Pistes sélectionnées\n\n"
+            f"{summary}\n\n"
+            "Ce contrôle mesure la présence d’un signal, "
+            "pas la langue réellement parlée.\n"
+            "Un résultat non concluant ne prouve pas "
+            "que la piste est inutilisable."
+        )
+
+        cancel_button = message_box.addButton(
+            "Annuler",
+            QtWidgets.QMessageBox.ButtonRole.RejectRole,
+        )
+        action_button = message_box.addButton(
             (
-                f"{summary}\n\n"
-                "Ce contrôle mesure la présence d’un signal, "
-                "pas la langue réellement parlée.\n"
-                "Un résultat non concluant ne prouve pas "
-                "que la piste est inutilisable.\n\n"
-                "Veux-tu poursuivre l’export avec "
-                "les pistes sélectionnées ?"
+                "Ajouter à la file"
+                if mode == "queued"
+                else "Exporter"
             ),
-            (
-                QtWidgets.QMessageBox.StandardButton.Yes
-                | QtWidgets.QMessageBox.StandardButton.No
-            ),
-            QtWidgets.QMessageBox.StandardButton.No
+            QtWidgets.QMessageBox.ButtonRole.AcceptRole,
+        )
+        message_box.setDefaultButton(cancel_button)
+        message_box.exec()
+
+        return message_box.clickedButton() is action_button
+
+    def audio_preflight_succeeded(self, report):
+        if self.audio_preflight_cancel_prompt_active:
+            self.deferred_audio_preflight_result = (
+                "succeeded",
+                report,
+            )
+            return
+
+        if self.pending_export is None:
+            return
+
+        pending_export = self.pending_export
+
+        pending_export_mode = (
+            self.pending_export_mode
+        )
+
+        confirmed = self.confirm_audio_preflight(
+            report,
+            pending_export_mode,
         )
 
         if self.pending_export != pending_export:
@@ -2150,7 +2168,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.pending_export = None
         self.pending_export_mode = None
 
-        if answer != QtWidgets.QMessageBox.StandardButton.Yes:
+        if not confirmed:
             self.export_status_changed("cancelled")
             return
 

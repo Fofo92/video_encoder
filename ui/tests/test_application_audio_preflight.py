@@ -33,6 +33,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             "deferred_audio_preflight_result": None,
             "pending_export_mode": "immediate",
             "trim_project_archiver": project_archiver,
+            "confirm_audio_preflight": Mock(return_value=True),
         }
         defaults.update(attributes)
         return SimpleNamespace(**defaults)
@@ -146,8 +147,10 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
 
     def test_does_not_export_when_audio_confirmation_is_declined(self):
         exporter = Mock()
+        confirmation = Mock(return_value=False)
         monitor = self.make_monitor(
             trim_project_exporter=exporter,
+            confirm_audio_preflight=confirmation,
             pending_export=(
                 Path("/projects/movie.json"),
                 "/output/movie.mkv",
@@ -170,17 +173,15 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             ],
         }
 
-        with patch(
-            "video_encoder_ui.application."
-            "QtWidgets.QMessageBox.question",
-            return_value=QtWidgets.QMessageBox.StandardButton.No,
-        ) as question:
-            MltFrameMonitor.audio_preflight_succeeded(
-                monitor,
-                report,
-            )
+        MltFrameMonitor.audio_preflight_succeeded(
+            monitor,
+            report,
+        )
 
-        question.assert_called_once()
+        confirmation.assert_called_once_with(
+            report,
+            "immediate",
+        )
         exporter.start.assert_not_called()
         self.assertIsNone(monitor.pending_export)
 
@@ -210,20 +211,14 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             ],
         }
 
-        with patch(
-            "video_encoder_ui.application."
-            "QtWidgets.QMessageBox.question",
-            return_value=QtWidgets.QMessageBox.StandardButton.Yes,
-        ) as question:
-            MltFrameMonitor.audio_preflight_succeeded(
-                monitor,
-                report,
-            )
+        MltFrameMonitor.audio_preflight_succeeded(
+            monitor,
+            report,
+        )
 
-        question.assert_called_once()
-        self.assertEqual(
-            question.call_args.args[-1],
-            QtWidgets.QMessageBox.StandardButton.No,
+        monitor.confirm_audio_preflight.assert_called_once_with(
+            report,
+            "immediate",
         )
         exporter.start.assert_called_once_with(
             project_path,
@@ -259,19 +254,10 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             "audio_checks": [],
         }
 
-        with (
-            patch(
-                "video_encoder_ui.application."
-                "QtWidgets.QMessageBox.question",
-                return_value=(
-                    QtWidgets.QMessageBox.StandardButton.Yes
-                ),
-            ),
-            patch(
-                "video_encoder_ui.application."
-                "QtWidgets.QMessageBox.information"
-            ) as information,
-        ):
+        with patch(
+            "video_encoder_ui.application."
+            "QtWidgets.QMessageBox.information"
+        ) as information:
             MltFrameMonitor.audio_preflight_succeeded(
                 monitor,
                 report,
@@ -329,19 +315,10 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             start_new_project_from_current_source=Mock(),
         )
 
-        with (
-            patch(
-                "video_encoder_ui.application."
-                "QtWidgets.QMessageBox.question",
-                return_value=(
-                    QtWidgets.QMessageBox.StandardButton.Yes
-                ),
-            ),
-            patch(
-                "video_encoder_ui.application."
-                "QtWidgets.QMessageBox.warning"
-            ) as warning,
-        ):
+        with patch(
+            "video_encoder_ui.application."
+            "QtWidgets.QMessageBox.warning"
+        ) as warning:
             MltFrameMonitor.audio_preflight_succeeded(
                 monitor,
                 {
@@ -542,20 +519,10 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             pending_export_mode="immediate",
         )
 
-        with (
-            patch(
-                "video_encoder_ui.application."
-                "QtWidgets.QMessageBox.question",
-                return_value=(
-                    QtWidgets.QMessageBox
-                    .StandardButton.Yes
-                ),
-            ),
-            patch(
-                "video_encoder_ui.application."
-                "QtWidgets.QMessageBox.warning"
-            ) as warning,
-        ):
+        with patch(
+            "video_encoder_ui.application."
+            "QtWidgets.QMessageBox.warning"
+        ) as warning:
             MltFrameMonitor.audio_preflight_succeeded(
                 monitor,
                 {
