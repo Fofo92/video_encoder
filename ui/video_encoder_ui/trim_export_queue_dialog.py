@@ -41,6 +41,17 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         "Étape 4/5 — Audio 2/3 (qaa) — 100 % — 1:00:00"
     )
 
+    RECENT_JOB_LIMIT = 15
+    TAB_FILTERS = (
+        ("Récents", None),
+        ("En cours", "running"),
+        ("En attente", "queued"),
+        ("Interrompus", "interrupted"),
+        ("Échecs", "failed"),
+        ("Terminés", "done"),
+        ("Tous", "all"),
+    )
+
     def __init__(
         self,
         jobs,
@@ -52,9 +63,10 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.setWindowTitle(
             "File des montages"
         )
-        self.resize(1_100, 420)
+        self.resize(1_500, 760)
 
         self.jobs = []
+        self.displayed_jobs = []
         self.running = False
         self.finishing_current = False
         self.progress_event = None
@@ -88,6 +100,34 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         layout.addWidget(
             self.refresh_status_label
         )
+
+        self.tabs = QtWidgets.QTabBar(self)
+        for label, _status in self.TAB_FILTERS:
+            self.tabs.addTab(label)
+        self.tabs.currentChanged.connect(
+            self.change_tab
+        )
+        layout.addWidget(self.tabs)
+
+        self.search_widget = QtWidgets.QWidget(self)
+        search_layout = QtWidgets.QHBoxLayout(
+            self.search_widget
+        )
+        search_layout.setContentsMargins(0, 0, 0, 0)
+        search_layout.addWidget(
+            QtWidgets.QLabel("Rechercher :", self)
+        )
+        self.search_field = QtWidgets.QLineEdit(self)
+        self.search_field.setPlaceholderText(
+            "Projet, source, sortie ou état"
+        )
+        self.search_field.setClearButtonEnabled(True)
+        self.search_field.textChanged.connect(
+            self.search_changed
+        )
+        search_layout.addWidget(self.search_field, 1)
+        self.search_widget.hide()
+        layout.addWidget(self.search_widget)
 
         self.jobs_table = QtWidgets.QTableWidget(
             0,
@@ -123,12 +163,14 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         )
 
         for column, width in enumerate(
-            (220, 220, 320, status_width, 90)
+            (250, 250, 420, max(status_width, 390), 90)
         ):
             header.resizeSection(
                 column,
                 width,
             )
+
+        layout.addWidget(self.jobs_table, 1)
 
         error_label = QtWidgets.QLabel(
             "Erreur du travail sélectionné",
@@ -153,7 +195,6 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.jobs_table.itemSelectionChanged.connect(
             self.update_retry_button
         )
-        layout.addWidget(self.jobs_table)
 
         buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.StandardButton.Close,
@@ -258,19 +299,61 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
                     job_id=running_job_id
                 )
 
+        self.refresh_displayed_jobs(
+            selected_job_id=selected_job_id,
+            displayed_error=displayed_error,
+        )
+
+    def change_tab(self, _index):
+        self.search_widget.setVisible(
+            self.current_tab_status() == "all"
+        )
+        selected_job = self.selected_job()
+        selected_job_id = (
+            selected_job.get("id")
+            if selected_job is not None
+            else None
+        )
+        self.refresh_displayed_jobs(
+            selected_job_id=selected_job_id,
+            displayed_error=self.error_details.toPlainText(),
+        )
+
+    def search_changed(self, _text):
+        if self.current_tab_status() == "all":
+            self.refresh_displayed_jobs(
+                displayed_error=(
+                    self.error_details.toPlainText()
+                ),
+            )
+
+    def current_tab_status(self):
+        return self.TAB_FILTERS[
+            self.tabs.currentIndex()
+        ][1]
+
+    def refresh_displayed_jobs(
+        self,
+        selected_job_id=None,
+        displayed_error="",
+    ):
+        self.displayed_jobs = self.jobs_for_current_tab()
+
         table_blocker = QtCore.QSignalBlocker(
             self.jobs_table
         )
         self.jobs_table.setRowCount(0)
 
-        for job in self.jobs:
+        for job in self.displayed_jobs:
             self.add_job(job)
 
         selected_row = (
             next(
                 (
                     row
-                    for row, job in enumerate(self.jobs)
+                    for row, job in enumerate(
+                        self.displayed_jobs
+                    )
                     if job.get("id") == selected_job_id
                 ),
                 None,
@@ -280,9 +363,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         )
 
         if selected_row is not None:
-            self.jobs_table.selectRow(
-                selected_row
-            )
+            self.jobs_table.selectRow(selected_row)
         else:
             self.jobs_table.clearSelection()
 
@@ -302,6 +383,74 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             or refreshed_error != displayed_error
         ):
             self.update_error_details()
+
+    def jobs_for_current_tab(self):
+        status = self.current_tab_status()
+
+        if status == "all":
+            jobs = self.sorted_jobs(self.jobs)
+            query = self.search_field.text().strip().casefold()
+
+            if query:
+                jobs = [
+                    job
+                    for job in jobs
+                    if self.job_matches_search(job, query)
+                ]
+
+            return jobs
+
+        if status is not None:
+            return self.sorted_jobs(
+                job
+                for job in self.jobs
+                if job.get("status") == status
+            )
+
+        recent_jobs = sorted(
+            self.jobs,
+            key=self.job_activity_timestamp,
+            reverse=True,
+        )[:self.RECENT_JOB_LIMIT]
+        return self.sorted_jobs(recent_jobs)
+
+    @classmethod
+    def sorted_jobs(cls, jobs):
+        return sorted(
+            jobs,
+            key=cls.job_activity_timestamp,
+        )
+
+    def job_matches_search(self, job, query):
+        project_path = job.get("input_path") or ""
+        status = job.get("status") or ""
+        values = (
+            project_path,
+            self.source_names(project_path),
+            job.get("output_path") or "",
+            status,
+            self.STATUS_LABELS.get(status, status),
+        )
+        return any(
+            query in str(value).casefold()
+            for value in values
+        )
+
+    @staticmethod
+    def job_activity_timestamp(job):
+        value = (
+            job.get("finished_at")
+            or job.get("started_at")
+            or job.get("created_at")
+        )
+
+        if not value:
+            return float("-inf")
+
+        try:
+            return datetime.fromisoformat(value).timestamp()
+        except (TypeError, ValueError):
+            return float("-inf")
 
     def set_running(self, running):
         self.running = bool(running)
@@ -344,7 +493,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.progress_timer.stop()
 
     def update_running_progress(self):
-        for row, job in enumerate(self.jobs):
+        for row, job in enumerate(self.displayed_jobs):
             if job.get("status") != "running":
                 continue
 
@@ -352,11 +501,11 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
             if item is not None:
                 item.setText(
-                    self.progress_text()
+                    self.progress_text(job)
                 )
             break
 
-    def progress_text(self):
+    def progress_text(self, job=None):
         event = self.progress_event or {}
         stage = event.get("stage") or "En cours"
         stage_label = {
@@ -424,7 +573,41 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
                 )
             )
 
+        if job is not None:
+            activity = self.job_activity_text(job)
+            if activity:
+                parts.append(activity)
+
         return " — ".join(parts)
+
+    @classmethod
+    def job_activity_text(cls, job):
+        status = job.get("status")
+        field_and_label = {
+            "queued": ("created_at", "ajouté le"),
+            "running": ("started_at", "démarré le"),
+            "done": ("finished_at", "le"),
+            "failed": ("finished_at", "le"),
+            "interrupted": ("finished_at", "le"),
+        }.get(status)
+
+        if field_and_label is None:
+            return ""
+
+        field, label = field_and_label
+        value = job.get(field)
+        if not value:
+            return ""
+
+        try:
+            timestamp = datetime.fromisoformat(value)
+        except (TypeError, ValueError):
+            return ""
+
+        return (
+            f"{label} "
+            f"{timestamp.strftime('%d/%m/%Y à %H:%M')}"
+        )
 
     @staticmethod
     def job_elapsed_seconds(job):
@@ -509,10 +692,10 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
         row = selected_rows[0].row()
 
-        if not 0 <= row < len(self.jobs):
+        if not 0 <= row < len(self.displayed_jobs):
             return None
 
-        return self.jobs[row]
+        return self.displayed_jobs[row]
 
     def update_retry_button(self):
         job = self.selected_job()
@@ -565,7 +748,11 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
                 or self.progress_percentage is not None
             )
         ):
-            status_text = self.progress_text()
+            status_text = self.progress_text(job)
+        else:
+            activity = self.job_activity_text(job)
+            if activity:
+                status_text = f"{status_text} {activity}"
 
         if status == "done":
             elapsed_seconds = self.job_elapsed_seconds(

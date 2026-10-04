@@ -226,7 +226,7 @@ class TrimExportQueueDialogTest(unittest.TestCase):
 
         self.assertEqual(
             dialog.jobs_table.item(0, 3).text(),
-            "Terminé — 09:17",
+            "Terminé le 04/10/2026 à 10:09 — 09:17",
         )
 
     def test_displays_french_audio_language(self):
@@ -866,6 +866,214 @@ class TrimExportQueueDialogTest(unittest.TestCase):
             dialog.error_details.toPlainText(),
             "",
         )
+
+    def test_opens_on_fifteen_most_recent_jobs(self):
+        statuses = (
+            "done",
+            "running",
+            "queued",
+            "interrupted",
+            "failed",
+        )
+        jobs = []
+
+        for index in range(18):
+            status = statuses[index % len(statuses)]
+            timestamp = (
+                f"2026-10-04T10:{index:02d}:00+02:00"
+            )
+            job = {
+                "id": f"trim-{index:02d}",
+                "kind": "trim_export",
+                "input_path": f"movie-{index:02d}.json",
+                "output_path": f"movie-{index:02d}.mkv",
+                "status": status,
+                "attempts": 1,
+                "created_at": timestamp,
+            }
+
+            if status == "running":
+                job["started_at"] = timestamp
+            elif status in (
+                "done",
+                "interrupted",
+                "failed",
+            ):
+                job["finished_at"] = timestamp
+
+            jobs.append(job)
+
+        dialog = TrimExportQueueDialog(jobs)
+
+        self.assertEqual(dialog.tabs.currentIndex(), 0)
+        self.assertEqual(dialog.jobs_table.rowCount(), 15)
+        self.assertEqual(
+            dialog.jobs_table.item(0, 0).text(),
+            "movie-03.json",
+        )
+        self.assertEqual(
+            dialog.jobs_table.item(14, 0).text(),
+            "movie-17.json",
+        )
+
+    def test_filters_complete_history_with_tabs(self):
+        jobs = [
+            {
+                "id": f"trim-{index}",
+                "kind": "trim_export",
+                "input_path": f"{status}-{index}.json",
+                "output_path": f"{status}-{index}.mkv",
+                "status": status,
+                "attempts": 1,
+                "created_at": (
+                    f"2026-10-04T10:{index:02d}:00+02:00"
+                ),
+            }
+            for index, status in enumerate(
+                (
+                    "done",
+                    "queued",
+                    "failed",
+                    "interrupted",
+                    "running",
+                    "done",
+                )
+            )
+        ]
+        dialog = TrimExportQueueDialog(jobs)
+
+        expected = {
+            "En cours": ("running", 1),
+            "En attente": ("queued", 1),
+            "Interrompus": ("interrupted", 1),
+            "Échecs": ("failed", 1),
+            "Terminés": ("done", 2),
+        }
+
+        for label, (status, count) in expected.items():
+            dialog.tabs.setCurrentIndex(
+                next(
+                    index
+                    for index in range(dialog.tabs.count())
+                    if dialog.tabs.tabText(index) == label
+                )
+            )
+            self.assertEqual(
+                dialog.jobs_table.rowCount(),
+                count,
+            )
+            self.assertTrue(
+                all(
+                    job["status"] == status
+                    for job in dialog.displayed_jobs
+                )
+            )
+
+    def test_all_tab_displays_complete_history(self):
+        jobs = [
+            {
+                "id": f"trim-{index:02d}",
+                "kind": "trim_export",
+                "input_path": f"movie-{index:02d}.json",
+                "output_path": f"movie-{index:02d}.mkv",
+                "status": "done",
+                "attempts": 1,
+                "finished_at": (
+                    f"2026-10-04T10:{index:02d}:00+02:00"
+                ),
+            }
+            for index in range(18)
+        ]
+        dialog = TrimExportQueueDialog(jobs)
+
+        dialog.tabs.setCurrentIndex(6)
+
+        self.assertEqual(dialog.tabs.tabText(6), "Tous")
+        self.assertEqual(dialog.jobs_table.rowCount(), 18)
+        self.assertEqual(
+            dialog.jobs_table.item(0, 0).text(),
+            "movie-00.json",
+        )
+        self.assertEqual(
+            dialog.jobs_table.item(17, 0).text(),
+            "movie-17.json",
+        )
+
+    def test_searches_only_the_all_history_tab(self):
+        source_names = Mock(
+            side_effect=lambda path: {
+                "alpha.json": "source-one.m2t",
+                "beta.json": "special-source.m2t",
+            }[path]
+        )
+        dialog = TrimExportQueueDialog(
+            [
+                {
+                    "id": "trim-1",
+                    "input_path": "alpha.json",
+                    "output_path": "alpha.mkv",
+                    "status": "done",
+                    "attempts": 1,
+                    "finished_at":
+                        "2026-10-04T10:00:00+02:00",
+                },
+                {
+                    "id": "trim-2",
+                    "input_path": "beta.json",
+                    "output_path": "beta.mkv",
+                    "status": "failed",
+                    "attempts": 1,
+                    "finished_at":
+                        "2026-10-04T11:00:00+02:00",
+                },
+            ],
+            source_names=source_names,
+        )
+
+        self.assertFalse(dialog.search_widget.isVisible())
+        dialog.tabs.setCurrentIndex(6)
+        self.assertFalse(dialog.search_widget.isHidden())
+
+        dialog.search_field.setText("special-source")
+
+        self.assertEqual(dialog.jobs_table.rowCount(), 1)
+        self.assertEqual(
+            dialog.jobs_table.item(0, 0).text(),
+            "beta.json",
+        )
+
+        dialog.tabs.setCurrentIndex(5)
+        self.assertTrue(dialog.search_widget.isHidden())
+        self.assertEqual(dialog.jobs_table.rowCount(), 1)
+        self.assertEqual(
+            dialog.jobs_table.item(0, 0).text(),
+            "alpha.json",
+        )
+
+    def test_exposes_the_expected_queue_tabs(self):
+        dialog = TrimExportQueueDialog([])
+
+        self.assertEqual(
+            [
+                dialog.tabs.tabText(index)
+                for index in range(dialog.tabs.count())
+            ],
+            [
+                "Récents",
+                "En cours",
+                "En attente",
+                "Interrompus",
+                "Échecs",
+                "Terminés",
+                "Tous",
+            ],
+        )
+
+    def test_opens_tall_enough_for_recent_history(self):
+        dialog = TrimExportQueueDialog([])
+
+        self.assertGreaterEqual(dialog.height(), 760)
+        self.assertGreaterEqual(dialog.width(), 1_500)
 
 if __name__ == "__main__":
     unittest.main()
