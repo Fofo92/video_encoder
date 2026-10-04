@@ -1,4 +1,5 @@
 import time
+from datetime import datetime
 from pathlib import Path
 
 from PySide6 import QtCore, QtWidgets
@@ -31,6 +32,15 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         "Tentatives",
     )
 
+    AUDIO_LANGUAGE_BY_ROLE = {
+        "french": "fra",
+        "original": "qaa",
+    }
+
+    STATUS_WIDTH_SAMPLE = (
+        "Étape 4/5 — Audio 2/3 (qaa) — 100 % — 1:00:00"
+    )
+
     def __init__(
         self,
         jobs,
@@ -42,7 +52,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.setWindowTitle(
             "File des montages"
         )
-        self.resize(900, 420)
+        self.resize(1_100, 420)
 
         self.jobs = []
         self.running = False
@@ -105,8 +115,15 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
                 QtWidgets.QHeaderView.ResizeMode.Interactive,
             )
 
+        status_width = (
+            self.jobs_table.fontMetrics().horizontalAdvance(
+                self.STATUS_WIDTH_SAMPLE
+            )
+            + 24
+        )
+
         for column, width in enumerate(
-            (220, 220, 320, 100, 90)
+            (220, 220, 320, status_width, 90)
         ):
             header.resizeSection(
                 column,
@@ -225,9 +242,21 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         )
 
         if running_job_id != self.progress_job_id:
-            self.reset_progress(
-                job_id=running_job_id
+            has_current_progress = (
+                self.progress_event is not None
+                or self.progress_percentage is not None
             )
+
+            if (
+                self.progress_job_id is None
+                and running_job_id is not None
+                and has_current_progress
+            ):
+                self.progress_job_id = running_job_id
+            else:
+                self.reset_progress(
+                    job_id=running_job_id
+                )
 
         table_blocker = QtCore.QSignalBlocker(
             self.jobs_table
@@ -340,6 +369,10 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         if stage == "audio":
             track = event.get("track")
             tracks = event.get("tracks")
+            role = event.get("role")
+            language = self.AUDIO_LANGUAGE_BY_ROLE.get(
+                role
+            )
 
             if (
                 isinstance(track, int)
@@ -351,7 +384,26 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
                     f"{track}/{tracks}"
                 )
 
-        parts = [stage_label]
+            if language is not None:
+                stage_label = (
+                    f"{stage_label} ({language})"
+                )
+
+        step = event.get("step")
+        total = event.get("total")
+
+        parts = []
+
+        if (
+            isinstance(step, int)
+            and isinstance(total, int)
+            and total > 0
+        ):
+            parts.append(
+                f"Étape {step}/{total}"
+            )
+
+        parts.append(stage_label)
 
         if self.progress_percentage is not None:
             parts.append(
@@ -373,6 +425,27 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             )
 
         return " — ".join(parts)
+
+    @staticmethod
+    def job_elapsed_seconds(job):
+        started_at = job.get("started_at")
+        finished_at = job.get("finished_at")
+
+        if not started_at or not finished_at:
+            return None
+
+        try:
+            started = datetime.fromisoformat(started_at)
+            finished = datetime.fromisoformat(finished_at)
+        except (TypeError, ValueError):
+            return None
+
+        return max(
+            0,
+            int(
+                (finished - started).total_seconds()
+            ),
+        )
 
     @staticmethod
     def format_elapsed_time(elapsed_seconds):
@@ -487,9 +560,23 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
         if (
             status == "running"
-            and self.progress_event is not None
+            and (
+                self.progress_event is not None
+                or self.progress_percentage is not None
+            )
         ):
             status_text = self.progress_text()
+
+        if status == "done":
+            elapsed_seconds = self.job_elapsed_seconds(
+                job
+            )
+
+            if elapsed_seconds is not None:
+                status_text = (
+                    f"{status_text} — "
+                    f"{self.format_elapsed_time(elapsed_seconds)}"
+                )
 
         values = (
             Path(project_path).name,

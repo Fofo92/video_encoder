@@ -105,7 +105,7 @@ class TrimExportQueueDialogTest(unittest.TestCase):
 
         self.assertEqual(
             dialog.jobs_table.item(0, 3).text(),
-            "render — 00:00",
+            "Étape 42/100 — render — 00:00",
         )
         self.assertEqual(
             dialog.jobs_table.item(1, 3).text(),
@@ -141,7 +141,181 @@ class TrimExportQueueDialogTest(unittest.TestCase):
 
         self.assertEqual(
             dialog.jobs_table.item(0, 3).text(),
-            "Vidéo — 42 % — 00:42",
+            "Étape 1/4 — Vidéo — 42 % — 00:42",
+        )
+
+    def test_preserves_progress_when_job_becomes_running(self):
+        queued_job = {
+            "id": "trim-1",
+            "kind": "trim_export",
+            "input_path": "movie.json",
+            "output_path": "movie.mkv",
+            "status": "queued",
+            "attempts": 0,
+        }
+        dialog = TrimExportQueueDialog([queued_job])
+
+        with patch(
+            "video_encoder_ui.trim_export_queue_dialog."
+            "time.monotonic",
+            side_effect=[100.0, 100.0, 142.0],
+        ):
+            dialog.set_progress(
+                {
+                    "stage": "video",
+                    "step": 1,
+                    "total": 4,
+                }
+            )
+            dialog.set_percentage(15)
+            dialog.set_jobs(
+                [
+                    {
+                        **queued_job,
+                        "status": "running",
+                        "attempts": 1,
+                    }
+                ]
+            )
+
+        self.assertEqual(
+            dialog.progress_job_id,
+            "trim-1",
+        )
+        self.assertEqual(
+            dialog.jobs_table.item(0, 3).text(),
+            "Étape 1/4 — Vidéo — 15 % — 00:00",
+        )
+
+    def test_preserves_percentage_only_during_refresh(self):
+        job = {
+            "id": "trim-1",
+            "kind": "trim_export",
+            "input_path": "movie.json",
+            "output_path": "movie.mkv",
+            "status": "running",
+            "attempts": 1,
+        }
+        dialog = TrimExportQueueDialog([job])
+
+        dialog.set_percentage(15)
+        dialog.set_jobs([job])
+
+        self.assertEqual(
+            dialog.jobs_table.item(0, 3).text(),
+            "En cours — 15 %",
+        )
+
+    def test_displays_total_duration_for_completed_job(self):
+        dialog = TrimExportQueueDialog(
+            [
+                {
+                    "id": "trim-1",
+                    "kind": "trim_export",
+                    "input_path": "movie.json",
+                    "output_path": "movie.mkv",
+                    "status": "done",
+                    "attempts": 1,
+                    "started_at":
+                        "2026-10-04T10:00:00+02:00",
+                    "finished_at":
+                        "2026-10-04T10:09:17+02:00",
+                }
+            ]
+        )
+
+        self.assertEqual(
+            dialog.jobs_table.item(0, 3).text(),
+            "Terminé — 09:17",
+        )
+
+    def test_displays_french_audio_language(self):
+        dialog = TrimExportQueueDialog(
+            [
+                {
+                    "id": "trim-1",
+                    "kind": "trim_export",
+                    "input_path": "movie.json",
+                    "output_path": "movie.mkv",
+                    "status": "running",
+                    "attempts": 1,
+                }
+            ]
+        )
+
+        with patch(
+            "video_encoder_ui.trim_export_queue_dialog."
+            "time.monotonic",
+            return_value=100.0,
+        ):
+            dialog.set_progress(
+                {
+                    "stage": "audio",
+                    "step": 3,
+                    "total": 5,
+                    "track": 1,
+                    "tracks": 2,
+                    "role": "french",
+                }
+            )
+
+        self.assertEqual(
+            dialog.jobs_table.item(0, 3).text(),
+            "Étape 3/5 — Audio 1/2 (fra) — 00:00",
+        )
+
+    def test_displays_original_audio_language(self):
+        dialog = TrimExportQueueDialog(
+            [
+                {
+                    "id": "trim-1",
+                    "kind": "trim_export",
+                    "input_path": "movie.json",
+                    "output_path": "movie.mkv",
+                    "status": "running",
+                    "attempts": 1,
+                }
+            ]
+        )
+
+        with patch(
+            "video_encoder_ui.trim_export_queue_dialog."
+            "time.monotonic",
+            return_value=100.0,
+        ):
+            dialog.set_progress(
+                {
+                    "stage": "audio",
+                    "step": 4,
+                    "total": 5,
+                    "track": 2,
+                    "tracks": 2,
+                    "role": "original",
+                }
+            )
+
+        self.assertEqual(
+            dialog.jobs_table.item(0, 3).text(),
+            "Étape 4/5 — Audio 2/2 (qaa) — 00:00",
+        )
+
+    def test_status_column_fits_progress_text(self):
+        dialog = TrimExportQueueDialog([])
+
+        required_width = (
+            dialog.jobs_table.fontMetrics().horizontalAdvance(
+                dialog.STATUS_WIDTH_SAMPLE
+            )
+            + 24
+        )
+
+        self.assertGreaterEqual(
+            dialog.jobs_table.columnWidth(3),
+            required_width,
+        )
+        self.assertGreaterEqual(
+            dialog.width(),
+            1_100,
         )
 
     def test_formats_elapsed_progress_over_an_hour(self):
@@ -227,7 +401,7 @@ class TrimExportQueueDialogTest(unittest.TestCase):
 
         self.assertEqual(
             dialog.jobs_table.item(0, 3).text(),
-            "render — 00:42",
+            "Étape 42/100 — render — 00:42",
         )
 
     def test_clears_progress_when_no_job_is_running(self):
