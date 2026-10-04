@@ -145,6 +145,31 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             "ffmpeg failed",
         )
 
+    def test_audio_confirmation_displays_output_path(self):
+        monitor = self.make_monitor()
+        message_box = Mock()
+        message_box.clickedButton.return_value = None
+
+        with patch(
+            "video_encoder_ui.application."
+            "QtWidgets.QMessageBox",
+            return_value=message_box,
+        ):
+            MltFrameMonitor.confirm_audio_preflight(
+                monitor,
+                {"audio_checks": []},
+                "queued",
+                "/videos/Films/movie.mkv",
+            )
+
+        message = message_box.setText.call_args.args[0]
+        self.assertIn(
+            "Fichier de destination\n\n"
+            "/videos/Films/movie.mkv",
+            message,
+        )
+        self.assertIn("Pistes sélectionnées", message)
+
     def test_does_not_export_when_audio_confirmation_is_declined(self):
         exporter = Mock()
         confirmation = Mock(return_value=False)
@@ -181,6 +206,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
         confirmation.assert_called_once_with(
             report,
             "immediate",
+            "/output/movie.mkv",
         )
         exporter.start.assert_not_called()
         self.assertIsNone(monitor.pending_export)
@@ -219,6 +245,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
         monitor.confirm_audio_preflight.assert_called_once_with(
             report,
             "immediate",
+            output_path,
         )
         exporter.start.assert_called_once_with(
             project_path,

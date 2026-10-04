@@ -2086,7 +2086,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
                 else "cancelled"
             )
 
-    def confirm_audio_preflight(self, report, mode):
+    def confirm_audio_preflight(self, report, mode, output_path):
         status_labels = {
             "signal_detected": "signal détecté",
             "inconclusive": "résultat non concluant",
@@ -2115,6 +2115,8 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.Icon.Question
         )
         message_box.setText(
+            "Fichier de destination\n\n"
+            f"{output_path}\n\n"
             "Pistes sélectionnées\n\n"
             f"{summary}\n\n"
             "Ce contrôle mesure la présence d’un signal, "
@@ -2157,9 +2159,12 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.pending_export_mode
         )
 
+        _project_path, output_path = pending_export
+
         confirmed = self.confirm_audio_preflight(
             report,
             pending_export_mode,
+            output_path,
         )
 
         if self.pending_export != pending_export:
