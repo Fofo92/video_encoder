@@ -151,6 +151,27 @@ RSpec.describe VideoEncoder::Persistence::JobRepository do
     end
   end
 
+  describe '#remove_queued?' do
+    it 'removes a queued job' do
+      repo.enqueue(job)
+
+      expect(repo.remove_queued?(job.id)).to be(true)
+      expect(repo.find(job.id)).to be_nil
+    end
+
+    it 'does not remove a running job' do
+      repo.enqueue(job)
+      repo.mark_running(job)
+
+      expect(repo.remove_queued?(job.id)).to be(false)
+      expect(repo.find(job.id)).to be_running
+    end
+
+    it 'returns false when the job does not exist' do
+      expect(repo.remove_queued?('unknown-id')).to be(false)
+    end
+  end
+
   describe '#retry' do
     it 'puts the job back in the queue' do
       repo.enqueue(job)

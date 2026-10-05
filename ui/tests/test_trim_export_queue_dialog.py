@@ -653,6 +653,45 @@ class TrimExportQueueDialogTest(unittest.TestCase):
 
         retry_requested.assert_called_once_with(job)
 
+    def test_requests_removal_for_selected_queued_job(self):
+        job = {
+            "id": "trim-1",
+            "kind": "trim_export",
+            "input_path": "movie.json",
+            "output_path": "movie.mkv",
+            "status": "queued",
+            "attempts": 0,
+        }
+        dialog = TrimExportQueueDialog([job])
+        remove_requested = Mock()
+        dialog.remove_requested.connect(remove_requested)
+
+        self.assertFalse(dialog.remove_button.isEnabled())
+        dialog.jobs_table.selectRow(0)
+        self.assertTrue(dialog.remove_button.isEnabled())
+
+        dialog.remove_button.click()
+
+        remove_requested.assert_called_once_with(job)
+
+    def test_disables_removal_for_non_queued_job(self):
+        dialog = TrimExportQueueDialog(
+            [
+                {
+                    "id": "trim-1",
+                    "kind": "trim_export",
+                    "input_path": "movie.json",
+                    "output_path": "movie.mkv",
+                    "status": "done",
+                    "attempts": 1,
+                }
+            ]
+        )
+
+        dialog.jobs_table.selectRow(0)
+
+        self.assertFalse(dialog.remove_button.isEnabled())
+
     def test_displays_an_interrupted_job(self):
         dialog = TrimExportQueueDialog(
             [

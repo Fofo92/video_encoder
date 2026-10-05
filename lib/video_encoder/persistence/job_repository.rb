@@ -95,6 +95,13 @@ module VideoEncoder
         )
       end
 
+      def remove_queued?(job_id)
+        @jobs.where(
+          job_id: job_id,
+          status: Status::QUEUED
+        ).delete == 1
+      end
+
       def all
         @jobs.all.map do |row|
           build_job(row)

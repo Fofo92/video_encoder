@@ -74,6 +74,55 @@ class TrimExportQueueClientTest(unittest.TestCase):
                 "movie.mkv",
             )
 
+    def test_removes_a_queued_job(self):
+        runner = Mock(
+            return_value=SimpleNamespace(
+                returncode=0,
+                stdout="Removed queued job: trim-1\n",
+                stderr="",
+            )
+        )
+        client = TrimExportQueueClient(
+            executable="/app/video_encoder",
+            runner=runner,
+        )
+
+        output = client.remove("trim-1")
+
+        runner.assert_called_once_with(
+            [
+                "/app/video_encoder",
+                "remove-job",
+                "trim-1",
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(
+            output,
+            "Removed queued job: trim-1",
+        )
+
+    def test_reports_a_removal_failure(self):
+        runner = Mock(
+            return_value=SimpleNamespace(
+                returncode=1,
+                stdout="",
+                stderr="Job is not queued: trim-1\n",
+            )
+        )
+        client = TrimExportQueueClient(
+            executable="/app/video_encoder",
+            runner=runner,
+        )
+
+        with self.assertRaisesRegex(
+            TrimExportQueueError,
+            "Job is not queued: trim-1",
+        ):
+            client.remove("trim-1")
+
     def test_lists_only_trim_export_jobs(self):
         runner = Mock(
             return_value=SimpleNamespace(

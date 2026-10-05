@@ -13,6 +13,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
     refresh_requested = QtCore.Signal()
     start_requested = QtCore.Signal()
     retry_requested = QtCore.Signal(object)
+    remove_requested = QtCore.Signal(object)
     stop_requested = QtCore.Signal()
     finish_current_requested = QtCore.Signal()
 
@@ -195,6 +196,9 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.jobs_table.itemSelectionChanged.connect(
             self.update_retry_button
         )
+        self.jobs_table.itemSelectionChanged.connect(
+            self.update_remove_button
+        )
 
         buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.StandardButton.Close,
@@ -234,6 +238,15 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.retry_button.setEnabled(False)
         self.retry_button.clicked.connect(
             self.request_selected_retry
+        )
+
+        self.remove_button = buttons.addButton(
+            "Retirer de la file",
+            QtWidgets.QDialogButtonBox.ButtonRole.ActionRole,
+        )
+        self.remove_button.setEnabled(False)
+        self.remove_button.clicked.connect(
+            self.request_selected_removal
         )
 
         self.refresh_button = buttons.addButton(
@@ -370,6 +383,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         del table_blocker
 
         self.update_retry_button()
+        self.update_remove_button()
 
         refreshed_job = self.selected_job()
         refreshed_error = (
@@ -705,6 +719,23 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             and job.get("status")
             in ("failed", "interrupted")
         )
+
+    def update_remove_button(self):
+        job = self.selected_job()
+
+        self.remove_button.setEnabled(
+            job is not None
+            and job.get("status") == "queued"
+        )
+
+    def request_selected_removal(self):
+        job = self.selected_job()
+
+        if (
+            job is not None
+            and job.get("status") == "queued"
+        ):
+            self.remove_requested.emit(job)
 
     def request_selected_retry(self):
         job = self.selected_job()

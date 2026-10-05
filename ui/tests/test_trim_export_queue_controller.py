@@ -65,6 +65,8 @@ class TrimExportQueueControllerTest(
         dialog.start_requested.connect.assert_called_once()
         dialog.stop_requested.connect.assert_called_once()
         dialog.finish_current_requested.connect.assert_called_once()
+        dialog.retry_requested.connect.assert_called_once()
+        dialog.remove_requested.connect.assert_called_once()
         dialog.exec.assert_called_once_with()
 
     def test_forwards_progress_to_the_displayed_dialog(self):
@@ -447,6 +449,107 @@ class TrimExportQueueControllerTest(
         controller.refresh.assert_called_once_with(
             dialog
         )
+
+    def test_removes_a_queued_job_after_confirmation(self):
+        job = {
+            "id": "trim-1",
+            "input_path": "/projects/movie.json",
+            "output_path": "/videos/movie.mkv",
+            "status": "queued",
+        }
+        client = Mock()
+        dialog = Mock()
+        controller = TrimExportQueueController(
+            client=client,
+            runner=Mock(),
+            dialog_class=Mock(),
+        )
+        controller.refresh = Mock()
+
+        with patch(
+            "video_encoder_ui."
+            "trim_export_queue_controller."
+            "QtWidgets.QMessageBox.question",
+            return_value=(
+                QtWidgets.QMessageBox.StandardButton.Yes
+            ),
+        ):
+            controller.remove(dialog, job)
+
+        client.remove.assert_called_once_with("trim-1")
+        controller.refresh.assert_called_once_with(dialog)
+
+    def test_does_not_remove_when_confirmation_is_declined(self):
+        client = Mock()
+        controller = TrimExportQueueController(
+            client=client,
+            runner=Mock(),
+            dialog_class=Mock(),
+        )
+
+        with patch(
+            "video_encoder_ui."
+            "trim_export_queue_controller."
+            "QtWidgets.QMessageBox.question",
+            return_value=(
+                QtWidgets.QMessageBox.StandardButton.No
+            ),
+        ):
+            controller.remove(
+                Mock(),
+                {
+                    "id": "trim-1",
+                    "input_path": "movie.json",
+                    "output_path": "movie.mkv",
+                },
+            )
+
+        client.remove.assert_not_called()
+
+    def test_reports_a_removal_failure(self):
+        client = Mock()
+        client.remove.side_effect = TrimExportQueueError(
+            "Job is not queued: trim-1"
+        )
+        parent = Mock()
+        controller = TrimExportQueueController(
+            client=client,
+            runner=Mock(),
+            dialog_class=Mock(),
+            parent=parent,
+        )
+        controller.refresh = Mock()
+
+        with (
+            patch(
+                "video_encoder_ui."
+                "trim_export_queue_controller."
+                "QtWidgets.QMessageBox.question",
+                return_value=(
+                    QtWidgets.QMessageBox.StandardButton.Yes
+                ),
+            ),
+            patch(
+                "video_encoder_ui."
+                "trim_export_queue_controller."
+                "QtWidgets.QMessageBox.warning"
+            ) as warning,
+        ):
+            controller.remove(
+                Mock(),
+                {
+                    "id": "trim-1",
+                    "input_path": "movie.json",
+                    "output_path": "movie.mkv",
+                },
+            )
+
+        warning.assert_called_once_with(
+            parent,
+            "Retrait impossible",
+            "Job is not queued: trim-1",
+        )
+        controller.refresh.assert_not_called()
 
     def test_reports_a_queue_listing_failure(self):
         client = Mock()

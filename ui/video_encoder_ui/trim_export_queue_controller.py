@@ -74,6 +74,9 @@ class TrimExportQueueController:
         dialog.retry_requested.connect(
             lambda job: self.retry(dialog, job)
         )
+        dialog.remove_requested.connect(
+            lambda job: self.remove(dialog, job)
+        )
 
         dialog.exec()
 
@@ -132,6 +135,42 @@ class TrimExportQueueController:
             QtWidgets.QMessageBox.warning(
                 self.parent,
                 "Relance impossible",
+                str(error),
+            )
+            return
+
+        self.refresh(dialog)
+
+    def remove(self, dialog, job):
+        answer = QtWidgets.QMessageBox.question(
+            self.parent,
+            "Retirer le travail",
+            (
+                "Retirer ce travail de la file d’attente ?\n\n"
+                f"Projet : {job['input_path']}\n"
+                f"Sortie : {job['output_path']}\n\n"
+                "Le projet, les sources et le fichier de sortie "
+                "ne seront pas supprimés."
+            ),
+            (
+                QtWidgets.QMessageBox.StandardButton.Yes
+                | QtWidgets.QMessageBox.StandardButton.No
+            ),
+            QtWidgets.QMessageBox.StandardButton.No,
+        )
+
+        if (
+            answer
+            != QtWidgets.QMessageBox.StandardButton.Yes
+        ):
+            return
+
+        try:
+            self.client.remove(job["id"])
+        except TrimExportQueueError as error:
+            QtWidgets.QMessageBox.warning(
+                self.parent,
+                "Retrait impossible",
                 str(error),
             )
             return

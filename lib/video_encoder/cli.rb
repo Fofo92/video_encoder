@@ -18,6 +18,7 @@ module VideoEncoder
   COMMANDS = {
     'version' => :print_version,
     'enqueue-trim-export' => :enqueue_trim_export,
+    'remove-job' => :remove_job,
     'list' => :list,
     'status' => :status,
     'failed' => :failed,
@@ -35,6 +36,7 @@ module VideoEncoder
       video_encoder version
       video_encoder run-trim-exports [--once]
       video_encoder enqueue-trim-export <project.json> --output <movie.mkv>
+      video_encoder remove-job <job_id>
       video_encoder list [--json]
       video_encoder status <job_id>
       video_encoder config
@@ -134,6 +136,17 @@ module VideoEncoder
 
     def enqueue_trim_export
       EnqueueTrimExportCommand.new(argv: @argv, repo: repo).run
+    end
+
+    def remove_job
+      id = @argv.shift or abort('Usage: remove-job <job_id>')
+
+      return puts("Removed queued job: #{id}") if repo.remove_queued?(id)
+
+      job = repo.find(id)
+      abort("Job not found: #{id}") unless job
+
+      abort("Job is not queued: #{id}")
     end
 
     def status

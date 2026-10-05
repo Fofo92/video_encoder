@@ -48,6 +48,28 @@ class TrimExportQueueClient:
 
         return result.stdout.strip()
 
+    def remove(self, job_id):
+        result = self.runner(
+            [
+                str(self.executable),
+                "remove-job",
+                str(job_id),
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+        if result.returncode != 0:
+            raise TrimExportQueueError(
+                self.error_message(
+                    result,
+                    fallback="trim export removal failed",
+                )
+            )
+
+        return result.stdout.strip()
+
     def list_jobs(self):
         result = self.runner(
             [
