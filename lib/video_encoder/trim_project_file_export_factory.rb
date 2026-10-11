@@ -32,7 +32,8 @@ module VideoEncoder
       ExportTrimProjectFile.new(
         reader: reader,
         loader: TrimProjectLoader.new(media_probe: media_probe),
-        exporter: exporter
+        exporter: exporter,
+        receipt: ExportReceipt.new
       )
     end
 

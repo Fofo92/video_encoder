@@ -3,19 +3,24 @@
 module VideoEncoder
   # Loads and exports a persisted trim project.
   class ExportTrimProjectFile
-    def initialize(reader:, loader:, exporter:)
+    def initialize(reader:, loader:, exporter:, receipt: nil)
       @reader = reader
       @loader = loader
       @exporter = exporter
+      @receipt = receipt
     end
 
     def call(project_path:, output_path:)
-      project = loader.load(reader.read(project_path))
+      document = reader.read(project_path)
+      project = loader.load(document)
 
-      exporter.call(
+      result = exporter.call(
         trim_project: project,
         output_path: output_path
       )
+      @receipt&.call(project_path: project_path, project_json: document,
+                     trim_project: project, output_path: output_path)
+      result
     end
 
     private
