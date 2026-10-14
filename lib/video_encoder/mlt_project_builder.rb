@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'cgi'
+
 module VideoEncoder
   # Builds an MLT project XML document for a given video encoder project.
   class MltProjectBuilder
@@ -29,7 +31,7 @@ module VideoEncoder
 
         <<~CHAIN.chomp
           <chain id="#{source_id}">
-            <property name="resource">#{source.path}</property>
+            <property name="resource">#{CGI.escapeHTML(source.path.to_s)}</property>
             <property name="video_index">#{selected_video_index}</property>
             <property name="audio_index">#{selected_audio_index}</property>
           </chain>

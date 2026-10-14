@@ -49,6 +49,18 @@ class ClickableSliderTest(unittest.TestCase):
             QtGui.QColor("#67c23a")
         )
 
+    def test_cursor_turns_red_only_at_exact_marker_or_segment_bounds(self):
+        slider = ClickableSlider(QtCore.Qt.Orientation.Horizontal)
+        slider.setRange(0, 100)
+        slider.set_segments(((10, 20, "#3daee9"),))
+        slider.set_markers(30, 40)
+        for position in [10, 20, 30, 40]:
+            slider.setValue(position)
+            self.assertEqual(slider.position_color(), QtGui.QColor(210, 70, 60))
+        for position in [9, 11, 19, 21, 31]:
+            slider.setValue(position)
+            self.assertEqual(slider.position_color(), QtGui.QColor(35, 95, 155))
+
 
 if __name__ == "__main__":
     unittest.main()

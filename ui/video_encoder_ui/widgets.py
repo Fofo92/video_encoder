@@ -99,6 +99,14 @@ class ClickableSlider(QtWidgets.QSlider):
         )
         return slider_min + position
 
+    def position_color(self):
+        boundaries = {self.in_position, self.out_position}
+        for first, last, _color in self.segments:
+            boundaries.update((first, last))
+        if self.value() in boundaries:
+            return QtGui.QColor(210, 70, 60)
+        return QtGui.QColor(35, 95, 155)
+
     def paintEvent(self, event):
         super().paintEvent(event)
 
@@ -259,11 +267,7 @@ class ClickableSlider(QtWidgets.QSlider):
             ]
         )
 
-        position_color = QtGui.QColor(
-            35,
-            95,
-            155
-        )
+        position_color = self.position_color()
         painter.setPen(
             QtGui.QPen(position_color, 1)
         )

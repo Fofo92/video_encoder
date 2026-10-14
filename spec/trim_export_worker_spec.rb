@@ -30,6 +30,8 @@ RSpec.describe VideoEncoder::TrimExportWorker do
 
   describe '#run_once' do
     before do
+      allow(repo).to receive(:mark_running).and_return(true)
+      allow(repo).to receive(:find).with(job.id).and_return(job)
       allow(repo).to receive(:next)
         .with(
           kind: VideoEncoder::TrimExportJob::KIND
@@ -43,6 +45,7 @@ RSpec.describe VideoEncoder::TrimExportWorker do
       expect(repo).to receive(:mark_running)
         .with(job)
         .ordered
+        .and_return(true)
       expect(executor).to receive(:call)
         .with(job)
         .ordered
@@ -66,7 +69,9 @@ RSpec.describe VideoEncoder::TrimExportWorker do
         )
         .and_return(job, next_job, nil)
 
-      allow(repo).to receive(:mark_running)
+      allow(repo).to receive(:mark_running).and_return(true)
+
+      allow(repo).to receive(:find).with(next_job.id).and_return(next_job)
 
       allow(executor).to receive(:call) do |current_job|
         raise 'export failed' if current_job == job
@@ -98,7 +103,7 @@ RSpec.describe VideoEncoder::TrimExportWorker do
         stop_requested: -> { true }
       )
 
-      allow(repo).to receive(:mark_running)
+      allow(repo).to receive(:mark_running).and_return(true)
       allow(repo).to receive(:mark_done)
       allow(executor).to receive(:call)
 
@@ -119,7 +124,7 @@ RSpec.describe VideoEncoder::TrimExportWorker do
     end
 
     it 'marks the current job as interrupted and stops' do
-      allow(repo).to receive(:mark_running)
+      allow(repo).to receive(:mark_running).and_return(true)
 
       allow(executor).to receive(:call)
         .with(job)

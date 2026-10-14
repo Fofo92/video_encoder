@@ -51,7 +51,9 @@ module VideoEncoder
                 :stop_requested
 
     def process_job(job)
-      repo.mark_running(job)
+      return unless repo.mark_running(job)
+
+      job = repo.find(job.id)
       log("Start trim export #{job.id}")
 
       executor.call(job)

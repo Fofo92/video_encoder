@@ -7,3 +7,32 @@ AllCops:
   Exclude:
     - 'patches/**/*'
     - 'vendor/**/*'
+    # Frozen exploratory 6ter algorithms: reviewed separately before promotion.
+    - 'script/ad_detection/ad_separator_pairing.rb'
+    - 'script/ad_detection/detect_6ter_pub_v3.rb'
+    - 'script/ad_detection/refine_6ter_candidates_v4.rb'
+    - 'script/propose_ad_trim.rb'
+
+# Existing queue repository is a cohesive persistence boundary; split in a
+# dedicated change with transaction and crash-recovery regression tests.
+Metrics/ClassLength:
+  Exclude:
+    - 'lib/video_encoder/persistence/job_repository.rb'
+
+Metrics/CyclomaticComplexity:
+  Exclude:
+    - 'lib/video_encoder/persistence/job_repository.rb'
+
+Metrics/PerceivedComplexity:
+  Exclude:
+    - 'lib/video_encoder/persistence/job_repository.rb'
+
+# mark_running returns a job, rather than a boolean.
+Naming/PredicateMethod:
+  Exclude:
+    - 'lib/video_encoder/persistence/job_repository.rb'
+
+# Called with ruby explicitly, not installed as standalone executables.
+Lint/ScriptPermission:
+  Exclude:
+    - 'script/prepare_ad_trim.rb'

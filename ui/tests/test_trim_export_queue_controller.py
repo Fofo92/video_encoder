@@ -546,7 +546,7 @@ class TrimExportQueueControllerTest(
 
         warning.assert_called_once_with(
             parent,
-            "Retrait impossible",
+            "Suppression impossible",
             "Job is not queued: trim-1",
         )
         controller.refresh.assert_not_called()

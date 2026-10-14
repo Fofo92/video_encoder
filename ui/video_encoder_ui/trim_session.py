@@ -85,6 +85,14 @@ class TrimSession:
     def remove_segment(self, segment):
         self._segments.remove(segment)
 
+    def replace_segment(self, index, segment):
+        if not 0 <= index < len(self._segments):
+            raise ValueError("segment index is invalid")
+        if segment.source_id not in self._sources:
+            raise ValueError("segment source is unknown")
+        self._segments[index] = segment
+        return segment
+
     def clear_segments(self):
         self._segments.clear()
 

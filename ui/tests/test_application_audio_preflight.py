@@ -27,6 +27,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             lambda project_path, output_path: project_path
         )
         defaults = {
+            "select_output_path": Mock(side_effect=lambda path: Path(path)),
             "close_after_preflight": False,
             "export_status_changed": Mock(),
             "audio_preflight_cancel_prompt_active": False,

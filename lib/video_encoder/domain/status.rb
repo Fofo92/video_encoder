@@ -7,5 +7,6 @@ module VideoEncoder
     DONE    = 'done'
     FAILED  = 'failed'
     INTERRUPTED = 'interrupted'
+    DEFERRED = 'deferred'
   end
 end

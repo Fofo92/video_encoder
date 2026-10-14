@@ -11,6 +11,7 @@ require_relative 'cli/list_jobs_command'
 require_relative 'cli/enqueue_trim_export_command'
 require_relative 'cli/run_trim_exports_command'
 require_relative 'cli/inspect_media_command'
+require_relative 'cli/manage_trim_job_command'
 
 module VideoEncoder
   # CLI handles command-line interface for VideoEncoder.
@@ -19,6 +20,10 @@ module VideoEncoder
     'version' => :print_version,
     'enqueue-trim-export' => :enqueue_trim_export,
     'remove-job' => :remove_job,
+    'defer-job' => :defer_job,
+    'resume-job' => :resume_job,
+    'set-job-output' => :set_job_output,
+    'delete-job' => :delete_job,
     'list' => :list,
     'status' => :status,
     'failed' => :failed,
@@ -37,6 +42,10 @@ module VideoEncoder
       video_encoder run-trim-exports [--once]
       video_encoder enqueue-trim-export <project.json> --output <movie.mkv>
       video_encoder remove-job <job_id>
+      video_encoder defer-job <job_id>
+      video_encoder resume-job <job_id>
+      video_encoder set-job-output <job_id> --output <movie.mkv>
+      video_encoder delete-job <job_id> [--delete-project]
       video_encoder list [--json]
       video_encoder status <job_id>
       video_encoder config
@@ -147,6 +156,12 @@ module VideoEncoder
       abort("Job not found: #{id}") unless job
 
       abort("Job is not queued: #{id}")
+    end
+
+    %w[defer-job resume-job set-job-output delete-job].each do |action|
+      define_method(action.tr('-', '_')) do
+        ManageTrimJobCommand.new(action: action, argv: @argv, repo: repo).run
+      end
     end
 
     def status

@@ -2,7 +2,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from .trim_project_source_names import (
     TrimProjectSourceNames,
@@ -14,6 +14,9 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
     start_requested = QtCore.Signal()
     retry_requested = QtCore.Signal(object)
     remove_requested = QtCore.Signal(object)
+    defer_requested = QtCore.Signal(object)
+    output_requested = QtCore.Signal(object)
+    delete_project_requested = QtCore.Signal(object)
     stop_requested = QtCore.Signal()
     finish_current_requested = QtCore.Signal()
 
@@ -23,6 +26,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         "done": "Terminé",
         "failed": "Échec",
         "interrupted": "Interrompu",
+        "deferred": "Reporté",
     }
 
     HEADERS = (
@@ -51,6 +55,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         ("Échecs", "failed"),
         ("Terminés", "done"),
         ("Tous", "all"),
+        ("Reportés", "deferred"),
     )
 
     def __init__(
@@ -200,6 +205,9 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             self.update_remove_button
         )
 
+        job_buttons = QtWidgets.QDialogButtonBox(parent=self)
+        layout.addWidget(job_buttons)
+
         buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.StandardButton.Close,
             parent=self,
@@ -231,7 +239,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             self.finish_current_requested
         )
 
-        self.retry_button = buttons.addButton(
+        self.retry_button = job_buttons.addButton(
             "Relancer le travail",
             QtWidgets.QDialogButtonBox.ButtonRole.ActionRole,
         )
@@ -240,14 +248,29 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             self.request_selected_retry
         )
 
-        self.remove_button = buttons.addButton(
-            "Retirer de la file",
+        self.remove_button = job_buttons.addButton(
+            "Supprimer la tâche",
             QtWidgets.QDialogButtonBox.ButtonRole.ActionRole,
         )
         self.remove_button.setEnabled(False)
         self.remove_button.clicked.connect(
             self.request_selected_removal
         )
+        self.set_action_icon(self.remove_button, "list-remove", QtWidgets.QStyle.StandardPixmap.SP_DialogDiscardButton)
+        self.remove_button.setToolTip("Supprimer la tâche uniquement ; conserver le JSON, les sources et la vidéo")
+
+        self.defer_button = job_buttons.addButton("Reporter", QtWidgets.QDialogButtonBox.ButtonRole.ActionRole)
+        self.set_action_icon(self.defer_button, "media-playback-pause", QtWidgets.QStyle.StandardPixmap.SP_MediaPause)
+        self.defer_button.setToolTip("Conserver la tâche mais l’exclure des prochains lancements jusqu’à sa réactivation")
+        self.defer_button.clicked.connect(self.request_selected_deferral)
+        self.output_button = job_buttons.addButton("Destination…", QtWidgets.QDialogButtonBox.ButtonRole.ActionRole)
+        self.set_action_icon(self.output_button, "document-edit", QtWidgets.QStyle.StandardPixmap.SP_FileIcon)
+        self.output_button.setToolTip("Modifier le nom et le dossier du fichier de sortie avant lancement")
+        self.output_button.clicked.connect(self.request_selected_output)
+        self.delete_project_button = job_buttons.addButton("Supprimer tâche et JSON…", QtWidgets.QDialogButtonBox.ButtonRole.ActionRole)
+        self.set_action_icon(self.delete_project_button, "user-trash", QtWidgets.QStyle.StandardPixmap.SP_TrashIcon)
+        self.delete_project_button.setToolTip("Supprimer aussi le projet JSON après confirmation ; conserver les sources et la vidéo")
+        self.delete_project_button.clicked.connect(self.request_selected_project_deletion)
 
         self.refresh_button = buttons.addButton(
             "Actualiser",
@@ -266,6 +289,12 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.refresh_status_label.setText(
             f"Dernière actualisation : {time_text}"
         )
+
+    def set_action_icon(self, button, name, fallback):
+        icon = QtGui.QIcon.fromTheme(name)
+        if icon.isNull():
+            icon = self.style().standardIcon(fallback)
+        button.setIcon(icon)
 
     def set_jobs(self, jobs):
         selected_job = self.selected_job()
@@ -481,6 +510,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.update_start_button()
         self.update_stop_button()
         self.update_finish_current_button()
+        self.update_remove_button()
 
     def set_finish_current_requested(self, requested):
         self.finishing_current = bool(requested)
@@ -725,15 +755,55 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
         self.remove_button.setEnabled(
             job is not None
-            and job.get("status") == "queued"
+            and job.get("status") in ("queued", "deferred", "failed", "interrupted", "done")
         )
+        pending = job is not None and job.get("status") in ("queued", "deferred")
+        self.defer_button.setEnabled(pending)
+        deferred = job is not None and job.get("status") == "deferred"
+        self.defer_button.setText("Réactiver" if deferred else "Reporter")
+        self.defer_button.setToolTip(
+            "Inclure à nouveau cette tâche dans les prochains lancements"
+            if deferred else "Conserver la tâche, exclue des lancements jusqu’à sa réactivation"
+        )
+        self.set_action_icon(
+            self.defer_button,
+            "media-playback-start" if deferred else "media-playback-pause",
+            QtWidgets.QStyle.StandardPixmap.SP_MediaPlay if deferred else QtWidgets.QStyle.StandardPixmap.SP_MediaPause,
+        )
+        self.output_button.setEnabled(pending and not self.running and not any(item.get("status") == "running" for item in self.jobs))
+        project = Path(job.get("input_path") or "") if job is not None else None
+        shared_project = job is not None and any(
+            item.get("id") != job.get("id") and item.get("input_path")
+            and Path(item["input_path"]).resolve() == project.resolve()
+            for item in self.jobs
+        )
+        self.delete_project_button.setEnabled(
+            job is not None and job.get("status") in ("queued", "deferred", "failed", "interrupted", "done")
+            and project.is_file() and project.suffix.lower() == ".json" and not project.is_symlink()
+            and not shared_project
+        )
+
+    def request_selected_deferral(self):
+        job = self.selected_job()
+        if job is not None and job.get("status") in ("queued", "deferred"):
+            self.defer_requested.emit(job)
+
+    def request_selected_output(self):
+        job = self.selected_job()
+        if job is not None and job.get("status") in ("queued", "deferred") and not self.running and not any(item.get("status") == "running" for item in self.jobs):
+            self.output_requested.emit(job)
+
+    def request_selected_project_deletion(self):
+        job = self.selected_job()
+        if job is not None and job.get("status") in ("queued", "deferred", "failed", "interrupted", "done") and Path(job.get("input_path") or "").is_file():
+            self.delete_project_requested.emit(job)
 
     def request_selected_removal(self):
         job = self.selected_job()
 
         if (
             job is not None
-            and job.get("status") == "queued"
+            and job.get("status") in ("queued", "deferred", "failed", "interrupted", "done")
         ):
             self.remove_requested.emit(job)
 

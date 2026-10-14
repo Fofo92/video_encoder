@@ -1,3 +1,4 @@
+from pathlib import Path
 from PySide6 import QtCore, QtWidgets
 
 from video_encoder_ui.trim_export_queue_client import (
@@ -77,6 +78,9 @@ class TrimExportQueueController:
         dialog.remove_requested.connect(
             lambda job: self.remove(dialog, job)
         )
+        dialog.defer_requested.connect(lambda job: self.defer(dialog, job))
+        dialog.output_requested.connect(lambda job: self.change_output(dialog, job))
+        dialog.delete_project_requested.connect(lambda job: self.delete_project(dialog, job))
 
         dialog.exec()
 
@@ -144,9 +148,9 @@ class TrimExportQueueController:
     def remove(self, dialog, job):
         answer = QtWidgets.QMessageBox.question(
             self.parent,
-            "Retirer le travail",
+            "Supprimer la tâche",
             (
-                "Retirer ce travail de la file d’attente ?\n\n"
+                "Supprimer cette tâche de la liste ?\n\n"
                 f"Projet : {job['input_path']}\n"
                 f"Sortie : {job['output_path']}\n\n"
                 "Le projet, les sources et le fichier de sortie "
@@ -170,11 +174,62 @@ class TrimExportQueueController:
         except TrimExportQueueError as error:
             QtWidgets.QMessageBox.warning(
                 self.parent,
-                "Retrait impossible",
+                "Suppression impossible",
                 str(error),
             )
             return
 
+        self.refresh(dialog)
+
+    def defer(self, dialog, job):
+        try:
+            if job["status"] == "deferred":
+                self.client.resume(job["id"])
+            elif job["status"] == "queued":
+                self.client.defer(job["id"])
+            else:
+                return
+        except TrimExportQueueError as error:
+            QtWidgets.QMessageBox.warning(self.parent, "Report impossible", str(error))
+            return
+        self.refresh(dialog)
+
+    def change_output(self, dialog, job):
+        if self.runner.is_running or job.get("status") not in ("queued", "deferred"):
+            return
+        selected, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self.parent, "Destination du fichier encodé", job["output_path"], "Vidéo Matroska (*.mkv)",
+        )
+        if not selected:
+            return
+        path = Path(selected)
+        if not path.suffix:
+            path = path.with_suffix(".mkv")
+        try:
+            self.client.set_output(job["id"], path)
+        except TrimExportQueueError as error:
+            QtWidgets.QMessageBox.warning(self.parent, "Destination impossible", str(error))
+            return
+        self.refresh(dialog)
+
+    def delete_project(self, dialog, job):
+        if job.get("status") == "running":
+            return
+        answer = QtWidgets.QMessageBox.question(
+            self.parent, "Supprimer la tâche et son projet",
+            f"Supprimer définitivement cette tâche et le fichier JSON suivant ?\n\n{job['input_path']}\n\n"
+            "Les sources vidéo, le fichier encodé et son reçu seront conservés. "
+            "Un projet utilisé par une autre tâche ne peut pas être supprimé.",
+            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+            QtWidgets.QMessageBox.StandardButton.No,
+        )
+        if answer != QtWidgets.QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self.client.delete_project(job["id"])
+        except TrimExportQueueError as error:
+            QtWidgets.QMessageBox.warning(self.parent, "Suppression impossible", str(error))
+            return
         self.refresh(dialog)
 
     def start(self, dialog):

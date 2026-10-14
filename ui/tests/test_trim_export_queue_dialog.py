@@ -674,7 +674,7 @@ class TrimExportQueueDialogTest(unittest.TestCase):
 
         remove_requested.assert_called_once_with(job)
 
-    def test_disables_removal_for_non_queued_job(self):
+    def test_disables_removal_for_running_job(self):
         dialog = TrimExportQueueDialog(
             [
                 {
@@ -682,7 +682,7 @@ class TrimExportQueueDialogTest(unittest.TestCase):
                     "kind": "trim_export",
                     "input_path": "movie.json",
                     "output_path": "movie.mkv",
-                    "status": "done",
+                    "status": "running",
                     "attempts": 1,
                 }
             ]
@@ -1105,6 +1105,7 @@ class TrimExportQueueDialogTest(unittest.TestCase):
                 "Échecs",
                 "Terminés",
                 "Tous",
+                "Reportés",
             ],
         )
 

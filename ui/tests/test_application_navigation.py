@@ -55,6 +55,9 @@ class ApplicationNavigationTest(unittest.TestCase):
             segment_list=SimpleNamespace(
                 currentRow=Mock(
                     return_value=0
+                ),
+                selectedItems=Mock(
+                    return_value=[object()]
                 )
             ),
             show_frame=Mock(),
@@ -84,6 +87,9 @@ class ApplicationNavigationTest(unittest.TestCase):
             segment_list=SimpleNamespace(
                 currentRow=Mock(
                     return_value=-1
+                ),
+                selectedItems=Mock(
+                    return_value=[]
                 )
             ),
             show_frame=Mock(),

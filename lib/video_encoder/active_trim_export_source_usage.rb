@@ -30,7 +30,7 @@ module VideoEncoder
 
     def active_trim_export?(job)
       job.kind == TrimExportJob::KIND &&
-        (job.queued? || job.running?)
+        (job.queued? || job.running? || job.status == Status::DEFERRED)
     end
 
     def project_uses?(job, target)

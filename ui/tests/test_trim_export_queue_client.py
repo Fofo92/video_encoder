@@ -92,7 +92,7 @@ class TrimExportQueueClientTest(unittest.TestCase):
         runner.assert_called_once_with(
             [
                 "/app/video_encoder",
-                "remove-job",
+                "delete-job",
                 "trim-1",
             ],
             text=True,

@@ -52,7 +52,7 @@ class TrimExportQueueClient:
         result = self.runner(
             [
                 str(self.executable),
-                "remove-job",
+                "delete-job",
                 str(job_id),
             ],
             text=True,
@@ -69,6 +69,27 @@ class TrimExportQueueClient:
             )
 
         return result.stdout.strip()
+
+    def manage(self, command, job_id, *options):
+        result = self.runner(
+            [str(self.executable), command, str(job_id), *map(str, options)],
+            text=True, capture_output=True, check=False,
+        )
+        if result.returncode != 0:
+            raise TrimExportQueueError(self.error_message(result, fallback="queue update failed"))
+        return result.stdout.strip()
+
+    def defer(self, job_id):
+        return self.manage("defer-job", job_id)
+
+    def resume(self, job_id):
+        return self.manage("resume-job", job_id)
+
+    def set_output(self, job_id, path):
+        return self.manage("set-job-output", job_id, "--output", path)
+
+    def delete_project(self, job_id):
+        return self.manage("delete-job", job_id, "--delete-project")
 
     def list_jobs(self):
         result = self.runner(

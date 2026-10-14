@@ -15,6 +15,13 @@ class TrimProjectArchiver:
         if source.resolve() == destination.resolve():
             return source
 
+        if destination.is_symlink():
+            raise FileExistsError(f"Le projet de destination est un lien symbolique : {destination}")
+        if destination.exists():
+            if source.read_bytes() == destination.read_bytes():
+                return destination
+            raise FileExistsError(f"Un autre projet existe déjà à cette destination : {destination}")
+
         self.copy_file(
             source,
             destination
