@@ -2207,6 +2207,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.trim_session.clear_segments()
         for segment in segments:
             self.trim_session.add_segment(segment)
+        self.trim_session.analysis_workspaces.extend(session.analysis_workspaces)
         self.project_path = None
         self.clear_active_markers()
         self.set_project_modified()
@@ -2336,6 +2337,13 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             f"Projet enregistré : {destination}",
             5_000
         )
+
+        if self.trim_project_writer.cleanup_warnings:
+            QtWidgets.QMessageBox.warning(
+                self, "Projet enregistré ; nettoyage différé",
+                "Le montage est enregistré. Les intermédiaires suivants sont conservés :\n\n"
+                + "\n".join(self.trim_project_writer.cleanup_warnings),
+            )
 
         return destination
 

@@ -56,6 +56,7 @@ class TrimSession:
     def __init__(self):
         self._sources = {}
         self._segments = []
+        self.analysis_workspaces = []
 
     @property
     def sources(self):
@@ -95,6 +96,7 @@ class TrimSession:
 
     def clear_segments(self):
         self._segments.clear()
+        self.analysis_workspaces.clear()
 
     @staticmethod
     def serialize_source(source):

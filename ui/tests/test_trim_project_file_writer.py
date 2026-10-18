@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock
+from types import SimpleNamespace
 
 from video_encoder_ui.trim_project_file_writer import (
     TrimProjectFileWriter,
@@ -36,7 +37,7 @@ class TrimProjectFileWriterTest(unittest.TestCase):
             )
 
             result = writer.save(
-                Mock(),
+                SimpleNamespace(analysis_workspaces=[]),
                 destination
             )
 
