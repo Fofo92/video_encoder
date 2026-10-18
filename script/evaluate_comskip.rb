@@ -6,6 +6,7 @@ require_relative '../lib/video_encoder/ad_detection/comskip_project'
 require_relative '../lib/video_encoder/ad_detection/comskip_execution'
 require_relative '../lib/video_encoder/ad_detection/comskip_analysis'
 require_relative '../lib/video_encoder/ad_detection/reference_evaluation'
+require_relative '../lib/video_encoder/ad_detection/comskip_reprise_experiment'
 
 # Analyse first; compare optional human references only after detection finishes.
 module EvaluateComskip
@@ -18,6 +19,9 @@ module EvaluateComskip
       p.on('--source FILE') { |value| options[:source] = value }
       p.on('--workspace DIR') { |value| options[:workspace] = value }
       p.on('--reference JSON') { |value| options[:reference] = value }
+      p.on('--suggest-reprises', 'Experimental alternative based on transitions and stable logo returns') do
+        options[:suggest_reprises] = true
+      end
       p.on('--recover-complete-output', 'Reuse complete TXT after an adapter failure; retain manual review') do
         options[:recover_complete_output] = true
       end
@@ -29,6 +33,9 @@ module EvaluateComskip
     end
     parser.parse!(argv)
     raise ArgumentError, parser.to_s unless argv.empty? && options[:source] && options[:workspace]
+    if options[:suggest_reprises] && !(options[:first_explicit] && options[:last])
+      raise ArgumentError, '--suggest-reprises requires explicit --start-frame and --end-frame'
+    end
 
     prepare(options)
   end
@@ -49,7 +56,16 @@ module EvaluateComskip
                proposed_intervals: cuts.intervals.size, scanned_frame_count: cuts.frame_count }
     review[:evaluation] = evaluate(options, source, cuts) if options[:reference]
     write_draft(options, source, workspace, cuts, review)
+    review[:reprise_experiment] = experiment(options, source, workspace, cuts) if options[:suggest_reprises]
     puts JSON.pretty_generate(review)
+  end
+
+  def experiment(options, source, workspace, cuts)
+    report, refined = VideoEncoder::AdDetection::ComskipRepriseExperiment.new(
+      source: source, workspace: workspace, cuts: cuts, first: options[:first], last: options[:last]
+    ).call
+    report[:evaluation] = evaluate(options, source, refined) if options[:reference] && refined
+    report
   end
 
   def evaluate(options, source, cuts)

@@ -1,0 +1,17 @@
+Mpeg:	/commun/to_be_cut/9-1-1 - S05 E15 - Les signes du destin.m2t
+Frame  37184 (1487.280s) - Black frame because large scene change of 79, uniform 20378
+Frame  37313 (1492.440s) - Black frame because large scene change of 94, uniform 21014
+Frame  37365 (1494.520s) - Black frame because large scene change of 98, uniform 6970
+Frame  37385 (1495.320s) - Uniform frame with brightness of 235 and uniform of 0
+Frame  37968 (1518.640s) - Black frame because large scene change of 93, uniform 5556
+Start logo cblock 6	frame 38100
+End logo block 6	frame 44150	Length - 0:03:52.00
+Start logo cblock 17	frame 69600
+Frame  79015 (3160.520s) - Black frame because large scene change of 99, uniform 8988
+Frame  79027 (3161.000s) - Black frame because large scene change of 93, uniform 18417
+Frame  79378 (3175.040s) - Black frame because large scene change of 15, uniform 9457
+Frame  79402 (3176.000s) - Black frame because large scene change of 94, uniform 12726
+Frame  79552 (3182.000s) - Black frame because large scene change of 95, uniform 7626
+Start logo cblock 17	frame 79600
+End logo block 17	frame 90450	Length - 0:07:04.00
+Average framerate:          25.000

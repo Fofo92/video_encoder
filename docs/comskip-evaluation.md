@@ -64,6 +64,35 @@ sont [1, -510] et [-5, -147] images : les reprises sont trop précoces de
 de l'œuvre, pas ces imprécisions intérieures. Aucun décalage spécifique à cet
 épisode n'est appliqué au moteur.
 
+### Affinement expérimental des reprises
+
+Ajouter `--suggest-reprises` à une commande avec IN et OUT explicites produit
+un rapport `reprise_experiment` et, si des indices suffisants sont présents,
+un projet distinct `proposal-experimental-reprises-IN-OUT.json`. Le projet
+Comskip verrouillé reste disponible et inchangé. Aucun encodage n'est lancé.
+Les logs déjà conservés suffisent ; le calcul Comskip n'est pas relancé.
+
+La règle exploratoire cherche, dans les 30 secondes suivant une reprise brute,
+un unique retour de logo présent pendant au moins 60 secondes. Elle propose une
+transition de score au moins 90 uniquement s'il en existe une seule dans les
+8 secondes précédant ce retour, après la reprise brute et avant la prochaine
+coupure ou OUT. Plusieurs possibilités, aucun indice ou un journal de source
+ou cadence différente entraînent une abstention. Les références manuelles
+n'entrent pas dans cette décision ; la comparaison intervient ensuite.
+
+Les coordonnées des transitions proviennent de leur temps en secondes et de la
+cadence moyenne, car les numéros d'images du journal et ceux du TXT exporté
+n'utilisent pas nécessairement la même échelle.
+
+Sur les traces S05 E15 fournies, les reprises suggérées sont 37 966 et 79 550,
+soit 4 et 3 images après les repères humains. Ce résultat est mesuré sur le cas
+ayant servi à concevoir la règle : ce n'est pas une validation indépendante.
+Les seuils sont expérimentaux, sans sélection de chaîne ou de jingle. Un logo
+peut également être présent dans une publicité ; une transition peut appartenir
+au programme. Il faut vérifier le raccord proposé avant d'utiliser ce projet.
+Cette expérience ne corrige ni les départs en publicité, ni une pause absente,
+ni une reprise brute déjà trop tardive. Le bouton de l'interface reste inchangé.
+
 Relancer la même commande réutilise l'analyse complète si la source, le profil,
 la version du moteur et le résultat n'ont pas changé. Un dossier incomplet ou
 modifié est refusé ; employer un nouveau nom de dossier pour un nouvel essai.
