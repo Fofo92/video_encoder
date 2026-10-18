@@ -18,6 +18,9 @@ module EvaluateComskip
       p.on('--source FILE') { |value| options[:source] = value }
       p.on('--workspace DIR') { |value| options[:workspace] = value }
       p.on('--reference JSON') { |value| options[:reference] = value }
+      p.on('--recover-complete-output', 'Reuse complete TXT after an adapter failure; retain manual review') do
+        options[:recover_complete_output] = true
+      end
       p.on('--start-frame N', Integer) do |value|
         options[:first] = value
         options[:first_explicit] = true
@@ -36,9 +39,13 @@ module EvaluateComskip
     analysis = VideoEncoder::AdDetection::ComskipAnalysis.new(profile: File.expand_path(
       '../config/comskip-generic.ini', __dir__
     ))
-    cuts, observation, reused = analysis.call(source: source, workspace: workspace)
+    cuts, observation, reused = analysis.call(source: source, workspace: workspace,
+                                              recover_complete_output: options.fetch(:recover_complete_output, false))
     review = { needs_manual_review: true, reused_analysis: reused,
                analysis_seconds: observation.fetch('elapsed_seconds'),
+               recovered_output: observation.fetch('recovered_output', false),
+               native_frame_rate: observation.fetch('native_frame_rate', observation.fetch('frame_rate')),
+               project_frame_rate: cuts.frame_rate.to_s,
                proposed_intervals: cuts.intervals.size, scanned_frame_count: cuts.frame_count }
     review[:evaluation] = evaluate(options, source, cuts) if options[:reference]
     write_draft(options, source, workspace, cuts, review)

@@ -4,6 +4,7 @@ require 'json'
 require 'digest'
 require 'time'
 require 'fileutils'
+require_relative 'comskip_coordinates'
 
 module VideoEncoder
   module AdDetection
@@ -14,7 +15,7 @@ module VideoEncoder
         @execution = execution
       end
 
-      def call(source:, workspace:)
+      def call(source:, workspace:, recover_complete_output: false)
         source = File.realpath(source)
         raise ArgumentError, 'Source must be a regular file' unless File.file?(source)
 
@@ -22,6 +23,9 @@ module VideoEncoder
         raise ArgumentError, 'Workspace cannot be a symlink' if File.symlink?(workspace)
 
         identity = identity_for(source)
+        if recover_complete_output && File.directory?(workspace) && !File.exist?("#{workspace}/analysis.json")
+          return recover(source, workspace, identity)
+        end
         return reuse(source, workspace, identity) if File.exist?(workspace)
 
         execute(source, workspace, identity)
@@ -49,23 +53,38 @@ module VideoEncoder
         @execution.call(source, workspace)
         raise 'Source changed during analysis' unless identity_for(source) == identity
 
-        cuts = read_cuts(workspace)
-        if (cuts.frame_rate - rate).abs > Rational(1, 100)
-          raise 'Comskip frame rate differs from the source: timing requires review'
-        end
-
-        finish(workspace, identity, cuts, started)
+        finish(workspace, identity, read_cuts(workspace), rate,
+               Process.clock_gettime(Process::CLOCK_MONOTONIC) - started)
       end
 
-      def finish(workspace, identity, cuts, started)
+      def finish(workspace, identity, native, rate, elapsed, recovered: false)
+        cuts = ComskipCoordinates.convert(native, rate)
         report = { 'format' => 'video_encoder.comskip_analysis', 'version' => 1,
                    'status' => 'complete', 'identity' => identity,
                    'cut_list_sha256' => Digest::SHA256.file("#{workspace}/analysis.txt").hexdigest,
-                   'elapsed_seconds' => Process.clock_gettime(Process::CLOCK_MONOTONIC) - started,
+                   'elapsed_seconds' => elapsed, 'recovered_output' => recovered,
+                   'native_frame_rate' => native.frame_rate.to_s, 'native_frame_count' => native.frame_count,
                    'scanned_frame_count' => cuts.frame_count, 'frame_rate' => cuts.frame_rate.to_s,
                    'excluded_intervals' => cuts.intervals, 'needs_manual_review' => true }
         write_json("#{workspace}/analysis.json", report)
         [cuts, report, false]
+      end
+
+      def recover(source, workspace, identity)
+        request = JSON.parse(File.read("#{workspace}/request.json"))
+        profile = Digest::SHA256.file("#{workspace}/comskip.ini").hexdigest
+        unless request == identity && profile == identity.fetch('profile_sha256')
+          raise ArgumentError, 'Cannot recover output: source, engine or profile has changed'
+        end
+
+        native = read_cuts(workspace)
+        rate = @execution.frame_rate(source)
+        raise 'Source changed during recovery' unless identity_for(source) == identity
+
+        # Explicit recovery accepts a complete TXT after an interrupted adapter;
+        # it does not invent an engine exit status or a measured runtime.
+        cuts, report, = finish(workspace, identity, native, rate, nil, recovered: true)
+        [cuts, report, true]
       end
 
       def reuse(source, workspace, identity)
@@ -75,7 +94,7 @@ module VideoEncoder
                 Digest::SHA256.file("#{workspace}/analysis.txt").hexdigest == report['cut_list_sha256']
         raise ArgumentError, "Analysis does not match #{source}; keep it and choose a new workspace" unless valid
 
-        [read_cuts(workspace), report, true]
+        [ComskipCoordinates.convert(read_cuts(workspace), Rational(report.fetch('frame_rate'))), report, true]
       end
 
       def read_cuts(workspace)

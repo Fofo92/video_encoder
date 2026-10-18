@@ -43,6 +43,28 @@ Les diagnostics restent conservés pour l'évaluation. Leur nettoyage n'est pas
 automatique : ne supprimer ce dossier qu'après avoir enregistré le projet
 définitif ailleurs et terminé l'examen des résultats.
 
+### Reprise de l'export Braveheart à 50 Hz
+
+Comskip peut exporter les coordonnées à la cadence des champs (50 Hz) alors que
+l'éditeur utilise 25 images/s. L'adaptateur accepte ce doublement exact et
+convertit les bornes et le nombre d'images vers la cadence moyenne de la source.
+Seules les images entièrement comprises dans une plage sont proposées à la
+suppression. Les autres rapports de cadence restent bloqués. Cette conversion
+ne prouve pas la justesse des raccords sur un flux TNT : le visionnage reste requis.
+
+Pour le dossier déjà calculé puis refusé par l'ancien contrôle de cadence,
+ajouter `--recover-complete-output` à la commande d'essai. Cette option exige
+le même fichier source, profil et moteur que dans `request.json`, ainsi qu'un
+TXT complet et valide ; elle ne relance pas le moteur. Il faut que l'analyse
+soit arrêtée avant de demander cette reprise. Une récupération explicite peut
+accepter un export complet sans connaître le statut de sortie du processus
+initial : elle demeure une proposition à vérifier, jamais une validation de
+qualité. Le temps de calcul inconnu est affiché comme `null`.
+
+Le résultat affiche `native_frame_rate`, `project_frame_rate` et
+`recovered_output`. Le TXT original est conservé, sans modification. Les reprises
+ultérieures vérifient aussi son empreinte. Aucun projet déjà édité n'est écrasé.
+
 ## Validation disponible
 
 Les tests automatisés couvrent le format des coupures, les compléments de

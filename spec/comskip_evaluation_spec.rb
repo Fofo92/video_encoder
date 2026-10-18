@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require 'tmpdir'
+require 'stringio'
+require_relative '../script/evaluate_comskip'
 require_relative '../lib/video_encoder/ad_detection/comskip_cut_list'
 require_relative '../lib/video_encoder/ad_detection/comskip_project'
 require_relative '../lib/video_encoder/ad_detection/comskip_execution'
@@ -26,6 +28,25 @@ RSpec.describe 'Generic detector evaluation' do
     project = VideoEncoder::AdDetection::ComskipProject.new(source: '/capture.m2t', cut_list: cuts,
                                                             first: 100, last: 950).call
     expect(project[:timeline].map { |row| [row[:start_frame], row[:end_frame]] }).to eq([[200, 899]])
+  end
+
+  it 'converts the real Braveheart 50 Hz export into conservative 25 fps exclusions' do
+    native = parse("7635 15623\n17637 28147\n210667 221243\n342433 353381\n" \
+                   "544141 555991\n558763 563513\n614903 614905\n", count: 614_905, rate: 5000)
+    cuts = VideoEncoder::AdDetection::ComskipCoordinates.convert(native, Rational(25))
+    expect(cuts.frame_rate).to eq(Rational(25))
+    expect(cuts.frame_count).to eq(307_452)
+    expect(cuts.intervals[2..3]).to eq([[105_333, 110_620], [171_216, 176_689]])
+    expect(cuts.intervals.last).to eq([307_451, 307_451])
+    expect(native.frame_count).to eq(614_905)
+  end
+
+  it 'does not exclude programme frames only partially covered in field coordinates' do
+    native = parse("2 3\n6 8\n", count: 1000, rate: 5000)
+    cuts = VideoEncoder::AdDetection::ComskipCoordinates.convert(native, Rational(25))
+    expect(cuts.intervals).to eq([[3, 3]])
+    expect { VideoEncoder::AdDetection::ComskipCoordinates.convert(native, Rational(24)) }
+      .to raise_error(/unsupported coordinate conversion/)
   end
 
   it 'keeps an uncut draft for a complete result without commercial intervals' do
@@ -133,6 +154,76 @@ RSpec.describe 'Generic detector evaluation' do
       allow(@execution).to receive(:call).and_raise('decoder failed')
       expect { detector.call(source: @source, workspace: @workspace) }.to raise_error(/decoder failed/)
       expect(File.exist?("#{@workspace}/analysis.json")).to be(false)
+    end
+
+    it 'normalizes a fresh field-rate export and reuses it without another conversion or engine run' do
+      detector = analysis
+      allow(@execution).to receive(:call) do |_source, workspace|
+        File.write("#{workspace}/analysis.txt", "FILE PROCESSING COMPLETE 2000 FRAMES AT 5000\n-----\n401 600\n")
+      end
+      cuts, report, = detector.call(source: @source, workspace: @workspace)
+      expect(cuts.intervals).to eq([[200, 299]])
+      expect(report['native_frame_rate']).to eq('50/1')
+      cuts, _report, reused = detector.call(source: @source, workspace: @workspace)
+      expect(reused).to be(true)
+      expect(cuts.intervals).to eq([[200, 299]])
+      expect(@execution).to have_received(:call).once
+    end
+
+    it 'explicitly recovers complete legacy output without rerunning the detector or inventing runtime' do
+      detector = analysis
+      allow(@execution).to receive(:frame_rate).and_return(Rational(24))
+      expect { detector.call(source: @source, workspace: @workspace) }.to raise_error(/frame rate differs/)
+      expect { detector.call(source: @source, workspace: @workspace) }.to raise_error(Errno::ENOENT)
+      allow(@execution).to receive(:frame_rate).and_return(Rational(25))
+      File.write("#{@workspace}/analysis.txt", "FILE PROCESSING COMPLETE 2000 FRAMES AT 5000\n-----\n401 600\n")
+      cuts, report, reused = detector.call(source: @source, workspace: @workspace, recover_complete_output: true)
+      expect(cuts.intervals).to eq([[200, 299]])
+      expect(reused).to be(true)
+      expect(report['recovered_output']).to be(true)
+      expect(report['elapsed_seconds']).to be_nil
+      expect(report['needs_manual_review']).to be(true)
+      expect(@execution).to have_received(:call).once
+    end
+
+    it 'rejects recovery after source changes, profile changes or an incomplete native export' do
+      detector = analysis
+      allow(@execution).to receive(:call).and_raise('interrupted')
+      expect { detector.call(source: @source, workspace: @workspace) }.to raise_error(/interrupted/)
+      File.write("#{@workspace}/analysis.txt", 'incomplete')
+      expect { detector.call(source: @source, workspace: @workspace, recover_complete_output: true) }
+        .to raise_error(/incomplete/)
+      File.write("#{@workspace}/comskip.ini", 'changed')
+      expect { detector.call(source: @source, workspace: @workspace, recover_complete_output: true) }
+        .to raise_error(/has changed/)
+      File.write("#{@workspace}/comskip.ini", 'detect_method=111')
+      File.write(@source, 'changed capture')
+      expect { detector.call(source: @source, workspace: @workspace, recover_complete_output: true) }
+        .to raise_error(/has changed/)
+      expect(File.exist?("#{@workspace}/analysis.json")).to be(false)
+      expect(@execution).to have_received(:call).once
+    end
+
+    it 'accepts the recovery CLI option and writes a project in source-frame coordinates' do
+      detector = analysis
+      allow(@execution).to receive(:frame_rate).and_return(Rational(24))
+      expect { detector.call(source: @source, workspace: @workspace) }.to raise_error(/frame rate differs/)
+      allow(@execution).to receive(:frame_rate).and_return(Rational(25))
+      File.write("#{@workspace}/analysis.txt", "FILE PROCESSING COMPLETE 2000 FRAMES AT 5000\n-----\n401 600\n")
+      allow(VideoEncoder::AdDetection::ComskipAnalysis).to receive(:new).and_return(detector)
+      output = StringIO.new
+      original_stdout = $stdout
+      $stdout = output
+      EvaluateComskip.run(['--source', @source, '--workspace', @workspace, '--recover-complete-output'])
+      review = JSON.parse(output.string)
+      expect(review['recovered_output']).to be(true)
+      expect(review['project_frame_rate']).to eq('25/1')
+      project = JSON.parse(File.read(review.fetch('project')))
+      expect(project['timeline'].map { |row| [row['start_frame'], row['end_frame']] })
+        .to eq([[0, 199], [300, 999]])
+      expect(@execution).to have_received(:call).once
+    ensure
+      $stdout = original_stdout
     end
   end
 end
