@@ -28,6 +28,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
         )
         defaults = {
             "select_output_path": Mock(side_effect=lambda path: Path(path)),
+            "write_project": Mock(side_effect=lambda path: Path(path)),
             "close_after_preflight": False,
             "export_status_changed": Mock(),
             "audio_preflight_cancel_prompt_active": False,
@@ -58,7 +59,8 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
 
         MltFrameMonitor.export_project(monitor)
 
-        monitor.save_project.assert_called_once_with()
+        monitor.save_project.assert_not_called()
+        monitor.write_project.assert_called_once_with(project_path)
         preflight.start.assert_called_once_with(project_path)
         exporter.start.assert_not_called()
         self.assertEqual(
@@ -97,7 +99,8 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             queued=True,
         )
 
-        monitor.save_project.assert_called_once_with()
+        monitor.save_project.assert_not_called()
+        monitor.write_project.assert_called_once_with(project_path)
         project_archiver.archive.assert_not_called()
         preflight.start.assert_called_once_with(
             project_path

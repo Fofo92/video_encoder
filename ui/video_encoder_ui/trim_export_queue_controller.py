@@ -1,5 +1,5 @@
-from pathlib import Path
 from PySide6 import QtCore, QtWidgets
+from .project_destination import select_project_output
 
 from video_encoder_ui.trim_export_queue_client import (
     TrimExportQueueError,
@@ -197,14 +197,9 @@ class TrimExportQueueController:
     def change_output(self, dialog, job):
         if self.runner.is_running or job.get("status") not in ("queued", "deferred"):
             return
-        selected, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self.parent, "Destination du fichier encodé", job["output_path"], "Vidéo Matroska (*.mkv)",
-        )
-        if not selected:
+        path = select_project_output(self.parent, job["output_path"], job.get("input_path"))
+        if path is None:
             return
-        path = Path(selected)
-        if not path.suffix:
-            path = path.with_suffix(".mkv")
         try:
             self.client.set_output(job["id"], path)
         except TrimExportQueueError as error:

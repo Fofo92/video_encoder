@@ -1,5 +1,30 @@
 # Roadmap
 
+## Parcours utilisateur et intégration avec vidb — 18 octobre 2026
+
+Ordre convenu pour les prochaines évolutions :
+
+1. Une seule saisie du nom et du dossier pour le projet de découpage JSON et le
+   MKV ; modification possible après annulation du récapitulatif et avant le
+   lancement de la tâche. Le fonctionnement est détaillé dans
+   [Bornes, tâches et destinations](editor-and-queue-actions.md).
+2. Finaliser le parcours d'analyse publicitaire : emplacement automatique des
+   intermédiaires, analyse et proposition clairement distinguées du chargement
+   d'un rapport existant, raccords faciles à vérifier et résultats utiles
+   conservés avec le projet sous le même nom de base.
+3. Déplacer ou renommer les fichiers d'un projet terminé et mettre à jour leurs
+   références sans réencoder.
+4. Consulter vidb pour identifier l'œuvre à partir de candidats documentés et
+   proposer son nom et son classement sur disque ; transmettre le résultat
+   d'encodage pour compléter la fiche et rattacher sa copie.
+5. Préparer, lancer et suivre les encodages depuis vidb, en réutilisant la file
+   technique de video_encoder et en conservant son fonctionnement autonome.
+
+La correction de fraîcheur et les améliorations de lecture du guide TV ont été
+validées séparément dans vidb (PR n° 14). Les chantiers ci-dessus n'exigent pas
+de modifier à nouveau le guide TV. Les validations seront regroupées par
+parcours cohérent, avec distinction entre contrôles automatiques et usage réel.
+
 ## Distribution Docker de CCExtractor
 
 La distribution reproductible de CCExtractor avec OCR français est
