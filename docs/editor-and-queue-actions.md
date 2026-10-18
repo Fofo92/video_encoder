@@ -72,9 +72,36 @@ choix commun. Le JSON et la destination du MKV sont mis à jour sur la tâche
 existante : son identifiant, son état, ses paramètres et ses tentatives sont
 conservés. Les fichiers ne sont pas réencodés par cette action.
 
-Les rapports et caches intermédiaires d'analyse publicitaire restent gérés par
-le pilote actuel. Leur création automatique et la conservation des résultats
-utiles avec le projet feront partie du chantier suivant.
+### Nettoyage après enregistrement
+
+Le projet de découpage JSON contient les segments et leurs bornes corrigées.
+Une fois ce projet enregistré, ses rapports, caches et propositions automatiques
+deviennent inutiles pour le montage et l'encodage : le dossier d'analyse associé
+est supprimé sans attendre le lancement ni la fin de la file d'encodage.
+Le JSON peut être rouvert et ses segments modifiés avec la capture source ; une
+nouvelle recherche automatique de publicités nécessitera une nouvelle analyse.
+
+Le nettoyage est rattaché au rapport chargé, y compris lors de la réutilisation
+d'un rapport déjà présent. Il reconnaît les dossiers `ad-analysis-…` produits
+pour la source et leur structure attendue ; il ne balaie pas le disque. Un
+projet déjà ouvert avant la mise à jour ou rouvert uniquement depuis son JSON
+final ne déclenche pas le nettoyage d'anciens dossiers non associés en mémoire.
+
+L'enregistrement du JSON utilise un fichier temporaire dans le même dossier,
+une synchronisation sur disque puis un remplacement atomique avant tout
+nettoyage. Les permissions d'un projet existant sont conservées. Une erreur
+d'écriture conserve les intermédiaires. Une erreur de nettoyage laisse le JSON
+enregistré et affiche un avertissement distinct, avec possibilité de réessayer
+lors de la prochaine sauvegarde.
+
+Le nettoyage est différé si une autre préparation utilise l'analyse, si le
+dossier a été remplacé, contient un élément supplémentaire non reconnu, ou
+contient le projet final ou une source. Les rapports fournis manuellement hors
+du dossier d'analyse reconnu restent conservés. Aucun nettoyage n'est déclenché
+par l'abandon d'une proposition non enregistrée.
+
+Le choix automatique de l'emplacement des analyses et leur file d'attente restent
+les évolutions suivantes.
 
 ## Vérifications
 

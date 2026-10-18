@@ -84,6 +84,12 @@ Dans le parcours intégré à l'éditeur, les fichiers intermédiaires sont
 temporaires ; seul le montage en mémoire est conservé, puis enregistré via
 le parcours normal de l'éditeur.
 
+Le dossier persistant `ad-analysis-…` utilisé par l'analyse intégrée est désormais
+associé au montage chargé. Après un enregistrement réussi du JSON final hors de
+ce dossier, il est nettoyé sans attendre l'encodage. Un échec d'enregistrement
+conserve l'analyse ; un échec de nettoyage est signalé séparément et ne rend pas
+le JSON enregistré inutilisable. Les sources et le JSON final sont conservés.
+
 ## Limites du pilote
 
 Le détecteur et l'affinage 6ter restent des scripts expérimentaux externes.

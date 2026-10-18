@@ -5,6 +5,7 @@ from pathlib import Path
 from PySide6 import QtCore
 
 from .trim_project_file_reader import TrimProjectFileReader
+from .ad_analysis_workspace import AdAnalysisWorkspace
 
 
 class AdTrimProposalRunner(QtCore.QObject):
@@ -17,10 +18,12 @@ class AdTrimProposalRunner(QtCore.QObject):
         self.process.finished.connect(self.finish)
         self.process.errorOccurred.connect(self.process_error)
         self.directory = None
+        self.analysis_workspace = None
 
     def start(self, report, source, first, last):
         if self.directory is not None:
             raise RuntimeError("Une proposition est déjà en cours.")
+        self.analysis_workspace = AdAnalysisWorkspace.for_report(report, source)
         self.directory = tempfile.TemporaryDirectory(prefix="video-encoder-ad-proposal-")
         self.project = Path(self.directory.name) / "proposal.json"
         script = Path(__file__).resolve().parents[2] / "script" / "propose_ad_trim.rb"
@@ -31,6 +34,9 @@ class AdTrimProposalRunner(QtCore.QObject):
         ])
 
     def clean_up(self):
+        if self.analysis_workspace is not None:
+            self.analysis_workspace.close()
+            self.analysis_workspace = None
         if self.directory is not None:
             self.directory.cleanup()
             self.directory = None
@@ -60,6 +66,9 @@ class AdTrimProposalRunner(QtCore.QObject):
                 raise ValueError(stderr.strip() or "La génération de la proposition a échoué.")
             summary = json.loads(stdout)
             session = TrimProjectFileReader().load(self.project)
+            if self.analysis_workspace is not None:
+                session.analysis_workspaces.append(self.analysis_workspace)
+                self.analysis_workspace = None
             result = {"session": session, "summary": summary}
         except (OSError, ValueError, KeyError, TypeError) as error:
             self.clean_up()

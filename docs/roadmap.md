@@ -8,7 +8,8 @@ Ordre convenu pour les prochaines évolutions :
    MKV ; modification possible après annulation du récapitulatif et avant le
    lancement de la tâche. Le fonctionnement est détaillé dans
    [Bornes, tâches et destinations](editor-and-queue-actions.md).
-2. Finaliser le parcours d'analyse publicitaire : emplacement automatique des
+2. Finaliser le parcours d'analyse publicitaire : nettoyage des intermédiaires
+   associés dès l'enregistrement du projet, emplacement automatique des
    intermédiaires, analyse et proposition clairement distinguées du chargement
    d'un rapport existant, raccords faciles à vérifier et résultats utiles
    conservés avec le projet sous le même nom de base.
