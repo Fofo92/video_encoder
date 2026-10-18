@@ -1,0 +1,11 @@
+{
+  "format": "video_encoder.ad_reference",
+  "version": 1,
+  "source": "/commun/to_be_cut/9-1-1 - S05 E15 - Les signes du destin.m2t",
+  "frame_rate": "25/1",
+  "coverage": "known_intervals_only",
+  "provenance": "Bornes inclusives corrigées par Pascal le 19 octobre 2026 à 00:59 (Europe/Paris). Remplacent le projet JSON de référence incomplet à deux segments.",
+  "reviewed_envelope": [13405, 92044],
+  "kept_intervals": [[13405, 30021], [37962, 70082], [79547, 92044]],
+  "excluded_intervals": [[30022, 37961], [70083, 79546]]
+}

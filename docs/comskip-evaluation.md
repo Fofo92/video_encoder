@@ -36,6 +36,34 @@ inclusives de l'éditeur. Enregistrer ensuite le projet définitif à la destina
 souhaitée avant de le mettre en file. Une proposition supprimant tout le
 programme est bloquée ; zéro coupure n'est pas une preuve d'absence de publicité.
 
+Lorsque `--start-frame` et `--end-frame` sont tous deux fournis, les deux bornes
+sont désormais verrouillées : les plages détectées qui touchent IN ou OUT sont
+ignorées en entier, sans raccourcir le programme à ces extrémités. Seules les
+coupures strictement intérieures sont appliquées. Si une seule plage détectée
+recouvre toute l'enveloppe manuelle, la proposition est bloquée pour examen.
+Le résultat annonce `outer_bounds_locked: true` et les plages ignorées dans
+`ignored_boundary_intervals`. Cela ne garantit pas que les coupures intérieures
+soient précises ou complètes.
+
+Le projet est alors nommé `proposal-locked-IN-OUT.json`, pour conserver les
+propositions antérieures et les modifications manuelles. Les anciennes analyses
+restent réutilisables : ce verrouillage ne demande aucun nouveau calcul Comskip.
+
+### Deuxième essai : 9-1-1, S05 E15
+
+Le projet nommé `_comskip.json` fourni initialement provenait du bouton de
+l'interface, qui utilise encore le détecteur historique. Ne pas attribuer sa
+pause manquée à Comskip. Le véritable essai Comskip lancé ensuite en terminal
+a retrouvé les deux pauses en environ 414 secondes.
+
+La référence finale est `config/ad_detection/911-s05e15.reference.json` :
+13 405–30 021, 37 962–70 082 et 79 547–92 044. Elle remplace le premier JSON
+manuel incomplet à deux segments. Les erreurs de bornes publicitaires Comskip
+sont [1, -510] et [-5, -147] images : les reprises sont trop précoces de
+20,40 secondes et 5,88 secondes. Le verrouillage corrige la perte aux extrémités
+de l'œuvre, pas ces imprécisions intérieures. Aucun décalage spécifique à cet
+épisode n'est appliqué au moteur.
+
 Relancer la même commande réutilise l'analyse complète si la source, le profil,
 la version du moteur et le résultat n'ont pas changé. Un dossier incomplet ou
 modifié est refusé ; employer un nouveau nom de dossier pour un nouvel essai.

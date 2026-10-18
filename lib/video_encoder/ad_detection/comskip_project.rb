@@ -4,11 +4,17 @@ module VideoEncoder
   module AdDetection
     # Builds an editable draft only. Does not enqueue or encode it.
     class ComskipProject
-      def initialize(source:, cut_list:, first: 0, last: nil)
+      attr_reader :ignored_boundary_intervals
+
+      def initialize(source:, cut_list:, first: 0, last: nil, lock_outer_bounds: false)
+        raise ArgumentError, 'Locked outer bounds require an explicit OUT' if lock_outer_bounds && last.nil?
+
         @source = source
         @cut_list = cut_list
         @first = first
         @last = last || (cut_list.frame_count - 1)
+        @lock_outer_bounds = lock_outer_bounds
+        @ignored_boundary_intervals = []
       end
 
       def call
@@ -37,7 +43,7 @@ module VideoEncoder
       def complement
         cursor = @first
         kept = []
-        @cut_list.intervals.each do |first, last|
+        applicable_intervals.each do |first, last|
           next if last < @first || first > @last
 
           kept << [cursor, first - 1] if first > cursor
@@ -45,6 +51,23 @@ module VideoEncoder
         end
         kept << [cursor, @last] if cursor <= @last
         kept
+      end
+
+      def applicable_intervals
+        return @cut_list.intervals unless @lock_outer_bounds
+
+        if @cut_list.intervals.any? { |first, last| first <= @first && last >= @last }
+          raise ArgumentError, 'Detector excludes the entire manual envelope: review required'
+        end
+
+        @ignored_boundary_intervals = @cut_list.intervals.select do |first, last|
+          touches_boundary?(first, last)
+        end
+        @cut_list.intervals.select { |first, last| first > @first && last < @last }
+      end
+
+      def touches_boundary?(first, last)
+        @first.between?(first, last) || @last.between?(first, last)
       end
     end
   end

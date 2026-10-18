@@ -58,15 +58,21 @@ module EvaluateComskip
   end
 
   def write_draft(options, source, workspace, cuts, review)
-    project = VideoEncoder::AdDetection::ComskipProject.new(source: source, cut_list: cuts,
-                                                            first: options[:first], last: options[:last]).call
-    path = File.join(workspace, "proposal-#{options[:first]}-#{options[:last] || (cuts.frame_count - 1)}.json")
+    locked = options.key?(:first_explicit) && options.key?(:last)
+    builder = VideoEncoder::AdDetection::ComskipProject.new(source: source, cut_list: cuts,
+                                                            first: options[:first], last: options[:last],
+                                                            lock_outer_bounds: locked)
+    project = builder.call
+    prefix = locked ? 'proposal-locked' : 'proposal'
+    path = File.join(workspace, "#{prefix}-#{options[:first]}-#{options[:last] || (cuts.frame_count - 1)}.json")
     bytes = "#{JSON.pretty_generate(project)}\n"
     unless File.file?(path) && File.binread(path) == bytes
       File.open(path, File::WRONLY | File::CREAT | File::EXCL) { |file| file.write(bytes) }
     end
     review[:project] = path
     review[:outer_bounds_assumed] = !options[:last] || !options.key?(:first_explicit)
+    review[:outer_bounds_locked] = locked
+    review[:ignored_boundary_intervals] = builder.ignored_boundary_intervals
   rescue ArgumentError => e
     review[:project] = nil
     review[:review_blocker] = e.message
