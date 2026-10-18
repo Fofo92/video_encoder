@@ -67,6 +67,22 @@ ultérieures vérifient aussi son empreinte. Aucun projet déjà édité n'est �
 
 ## Validation disponible
 
+### Référence corrigée du 19 octobre 2026
+
+Le projet corrigé par Pascal remplace les premiers repères : segments conservés
+14 073–105 331, 110 621–171 215 et 176 612–271 036 (bornes inclusives).
+La référence JSON conserve ces segments et l'enveloppe de l'œuvre à des fins
+d'évaluation uniquement. Ces champs ne pilotent pas Comskip et ne fixent pas
+automatiquement les bornes du projet proposé.
+
+Avec cette référence finale, une des deux plages intérieures respecte la
+tolérance : erreurs de bornes [1, 0] puis [0, 78] images. La reprise après la
+deuxième pause supprime donc 78 images de film (3,12 secondes). La fin du segment
+principal proposé dépasse de 1 033 images (41,32 secondes) la fin validée.
+Ce bilan corrige le premier rapport fondé sur les repères préliminaires ; il
+ne constitue pas une amélioration de la détection. Ne pas appliquer un décalage
+constant de 78 images aux autres captures pour faire passer ce cas.
+
 Les tests automatisés couvrent le format des coupures, les compléments de
 segments, les références partielles et la réutilisation contrôlée de l'analyse.
 Un essai avec un véritable binaire Comskip sur une source synthétique vérifie
