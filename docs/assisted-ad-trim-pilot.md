@@ -23,6 +23,13 @@ et la fin de la capture sont conservés. Les candidats non appariés sont conser
 
 ## Revue du montage
 
+L'analyse et le chargement d'un rapport acceptent aussi un unique segment déjà
+ajouté au montage : si les balises IN/OUT ont été effacées après cet ajout, ses
+bornes sont reprises. Le parcours source → IN/OUT → Ajouter le segment → Analyser
+les publicités est donc pris en charge. Des balises explicites restent prioritaires.
+Pour un montage comportant plusieurs segments, poser explicitement IN et OUT
+autour de l'œuvre à analyser ; le logiciel ne fusionne pas leurs plages implicitement.
+
 Le parcours conseillé commence maintenant dans l'éditeur, sur la capture :
 
 1. Poser **IN** au début de l'épisode, puis **OUT** à sa fin, générique compris

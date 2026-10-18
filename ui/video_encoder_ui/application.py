@@ -33,6 +33,7 @@ from .trim_project_file_reader import (
 )
 from .ad_trim_proposal_runner import AdTrimProposalRunner
 from .ad_analysis_runner import AdAnalysisRunner
+from .ad_analysis_bounds import ad_analysis_bounds
 from .trim_export_queue_client import (
     TrimExportQueueClient,
     TrimExportQueueError,
@@ -2092,13 +2093,13 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
     def propose_ad_trim(self):
         if self.export_status in {"running", "preflight", "confirming", "proposing"}:
             return
-        if (
-            self.in_position is None or self.out_position is None
-            or not 0 <= self.in_position < self.out_position < self.frame_source.length
-        ):
+        bounds = ad_analysis_bounds(
+            self.trim_session, self.source_id, self.in_position, self.out_position, self.frame_source.length,
+        )
+        if bounds is None:
             QtWidgets.QMessageBox.information(
                 self, "Bornes de l’épisode requises",
-                "Pose IN au début de l’épisode et OUT à sa fin avant de créer le montage.",
+                "Pose IN et OUT, ou ajoute un seul segment couvrant l’œuvre entière.",
             )
             return
         if (
@@ -2119,7 +2120,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.export_status_changed("proposing")
         try:
             self.ad_trim_proposal_runner.start(
-                report, self.source_path, self.in_position, self.out_position,
+                report, self.source_path, *bounds,
             )
         except (OSError, RuntimeError) as error:
             self.ad_trim_proposal_failed(str(error))
@@ -2127,12 +2128,12 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
     def analyze_ads(self):
         if self.export_status != "idle":
             return
-        if (
-            self.in_position is None or self.out_position is None
-            or not 0 <= self.in_position < self.out_position < self.frame_source.length
-        ):
+        bounds = ad_analysis_bounds(
+            self.trim_session, self.source_id, self.in_position, self.out_position, self.frame_source.length,
+        )
+        if bounds is None:
             QtWidgets.QMessageBox.information(
-                self, "Bornes requises", "Définis IN et OUT avant l'analyse.",
+                self, "Bornes requises", "Pose IN et OUT, ou ajoute un seul segment couvrant l’œuvre entière.",
             )
             return
         if self.frame_source.frame_rate_numerator != 25 * self.frame_source.frame_rate_denominator:
@@ -2158,7 +2159,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.export_status_changed("proposing")
         try:
             self.ad_analysis_runner.start(
-                self.source_path, destination, self.in_position, self.out_position,
+                self.source_path, destination, *bounds,
             )
         except (OSError, RuntimeError, ValueError) as error:
             self.ad_trim_proposal_failed(str(error))
@@ -2171,10 +2172,16 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.propose_ad_trim_from_report(result["report"])
 
     def propose_ad_trim_from_report(self, report):
+        bounds = ad_analysis_bounds(
+            self.trim_session, self.source_id, self.in_position, self.out_position, self.frame_source.length,
+        )
+        if bounds is None:
+            self.ad_trim_proposal_failed("Bornes de l’œuvre indisponibles : pose IN et OUT avant de reprendre.")
+            return
         self.export_status_changed("proposing")
         try:
             self.ad_trim_proposal_runner.start(
-                report, self.source_path, self.in_position, self.out_position,
+                report, self.source_path, *bounds,
             )
         except (OSError, RuntimeError) as error:
             self.ad_trim_proposal_failed(str(error))
