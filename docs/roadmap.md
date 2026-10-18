@@ -1,5 +1,20 @@
 # Roadmap
 
+## Priorité urgente : efficacité de la détection publicitaire
+
+Le pilote intégré repose encore sur des références 6ter. Il ne constitue pas
+un détecteur généraliste ; les améliorations du parcours ne changent pas cette
+limite. La capture NOVO19 de Braveheart a donné zéro candidat malgré deux
+coupures repérées manuellement.
+
+Avant les prochains travaux d'interface ou de file, évaluer Comskip sur cette
+capture, puis sur d'autres chaînes : bornes retrouvées, temps de calcul et
+contenu de programme proposé à tort à la suppression. L'adaptateur et son
+[protocole d'essai](comskip-evaluation.md) sont disponibles ; leur validation
+technique ne démontre pas encore la fiabilité sur les captures réelles.
+L'intégration dans l'éditeur dépend de ces mesures. La file d'analyse séparée
+viendra ensuite, sans relancer une analyse déjà terminée et inchangée.
+
 ## Parcours utilisateur et intégration avec vidb — 18 octobre 2026
 
 Ordre convenu pour les prochaines évolutions :

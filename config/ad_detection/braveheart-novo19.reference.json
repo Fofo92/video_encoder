@@ -1,0 +1,9 @@
+{
+  "format": "video_encoder.ad_reference",
+  "version": 1,
+  "source": "/commun/to_be_cut/Braveheart.m2t",
+  "frame_rate": "25/1",
+  "coverage": "known_intervals_only",
+  "provenance": "Bornes manuelles fournies par Pascal le 18 octobre 2026 ; sorties et entrées conservées inclusives.",
+  "excluded_intervals": [[105332, 110465], [171242, 176611]]
+}
