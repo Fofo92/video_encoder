@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from PySide6 import QtCore
+from .ad_detection_result import empty_detection_report
 
 
 class AdAnalysisRunner(QtCore.QObject):
@@ -65,8 +66,13 @@ class AdAnalysisRunner(QtCore.QObject):
         if self.workspace is None:
             return
         workspace = self.workspace
+        source = self.source
         self.read_progress()
         self.reset()
+        empty_report = empty_detection_report(workspace, source)
+        if empty_report is not None and exit_status == QtCore.QProcess.ExitStatus.NormalExit:
+            self.succeeded.emit({"status": "no_candidates", "report": empty_report, "workspace": workspace})
+            return
         if exit_code != 0 or exit_status != QtCore.QProcess.ExitStatus.NormalExit:
             self.failed.emit(f"Analyse interrompue ou échouée. Diagnostics conservés : {workspace}")
             return

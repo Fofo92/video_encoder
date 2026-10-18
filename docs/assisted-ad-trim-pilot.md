@@ -92,6 +92,23 @@ le JSON enregistré inutilisable. Les sources et le JSON final sont conservés.
 
 ## Limites du pilote
 
+Le bouton **Analyser les publicités (6ter)…** nomme explicitement le profil
+utilisé. Une détection complète avec zéro candidat est un résultat possible,
+et non une erreur d'affinage. Elle ne garantit pas que la capture soit sans
+publicité. Le pilote ne reconnaît pas nécessairement les écrans d'autres chaînes.
+
+Dans ce cas, l'éditeur propose de créer, après accord explicite, un montage qui
+conserve la plage IN/OUT entière pour contrôle et découpage manuels. Aucun
+affinage ni aucune coupure automatique n'est appliqué. Refuser conserve le montage
+et les diagnostics. Accepter charge un nouveau projet à enregistrer ; son analyse
+associée est nettoyée après sauvegarde comme pour les propositions découpées.
+
+Un ancien dossier contenant seulement `detection/pub-candidates.json` avec un
+scan complet à zéro candidat est reconnu : relancer le bouton et choisir le même
+dossier parent reprend ce résultat sans rescanner la capture. Un résultat partiel,
+échoué, limité à un extrait, portant sur une autre source ou antérieur à une
+modification de la source n'est pas réutilisé comme résultat complet.
+
 Le détecteur et l'affinage 6ter restent des scripts expérimentaux externes.
 Les huit pauses de quatre captures 9-1-1 ont été retrouvées après calibration sur
 ce corpus ; ce résultat ne mesure pas la fiabilité sur d'autres captures.

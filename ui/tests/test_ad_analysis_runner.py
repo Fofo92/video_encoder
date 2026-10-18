@@ -64,3 +64,21 @@ class AdAnalysisRunnerTest(unittest.TestCase):
         self.runner.cancel()
         self.runner.finish(1, QtCore.QProcess.ExitStatus.NormalExit)
         failed.assert_not_called()
+
+    def test_zero_candidates_returns_a_reviewable_outcome_instead_of_a_refinement_error(self):
+        workspace = Path(self.tmp.name) / "analysis"
+        self.runner.start(self.source, workspace, 10, 80)
+        (workspace / "detection").mkdir(parents=True)
+        report = workspace / "detection" / "pub-candidates.json"
+        report.write_text(json.dumps({
+            "format": "video_encoder.6ter_pub_candidates", "version": 3,
+            "source": str(self.source), "complete": True, "ffmpeg_exit_status": 0,
+            "candidate_count": 0, "candidates": [], "analysed_samples": 1000,
+        }))
+        succeeded, failed = Mock(), Mock()
+        self.runner.succeeded.connect(succeeded)
+        self.runner.failed.connect(failed)
+        self.runner.finish(0, QtCore.QProcess.ExitStatus.NormalExit)
+        failed.assert_not_called()
+        self.assertEqual(succeeded.call_args.args[0]["status"], "no_candidates")
+        self.assertEqual(succeeded.call_args.args[0]["report"], report)

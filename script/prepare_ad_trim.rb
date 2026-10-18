@@ -59,6 +59,10 @@ module PrepareAdTrim
     FileUtils.mkdir_p(workspace)
     begin
       run_detection(scripts, source, detection, workspace)
+      if empty_detection?(File.join(detection, 'pub-candidates.json'))
+        puts JSON.generate(status: 'no_candidates', report: File.join(detection, 'pub-candidates.json'))
+        return
+      end
       run_refinement(scripts, detection, boundaries, workspace)
       run_proposal(source, first, last, boundaries, proposal, workspace)
       puts JSON.generate(status: 'needs_manual_review', project: proposal,
@@ -67,6 +71,13 @@ module PrepareAdTrim
       warn "Preparation incomplete; diagnostics retained in #{workspace}"
       raise
     end
+  end
+
+  def empty_detection?(path)
+    document = JSON.parse(File.read(path))
+    document['format'] == 'video_encoder.6ter_pub_candidates' && document['version'] == 3 &&
+      document['complete'] == true && document.fetch('ffmpeg_exit_status').zero? &&
+      document.fetch('candidate_count').zero? && document['candidates'] == []
   end
 
   def run_detection(scripts, source, detection, workspace)

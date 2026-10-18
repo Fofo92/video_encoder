@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 from pathlib import Path
+from .ad_detection_result import empty_detection_report
 
 
 class AdAnalysisWorkspace:
@@ -20,6 +21,17 @@ class AdAnalysisWorkspace:
         report, source = Path(report).absolute(), Path(source).resolve()
         root = report.parent.parent
         fingerprint = hashlib.sha256(str(source).encode()).hexdigest()[:12]
+        if report.name == "pub-candidates.json" and report.parent.name == "detection":
+            if root.name != f"ad-analysis-{fingerprint}" or empty_detection_report(root, source) != report:
+                return None
+            try:
+                if root.is_symlink() or report.is_symlink() or report.parent.is_symlink():
+                    return None
+                if not cls.known_contents(root) or source.is_relative_to(root.resolve()):
+                    return None
+                return cls(root)
+            except OSError:
+                return None
         if report.name != "boundary-hypotheses.json" or report.parent.name != "boundaries":
             return None
         if root.name != f"ad-analysis-{fingerprint}":

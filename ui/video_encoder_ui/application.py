@@ -34,6 +34,8 @@ from .trim_project_file_reader import (
 from .ad_trim_proposal_runner import AdTrimProposalRunner
 from .ad_analysis_runner import AdAnalysisRunner
 from .ad_analysis_bounds import ad_analysis_bounds
+from .ad_detection_result import empty_detection_report
+from .ad_analysis_workspace import AdAnalysisWorkspace
 from .trim_export_queue_client import (
     TrimExportQueueClient,
     TrimExportQueueError,
@@ -406,7 +408,10 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             "Créer un montage dans la plage IN/OUT à partir d’un rapport de coupures"
         )
         self.propose_ad_trim_button.clicked.connect(self.propose_ad_trim)
-        self.analyze_ads_button = QtWidgets.QPushButton("Analyser les publicités…")
+        self.analyze_ads_button = QtWidgets.QPushButton("Analyser les publicités (6ter)…")
+        self.analyze_ads_button.setToolTip(
+            "Pilote calibré sur les écrans publicitaires de 6ter ; vérifier les coupures proposées."
+        )
         self.analyze_ads_button.clicked.connect(self.analyze_ads)
 
         self.nudge_marker_selector = QtWidgets.QComboBox()
@@ -2148,6 +2153,10 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         fingerprint = hashlib.sha256(str(self.source_path.resolve()).encode()).hexdigest()[:12]
         destination = Path(workspace) / f"ad-analysis-{fingerprint}"
         if destination.exists():
+            empty_report = empty_detection_report(destination, self.source_path)
+            if empty_report is not None:
+                self.ad_analysis_no_candidates(empty_report)
+                return
             report = destination / "boundaries" / "boundary-hypotheses.json"
             if report.is_file():
                 self.propose_ad_trim_from_report(report)
@@ -2169,7 +2178,35 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
 
     def ad_analysis_succeeded(self, result):
         self.export_status_changed("idle")
+        if result.get("status") == "no_candidates":
+            self.ad_analysis_no_candidates(result["report"])
+            return
         self.propose_ad_trim_from_report(result["report"])
+
+    def ad_analysis_no_candidates(self, report):
+        bounds = ad_analysis_bounds(
+            self.trim_session, self.source_id, self.in_position, self.out_position, self.frame_source.length,
+        )
+        if bounds is None:
+            self.ad_trim_proposal_failed("Pose IN et OUT autour de l’œuvre avant de reprendre le montage.")
+            return
+        answer = QtWidgets.QMessageBox.question(
+            self, "Aucune coupure publicitaire repérée",
+            "Le détecteur n’a repéré aucun écran publicitaire. Cela ne garantit pas l’absence de publicité.\n\n"
+            "Le pilote actuel est calibré sur des écrans publicitaires de 6ter.\n\n"
+            "Créer un montage conservant toute la plage IN/OUT, sans coupure automatique, pour contrôle manuel ?",
+            QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+            QtWidgets.QMessageBox.StandardButton.No,
+        )
+        if answer != QtWidgets.QMessageBox.StandardButton.Yes:
+            return
+        session = TrimSession()
+        session.add_source(SourceReference("source", self.source_path))
+        session.add_segment(SegmentSelection("source", *bounds))
+        workspace = AdAnalysisWorkspace.for_report(report, self.source_path)
+        if workspace is not None:
+            session.analysis_workspaces.append(workspace)
+        self.ad_trim_proposal_succeeded({"session": session, "summary": {"status": "no_candidates"}})
 
     def propose_ad_trim_from_report(self, report):
         bounds = ad_analysis_bounds(
