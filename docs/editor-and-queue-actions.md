@@ -48,9 +48,33 @@ persistée après l'avoir prise en charge.
 
 ## Remise en file d'un projet chargé
 
-**Ajouter à la file** propose désormais le choix du nom et du dossier du MKV,
-même lorsque le projet est déjà enregistré. La confirmation audio affiche cette
-destination. L'archivage habituel place une copie du projet à côté du MKV prévu.
+**Ajouter à la file** et **Exporter** demandent une seule fois le nom et le dossier
+communs du projet de découpage JSON et du MKV. Le nom peut être saisi sans
+extension : `S04 E05 - Suis ta route` donne les fichiers
+`S04 E05 - Suis ta route.json` et `S04 E05 - Suis ta route.mkv` dans le dossier choisi.
+Un projet déjà ouvert propose sa destination actuelle, qui reste modifiable.
+Une proposition automatique nommée `proposal.json` suggère un nom issu de la
+capture dans `/videos` ; son fichier d'origine reste préservé.
+
+Le choix précède l'enregistrement : annuler le choix de destination n'écrit pas
+de JSON et ne lance pas le contrôle audio. Une destination existante, un lien
+symbolique ou le JSON d'un autre projet sont refusés. Le projet ouvert peut être
+enregistré à son emplacement courant. Le récapitulatif audio affiche les deux
+chemins avant toute mise en file ou tout encodage.
+
+Annuler ce récapitulatif conserve le montage en mémoire et son JSON déjà
+enregistré, mais ne crée aucune tâche et ne lance aucun encodage. Une nouvelle
+action **Ajouter à la file** ou **Exporter** permet de choisir un autre nom ou
+dossier. Les anciens JSON enregistrés ne sont pas supprimés automatiquement.
+
+Pour un travail déjà en attente ou reporté, **Destination…** utilise le même
+choix commun. Le JSON et la destination du MKV sont mis à jour sur la tâche
+existante : son identifiant, son état, ses paramètres et ses tentatives sont
+conservés. Les fichiers ne sont pas réencodés par cette action.
+
+Les rapports et caches intermédiaires d'analyse publicitaire restent gérés par
+le pilote actuel. Leur création automatique et la conservation des résultats
+utiles avec le projet feront partie du chantier suivant.
 
 ## Vérifications
 

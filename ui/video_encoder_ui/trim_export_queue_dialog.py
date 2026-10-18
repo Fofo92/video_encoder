@@ -265,7 +265,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.defer_button.clicked.connect(self.request_selected_deferral)
         self.output_button = job_buttons.addButton("Destination…", QtWidgets.QDialogButtonBox.ButtonRole.ActionRole)
         self.set_action_icon(self.output_button, "document-edit", QtWidgets.QStyle.StandardPixmap.SP_FileIcon)
-        self.output_button.setToolTip("Modifier le nom et le dossier du fichier de sortie avant lancement")
+        self.output_button.setToolTip("Modifier ensemble le nom et le dossier du projet JSON et du MKV avant lancement")
         self.output_button.clicked.connect(self.request_selected_output)
         self.delete_project_button = job_buttons.addButton("Supprimer tâche et JSON…", QtWidgets.QDialogButtonBox.ButtonRole.ActionRole)
         self.set_action_icon(self.delete_project_button, "user-trash", QtWidgets.QStyle.StandardPixmap.SP_TrashIcon)

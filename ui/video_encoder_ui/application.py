@@ -27,6 +27,7 @@ from .trim_project_exporter import (
     TrimProjectExporter,
 )
 from .audio_preflight_runner import AudioPreflightRunner
+from .project_destination import select_project_output
 from .trim_project_file_reader import (
     TrimProjectFileReader,
 )
@@ -2332,18 +2333,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         return destination
 
     def select_output_path(self, suggested):
-        selected_path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Destination du fichier encodé", str(suggested), "Vidéo Matroska (*.mkv)",
-        )
-        if not selected_path:
-            return None
-        path = Path(selected_path)
-        if not path.suffix:
-            path = path.with_suffix(".mkv")
-        if path.suffix.lower() != ".mkv" or path.exists() or path.is_symlink():
-            QtWidgets.QMessageBox.warning(self, "Destination invalide", "Choisis un nouveau fichier de sortie .mkv.")
-            return None
-        return path
+        return select_project_output(self, suggested, self.project_path)
 
     def export_project(self, queued=False):
         if (
@@ -2362,16 +2352,15 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             )
             return
 
-        project_path = self.save_project()
-
+        suggested = self.project_path
+        if suggested is None or Path(suggested).name == "proposal.json":
+            suggested = DEFAULT_VIDEO_DIRECTORY / self.source_path.with_suffix(".json").name
+        output_path = self.select_output_path(Path(suggested).with_suffix(".mkv"))
+        if output_path is None:
+            return
+        project_path = self.write_project(Path(output_path).with_suffix(".json"))
         if project_path is None:
             return
-
-        output_path = Path(project_path).with_suffix(".mkv")
-        if queued:
-            output_path = self.select_output_path(output_path)
-            if output_path is None:
-                return
 
         self.pending_export_mode = (
             "queued"
@@ -2413,8 +2402,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.export_status_changed("cancelled")
         elif status == "succeeded":
             self.export_status_changed(
-                "confirming",
-            "proposing"
+                "confirming"
                 if self.pending_export is not None
                 else "cancelled"
             )
@@ -2448,6 +2436,8 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.Icon.Question
         )
         message_box.setText(
+            "Projet de découpage\n\n"
+            f"{Path(output_path).with_suffix('.json')}\n\n"
             "Fichier de destination\n\n"
             f"{output_path}\n\n"
             "Pistes sélectionnées\n\n"
@@ -2455,7 +2445,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             "Ce contrôle mesure la présence d’un signal, "
             "pas la langue réellement parlée.\n"
             "Un résultat non concluant ne prouve pas "
-            "que la piste est inutilisable."
+            "que la piste est inutilisable.\n\n"
+            "Annuler conserve le montage. Tu pourras choisir un autre nom "
+            "ou dossier lors de la prochaine mise en file ou de l’export."
         )
 
         cancel_button = message_box.addButton(

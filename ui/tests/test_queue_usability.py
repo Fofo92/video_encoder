@@ -50,7 +50,7 @@ class QueueControllerUsabilityTest(unittest.TestCase):
 
     def test_updates_output_without_enqueuing_a_duplicate(self):
         controller = self.controller()
-        with patch("video_encoder_ui.trim_export_queue_controller.QtWidgets.QFileDialog.getSaveFileName", return_value=("/new/name.mkv", "")):
+        with patch("video_encoder_ui.trim_export_queue_controller.select_project_output", return_value=Path("/new/name.mkv")):
             controller.change_output(Mock(), {"id": "job", "status": "queued", "output_path": "/old/name.mkv"})
         controller.client.set_output.assert_called_once_with("job", Path("/new/name.mkv"))
         controller.client.enqueue.assert_not_called()
@@ -76,6 +76,7 @@ class LoadedProjectDestinationTest(unittest.TestCase):
             trim_session=SimpleNamespace(segments=[object()]),
             trim_project_exporter=Mock(is_running=False), audio_preflight_runner=Mock(is_running=False),
             pending_export=None, save_project=Mock(return_value=Path("/old/project.json")),
+            write_project=Mock(side_effect=lambda path: Path(path)),
             select_output_path=Mock(return_value=output), export_status_changed=Mock(),
         )
 
@@ -83,13 +84,16 @@ class LoadedProjectDestinationTest(unittest.TestCase):
         monitor = self.monitor(Path("/new/name.mkv"))
         MltFrameMonitor.export_project(monitor, queued=True)
         monitor.select_output_path.assert_called_once_with(Path("/old/project.mkv"))
-        self.assertEqual(monitor.pending_export, (Path("/old/project.json"), Path("/new/name.mkv")))
-        monitor.audio_preflight_runner.start.assert_called_once_with(Path("/old/project.json"))
+        self.assertEqual(monitor.pending_export, (Path("/new/name.json"), Path("/new/name.mkv")))
+        monitor.audio_preflight_runner.start.assert_called_once_with(Path("/new/name.json"))
+        monitor.write_project.assert_called_once_with(Path("/new/name.json"))
+        monitor.save_project.assert_not_called()
 
     def test_cancelled_destination_does_not_start_audio_or_enqueue(self):
         monitor = self.monitor(None)
         MltFrameMonitor.export_project(monitor, queued=True)
         monitor.audio_preflight_runner.start.assert_not_called()
+        monitor.write_project.assert_not_called()
         self.assertIsNone(monitor.pending_export)
 
 

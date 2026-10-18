@@ -69,7 +69,7 @@ class ApplicationDefaultDirectoriesTest(unittest.TestCase):
             "/videos/movie.json",
         )
 
-    def test_export_uses_the_project_location_for_the_mkv(self):
+    def test_export_suggests_the_loaded_project_location_and_accepts_a_new_common_name(self):
         project_path = Path(
             "/videos/Series/Season/movie.json"
         )
@@ -92,7 +92,8 @@ class ApplicationDefaultDirectoriesTest(unittest.TestCase):
             ),
             project_path=project_path,
             save_project=Mock(return_value=project_path),
-            write_project=Mock(return_value=project_path),
+            write_project=Mock(side_effect=lambda path: Path(path)),
+            select_output_path=Mock(return_value=Path("/another/location/other.mkv")),
         )
 
         with patch(
@@ -106,18 +107,20 @@ class ApplicationDefaultDirectoriesTest(unittest.TestCase):
             MltFrameMonitor.export_project(monitor)
 
         dialog.assert_not_called()
-        monitor.save_project.assert_called_once_with()
+        monitor.save_project.assert_not_called()
+        monitor.select_output_path.assert_called_once_with(project_path.with_suffix(".mkv"))
+        monitor.write_project.assert_called_once_with(Path("/another/location/other.json"))
         self.assertEqual(
             monitor.pending_export,
             (
-                project_path,
+                Path("/another/location/other.json"),
                 Path(
-                    "/videos/Series/Season/movie.mkv"
+                    "/another/location/other.mkv"
                 ),
             ),
         )
         audio_preflight_runner.start.assert_called_once_with(
-            project_path
+            Path("/another/location/other.json")
         )
 
 
