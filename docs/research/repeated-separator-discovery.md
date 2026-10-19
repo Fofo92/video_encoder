@@ -271,3 +271,31 @@ blocks shorter than a motif, temporal reversal and static sequences. A smoke tes
 on recovered Chien & chat departure-1 finds its core at 10 seconds. This smoke
 test uses an observation clip and is not independent validation. The full original
 capture is available only on Zeus; its full-source result is still pending.
+
+### Résultat du balayage complet sur Zeus et affinement
+
+Le 19 octobre, Pascal a exécuté le scanner sur Chien & chat : 35 995 images à
+5 fps, 12 occurrences. Quatre noyaux sont à l'intérieur des bornes extérieures
+20 243–157 947 : 2 984,4 s, 3 338,2 s, 4 833,4 s et 5 206,6 s. Les huit autres
+sont avant ou après l'œuvre et n'ont pas été classifiés. Les quatre emplacements
+attendus sont retrouvés, mais ce résultat n'évalue pas les limites de coupe.
+
+`refine_source_occurrences.py` accepte ce rapport et les deux bornes extérieures,
+jamais les coupes corrigées. Il extrait en un décodage des fenêtres de 14 secondes
+centrées autour des noyaux trouvés, sur une chronologie FFmpeg explicitement
+rééchantillonnée à 25 fps. Il exige une source de cadence moyenne 25 fps, un
+nouveau dossier, des fenêtres ordonnées sans chevauchement et un motif unique
+soutenu par toutes les fenêtres. Il conserve le manifeste et les diagnostics,
+contrôle l'identité de la source et refuse les fenêtres tronquées.
+
+L'extension locale du motif commun produit ses limites inclusives/exclusives.
+Elle ne décide ni « départ » ni « reprise » et ne crée aucun projet. Les indices
+sont ceux de la chronologie rééchantillonnée, pas des indices d'éditeur validés.
+L'accord avec les corrections humaines doit être évalué après l'extraction.
+
+```sh
+python3 script/research/refine_source_occurrences.py \
+  --scan-report tmp/chien-chat-recherche-20261019-122501/resultat.json \
+  --start-frame 20243 --end-frame 157947 \
+  --output tmp/chien-chat-affinement-source
+```
