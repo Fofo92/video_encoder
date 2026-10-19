@@ -299,3 +299,26 @@ python3 script/research/refine_source_occurrences.py \
   --start-frame 20243 --end-frame 157947 \
   --output tmp/chien-chat-affinement-source
 ```
+
+### Correction des coordonnées après le premier affinement complet
+
+Le premier résultat sur Zeus donnait des repères de coupe 74 609, 83 529,
+120 835 et 130 239 contre les corrections 74 595, 83 516, 120 822 et 130 226.
+Les écarts de +14/+13/+13/+13 images indiquent une différence de coordonnées ;
+ils ne justifient pas une soustraction fixe codée en dur.
+
+L'extracteur retire désormais `fps=25:start_time=0` AVANT `trim`. Les fenêtres
+sont sélectionnées par indice d'image décodée ; les temps et la cadence sont
+réinitialisés APRÈS cette sélection, sans duplication préalable. Les secondes du
+scanner servent seulement à localiser approximativement des fenêtres de contexte.
+Leurs limites affinées sont calculées dans les images décodées de la source.
+Les champs correspondants sont renommés `first_decoded_frame`,
+`motif_start_decoded_frame` et `motif_end_decoded_frame_exclusive`.
+
+Un test FFmpeg conserve volontairement une origine vidéo décalée de 0,52 seconde :
+l'ancien filtre introduit 13 images supplémentaires (38 images pour 25 réelles),
+le filtre corrigé conserve les 25 images réelles. Ce test démontre le mécanisme,
+pas son origine exacte dans Chien & chat. Le rapport conserve maintenant aussi
+les métadonnées de début du conteneur et de la piste vidéo. Une nouvelle exécution
+sur la source originale est nécessaire pour vérifier les écarts ; aucune égalité
+globale entre indices décodés et indices de l'éditeur n'est supposée.

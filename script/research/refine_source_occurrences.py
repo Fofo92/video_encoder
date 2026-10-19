@@ -1,4 +1,4 @@
-"""Refine scanned motif occurrences on a 25 fps resampled source timeline.
+"""Refine scanned motif occurrences on a decoded source frame indices.
 
 Only outer bounds and the scanner report are accepted, never corrected cuts.
 No edit project is produced; separator semantics and editor mapping stay unverified.
@@ -32,14 +32,26 @@ def plan(report, start_frame, end_frame):
         first = max(0, round(start * 25) - 150)
         last = round(end * 25) + 150
         windows.append({'name': f'occurrence-{len(windows) + 1}.mp4',
-                        'first_sampled_frame': first, 'end_sampled_frame_exclusive': last,
+                        'first_decoded_frame': first, 'end_decoded_frame_exclusive': last,
                         'scanner_core_start_seconds': start})
     if not 3 <= len(windows) <= 12:
         raise ValueError('Need three to twelve occurrences inside the outer bounds')
-    if any(left['end_sampled_frame_exclusive'] > right['first_sampled_frame']
+    if any(left['end_decoded_frame_exclusive'] > right['first_decoded_frame']
            for left, right in zip(windows, windows[1:])):
         raise ValueError('Unordered or overlapping observation windows; manual review required')
     return windows
+
+
+def extraction_filters(windows):
+    # Count the original decoded images before resetting timestamps. An fps filter
+    # here could duplicate/drop images and invalidate origin + local-index mapping.
+    labels = ''.join(f'[v{i}]' for i in range(len(windows)))
+    filters = [f'[0:v:0]split={len(windows)}{labels}']
+    for index, row in enumerate(windows):
+        filters.append(f"[v{index}]trim=start_frame={row['first_decoded_frame']}:"
+                       f"end_frame={row['end_decoded_frame_exclusive']},"
+                       f'settb=1/25,setpts=N,scale=960:-2[out{index}]')
+    return filters
 
 
 def run(report_path, output, start_frame, end_frame):
@@ -50,24 +62,22 @@ def run(report_path, output, start_frame, end_frame):
     identity = source_identity(source)
     metadata = subprocess.run(
         ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries',
-         'stream=avg_frame_rate', '-of', 'json', str(source)],
+         'stream=avg_frame_rate,start_time:format=start_time', '-of', 'json', str(source)],
         capture_output=True, text=True, check=True,
     )
-    if json.loads(metadata.stdout)['streams'][0]['avg_frame_rate'] != '25/1':
+    timing = json.loads(metadata.stdout)
+    if timing['streams'][0]['avg_frame_rate'] != '25/1':
         raise ValueError('This pilot requires a 25 average fps source')
     output.mkdir(parents=True, exist_ok=False)
     manifest = {'status': 'prepared', 'source': str(source), 'source_identity': identity,
                 'scan_report_sha256': hashlib.sha256(encoded).hexdigest(),
                 'outer_bounds': [start_frame, end_frame], 'windows': windows,
-                'coordinate_basis': 'FFmpeg fps=25:start_time=0; editor mapping unverified'}
+                'coordinate_basis': 'FFmpeg decoded source frame index; editor mapping unverified',
+                'source_timing_metadata': timing,
+                'window_localization': 'scanner seconds times 25 are approximate centers only'}
     manifest_path = output / 'manifest.json'
     manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
-    labels = ''.join(f'[v{i}]' for i in range(len(windows)))
-    filters = [f'[0:v:0]fps=25:start_time=0,split={len(windows)}{labels}']
-    for index, row in enumerate(windows):
-        filters.append(f"[v{index}]trim=start_frame={row['first_sampled_frame']}:"
-                       f"end_frame={row['end_sampled_frame_exclusive']},"
-                       f'settb=1/25,setpts=N,scale=960:-2[out{index}]')
+    filters = extraction_filters(windows)
     command = ['ffmpeg', '-nostdin', '-v', 'error', '-n', '-i', str(source),
                '-filter_complex_threads', '1', '-filter_complex', ';'.join(filters)]
     for index, row in enumerate(windows):
@@ -81,7 +91,7 @@ def run(report_path, output, start_frame, end_frame):
     paths = [output / row['name'] for row in windows]
     full_rate = [decode(path, sample_fps=25) for path in paths]
     for row, frames in zip(windows, full_rate):
-        if len(frames) != row['end_sampled_frame_exclusive'] - row['first_sampled_frame']:
+        if len(frames) != row['end_decoded_frame_exclusive'] - row['first_decoded_frame']:
             raise ValueError('Truncated window; no refinement accepted')
     candidates = discover([frames[::5] for frames in full_rate])
     if len(candidates) != 1 or candidates[0]['supporting_clips'] != len(windows):
@@ -91,15 +101,15 @@ def run(report_path, output, start_frame, end_frame):
     if refined['status'] == 'experimental':
         mapped = []
         for row in refined['occurrences']:
-            origin = windows[row['clip_index']]['first_sampled_frame']
+            origin = windows[row['clip_index']]['first_decoded_frame']
             mapped.append({'occurrence': row['clip_index'] + 1,
-                           'motif_start_sampled_frame': origin + row['sampled_start_frame'],
-                           'motif_end_sampled_frame_exclusive': origin + row['sampled_end_frame_exclusive']})
+                           'motif_start_decoded_frame': origin + row['sampled_start_frame'],
+                           'motif_end_decoded_frame_exclusive': origin + row['sampled_end_frame_exclusive']})
         manifest['source_motif_limits'] = mapped
     manifest.update(status='experimental', needs_manual_review=True,
                     limitations=['Motif limits are not automatically cut decisions',
                                  'No departure/resume classification or edit project',
-                                 'Source resampled timeline is not verified editor coordinates'])
+                                 'Decoded source frame indices still require editor alignment checks'])
     manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
     return manifest
 
