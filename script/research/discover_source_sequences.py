@@ -4,6 +4,7 @@ No observation clips, reference project, channel template or cut coordinates.
 Approximate candidate indexing can miss motifs. Repetition is not ad semantics.
 """
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -28,6 +29,8 @@ def descriptors(frames, window=10):
 
 
 def discover_source(frames, max_pairs=500000, max_bucket=128):
+    if not 1 <= max_pairs <= 5000000 or not 1 <= max_bucket <= 1024:
+        raise ValueError('Search limits outside supported research bounds')
     window, minimum_separation = 10, 150
     if frames.ndim != 2 or frames.shape[1] % 12:
         raise ValueError('Expected flattened RGB frames')
@@ -105,36 +108,81 @@ def discover_source(frames, max_pairs=500000, max_bucket=128):
             'bucket_limit_reached': saturated, 'pair_limit_reached': exhausted}
 
 
-def run(source, output):
+def digest(path):
+    value = hashlib.sha256()
+    with path.open('rb') as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b''):
+            value.update(block)
+    return value.hexdigest()
+
+
+def load_cache(directory, source):
+    manifest = json.loads((directory / 'manifest.json').read_text())
+    if manifest.get('status') != 'completed':
+        raise ValueError('Cannot reuse an incomplete discovery cache')
+    if (Path(manifest['source']).resolve() != source.resolve()
+            or manifest['source_identity'] != source_identity(source)):
+        raise ValueError('Cache belongs to a different or modified source')
+    count = manifest['sampled_frames']
+    if type(count) is not int or not 0 < count <= 108000:
+        raise ValueError('Invalid cached frame count')
+    cache = Path(manifest.get('cache_path', directory / 'sampled-rgb.bin')).resolve(strict=True)
+    if cache.stat().st_size != count * 1728:
+        raise ValueError('Truncated or oversized discovery cache')
+    checksum = digest(cache)
+    expected = manifest.get('cache_sha256')
+    if expected is not None and checksum != expected:
+        raise ValueError('Discovery cache checksum changed')
+    return cache, count, checksum, ('verified_sha256' if expected else 'legacy_cache_no_original_digest')
+
+
+def run(source, output, reuse_cache=None, max_pairs=500000, max_bucket=128):
     source = source.resolve(strict=True)
     identity = source_identity(source)
+    # Validate before creating a new output. Legacy caches can only be checked
+    # for source identity and size; their historical byte integrity is unknown.
+    reused = load_cache(reuse_cache, source) if reuse_cache else None
     output.mkdir(parents=True, exist_ok=False)
-    cache = output / 'sampled-rgb.bin'
-    count = 0
-    (output / 'manifest.json').write_text(json.dumps({'status': 'decoding', 'source': str(source)}))
-    print('Decoding source at 5 sampled frames/second...', file=sys.stderr)
-    with cache.open('wb') as stream:
-        for block in source_blocks(source):
-            count += len(block)
-            if count > 108000:
-                raise ValueError('Research limit: six hours; diagnostics retained')
-            np.rint(block * 255).astype(np.uint8).tofile(stream)
-            if count % 6000 == 0:
-                print(f'Sampled {count / 5:.0f} seconds of recording', file=sys.stderr)
+    manifest_path = output / 'manifest.json'
+    manifest_path.write_text(json.dumps({'status': 'preparing', 'source': str(source)}))
+    if reused:
+        cache, count, checksum, integrity = reused
+        print(f'Reusing {count} sampled frames; no source decoding', file=sys.stderr)
+    else:
+        cache = output / 'sampled-rgb.bin'
+        count = 0
+        print('Decoding source at 5 sampled frames/second...', file=sys.stderr)
+        with cache.open('wb') as stream:
+            for block in source_blocks(source):
+                count += len(block)
+                if count > 108000:
+                    raise ValueError('Research limit: six hours; diagnostics retained')
+                np.rint(block * 255).astype(np.uint8).tofile(stream)
+                if count % 6000 == 0:
+                    print(f'Sampled {count / 5:.0f} seconds of recording', file=sys.stderr)
+        checksum, integrity = digest(cache), 'sealed_after_decoding'
     if source_identity(source) != identity:
-        raise ValueError('Source changed during decoding')
-    print(f'Decoded {count} sampled frames; discovering repeated cores...', file=sys.stderr)
+        raise ValueError('Source changed during decoding or cache checks')
+    cache_manifest = {'status': 'completed', 'source': str(source), 'source_identity': identity,
+                      'sampled_frames': count, 'cache_path': str(cache.resolve()),
+                      'cache_sha256': checksum, 'cache_integrity': integrity}
+    # Cache completion is independent of motif discovery, allowing a retry after
+    # an interrupted search without decoding the source again.
+    manifest_path.write_text(json.dumps(cache_manifest, indent=2) + '\n')
+    print(f'Discovering repeated cores in {count} sampled frames...', file=sys.stderr)
     frames = np.memmap(cache, dtype=np.uint8, mode='r', shape=(count, 1728)) if count else np.empty((0, 1728), np.uint8)
-    result = discover_source(frames)
+    result = discover_source(frames, max_pairs=max_pairs, max_bucket=max_bucket)
+    if digest(cache) != checksum or source_identity(source) != identity:
+        raise ValueError('Source or cache changed during discovery')
     result.update(status='experimental', needs_manual_review=True, source=str(source),
                   source_identity=identity, sample_fps=5, sampled_frames=count,
+                  reused_cache=reused is not None, cache_integrity=integrity,
+                  search_limits={'max_pairs': max_pairs, 'max_bucket': max_bucket},
                   limitations=['Approximate index may miss motifs even without a reported limit',
                                'Repeated advertisements and programme sequences may match',
                                'No separator classification, cut decisions or project',
                                'Times use the resampled FFmpeg timeline, not editor frame indices'])
     (output / 'resultat.json').write_text(json.dumps(result, indent=2) + '\n')
-    (output / 'manifest.json').write_text(json.dumps({'status': 'completed', 'source': str(source),
-                                                     'source_identity': identity, 'sampled_frames': count}, indent=2))
     return result
 
 
@@ -142,5 +190,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--reuse-cache', type=Path)
+    parser.add_argument('--max-pairs', type=int, default=500000)
+    parser.add_argument('--max-bucket', type=int, default=128)
     args = parser.parse_args()
-    print(json.dumps(run(args.source, args.output), indent=2))
+    print(json.dumps(run(args.source, args.output, args.reuse_cache, args.max_pairs, args.max_bucket), indent=2))

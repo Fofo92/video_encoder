@@ -47,3 +47,32 @@ class SourceRefinementTest(unittest.TestCase):
                                  capture_output=True, check=True).stdout
         self.assertEqual(len(old) // (32 * 18), 38)
         self.assertEqual(len(current) // (960 * 540), 25)
+
+
+class DiscoveryCandidateSelectionTest(unittest.TestCase):
+    def report(self):
+        return {'status': 'experimental', 'sample_fps': 5, 'source': '/source.m2t',
+                'index_limits_reached': True,
+                'candidates': [{'classification': 'unverified_repeated_visual_sequence',
+                                'occurrences': [{'core_start_seconds': 10, 'core_end_seconds': 12}]},
+                               {'classification': 'unverified_repeated_visual_sequence',
+                                'occurrences': [{'core_start_seconds': start, 'core_end_seconds': start + 3}
+                                                for start in [100, 200, 300, 400]]}]}
+
+    def test_explicit_choice_flows_into_refinement_without_reference_cuts(self):
+        from refine_source_occurrences import select_candidate
+        selected = select_candidate(self.report(), 2)
+        self.assertEqual(len(plan(selected, 0, 12000)), 4)
+        self.assertTrue(selected['index_limits_reached'])
+        self.assertEqual(selected['source'], '/source.m2t')
+
+    def test_does_not_implicitly_choose_the_most_frequent_group(self):
+        from refine_source_occurrences import select_candidate
+        for index in [None, 0, 3]:
+            with self.assertRaises(ValueError):
+                select_candidate(self.report(), index)
+
+    def test_old_learned_scan_reports_remain_supported(self):
+        from refine_source_occurrences import select_candidate
+        report = {'occurrences': []}
+        self.assertIs(select_candidate(report), report)

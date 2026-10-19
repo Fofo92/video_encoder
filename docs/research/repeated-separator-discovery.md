@@ -366,3 +366,51 @@ Il s'agit encore d'extraits sélectionnés par l'humain ; la découverte sur le
 fichier entier sans modèle reste à exécuter sur Zeus. Les tests synthétiques
 couvrent répétitions sans modèle, support insuffisant, source statique, entrée
 courte et signalement du plafond de comparaisons.
+
+### Retour du premier essai sans modèle et sélection d'un groupe
+
+L'exécution de 6d131d1 sur Zeus trouve cinq groupes. Le deuxième contient douze
+occurrences, dont les quatre noyaux attendus dans l'œuvre. Le premier groupe
+contient dix-sept ressemblances non classifiées. Les plafonds de comparaisons
+(500 000) et de taille des groupes indexés sont atteints : le résultat n'est pas
+exhaustif. La fréquence seule ne fournit donc pas un classement sémantique fiable.
+
+L'affinement accepte désormais explicitement `--candidate 2` avec le rapport de
+découverte, les bornes extérieures et un nouveau dossier de sortie. L'absence de
+choix, un numéro hors limites ou une source modifiée depuis le rapport entraîne
+un refus. La sélection est inscrite dans le manifeste, ainsi que le fait que la
+recherche initiale a atteint ses plafonds. Les anciens rapports du scanner à
+motif appris restent compatibles sans option de sélection.
+
+```sh
+python3 script/research/refine_source_occurrences.py \
+  --scan-report DOSSIER_DE_DECOUVERTE/resultat.json --candidate 2 \
+  --start-frame 20243 --end-frame 157947 --output NOUVEAU_DOSSIER
+```
+
+Cette sélection est une validation explicite pour cet essai, pas une règle disant
+que le deuxième groupe est toujours un séparateur. L'affinement extrait ses
+fenêtres sur la source originale ; il ne relance pas la découverte. Les limites
+communes sont proposées sans générer de projet d'encodage.
+
+### Réutilisation du cache de découverte
+
+```sh
+python3 script/research/discover_source_sequences.py \
+  --source '/commun/to_be_cut/Chien & chat.m2t' \
+  --reuse-cache DOSSIER_DE_DECOUVERTE --output NOUVEAU_DOSSIER \
+  --max-pairs 2000000 --max-bucket 512
+```
+
+L'outil réutilise les empreintes RGB existantes en lecture seule. L'identité du
+fichier source, le statut complet et la longueur exacte du cache sont contrôlés.
+Les nouveaux caches portent une empreinte SHA-256, vérifiée avant et après la
+recherche. Le premier cache créé sur Zeus n'en portait pas : sa reprise indique
+`legacy_cache_no_original_digest`, sans prétendre prouver son intégrité historique.
+Le nouveau manifeste enregistre une empreinte pour les reprises ultérieures.
+
+La clôture du cache précède la recherche de motifs : une interruption de cette
+dernière laisse ainsi le décodage réutilisable. Les sorties sont dans un nouveau
+dossier et peuvent référencer le cache précédent sans le recopier. Conserver ce
+cache tant que ces sorties doivent pouvoir être rejouées. Augmenter les plafonds
+permet plus de comparaisons, sans rendre l'index approximatif exhaustif.

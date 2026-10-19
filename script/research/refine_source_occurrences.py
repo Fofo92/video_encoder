@@ -1,4 +1,4 @@
-"""Refine scanned motif occurrences on a decoded source frame indices.
+"""Refine scanned motif occurrences using decoded source frame indices.
 
 Only outer bounds and the scanner report are accepted, never corrected cuts.
 No edit project is produced; separator semantics and editor mapping stay unverified.
@@ -13,6 +13,19 @@ import subprocess
 from export_indexed_windows import source_identity
 from repeated_visual_sequences import decode, discover
 from repeated_sequence_boundaries import refine
+
+
+def select_candidate(report, candidate_index=None):
+    if 'candidates' not in report:
+        if candidate_index is not None:
+            raise ValueError('Candidate selection requires a discovery report')
+        return report
+    if type(candidate_index) is not int or not 1 <= candidate_index <= len(report['candidates']):
+        raise ValueError('Choose a candidate explicitly with --candidate (one-based)')
+    selected = report['candidates'][candidate_index - 1]
+    if selected.get('classification') != 'unverified_repeated_visual_sequence':
+        raise ValueError('Unsupported candidate classification')
+    return {**report, 'occurrences': selected['occurrences']}
 
 
 def plan(report, start_frame, end_frame):
@@ -54,12 +67,14 @@ def extraction_filters(windows):
     return filters
 
 
-def run(report_path, output, start_frame, end_frame):
+def run(report_path, output, start_frame, end_frame, candidate_index=None):
     encoded = report_path.read_bytes()
-    report = json.loads(encoded)
+    report = select_candidate(json.loads(encoded), candidate_index)
     windows = plan(report, start_frame, end_frame)
     source = Path(report['source']).resolve(strict=True)
     identity = source_identity(source)
+    if report.get('source_identity', identity) != identity:
+        raise ValueError('Source changed since discovery')
     metadata = subprocess.run(
         ['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries',
          'stream=avg_frame_rate,start_time:format=start_time', '-of', 'json', str(source)],
@@ -71,6 +86,8 @@ def run(report_path, output, start_frame, end_frame):
     output.mkdir(parents=True, exist_ok=False)
     manifest = {'status': 'prepared', 'source': str(source), 'source_identity': identity,
                 'scan_report_sha256': hashlib.sha256(encoded).hexdigest(),
+                'selected_candidate': candidate_index,
+                'discovery_limits_reached': report.get('index_limits_reached', False),
                 'outer_bounds': [start_frame, end_frame], 'windows': windows,
                 'coordinate_basis': 'FFmpeg decoded source frame index; editor mapping unverified',
                 'source_timing_metadata': timing,
@@ -118,7 +135,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--scan-report', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--candidate', type=int)
     parser.add_argument('--start-frame', type=int, required=True)
     parser.add_argument('--end-frame', type=int, required=True)
     args = parser.parse_args()
-    print(json.dumps(run(args.scan_report, args.output, args.start_frame, args.end_frame), indent=2))
+    print(json.dumps(run(args.scan_report, args.output, args.start_frame, args.end_frame, args.candidate), indent=2))
