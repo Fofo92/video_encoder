@@ -96,3 +96,24 @@ class DiscoveryCacheTest(unittest.TestCase):
         self.manifest_path.write_text(json.dumps(self.manifest))
         with self.assertRaisesRegex(ValueError, 'incomplete'):
             load_cache(self.cache_dir, self.source)
+
+
+class BalancedIndexTest(unittest.TestCase):
+    def test_saturated_bucket_still_compares_the_end_of_the_capture(self):
+        from discover_source_sequences import bucket_pairs
+        pairs = list(bucket_pairs(list(range(1000)), limit=3))
+        self.assertEqual(pairs, [(0, 499), (0, 999), (499, 999)])
+
+    def test_dense_bucket_cannot_starve_other_buckets_or_tables(self):
+        from discover_source_sequences import round_robin
+        dense = ((0, value) for value in range(100, 10000))
+        rare_late = iter([(10000, 20000)])
+        self.assertEqual([value for _, value in zip(range(3), round_robin([dense, rare_late]))],
+                         [(0, 100), (10000, 20000), (0, 101)])
+
+    def test_overlapping_windows_are_one_occurrence_not_independent_support(self):
+        from discover_source_sequences import overlapping_runs
+        # Braveheart group 3 contained overlapping 4414.0–4418.0 and
+        # 4417.6–4420.4 spans. Overlapping two-second cores must not split a run.
+        self.assertEqual(overlapping_runs([0, 4, 12, 20, 100, 108], 10),
+                         [[0, 4, 12, 20], [100, 108]])

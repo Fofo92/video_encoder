@@ -4,6 +4,8 @@ No observation clips, reference project, channel template or cut coordinates.
 Approximate candidate indexing can miss motifs. Repetition is not ad semantics.
 """
 import argparse
+from collections import deque
+from itertools import combinations
 import hashlib
 import json
 from pathlib import Path
@@ -28,6 +30,34 @@ def descriptors(frames, window=10):
                            for a, b in [(0, 2), (2, 5), (5, 7), (7, 10)]], axis=1)
 
 
+def round_robin(iterables):
+    pending = deque(iter(value) for value in iterables)
+    while pending:
+        iterator = pending.popleft()
+        try:
+            yield next(iterator)
+        except StopIteration:
+            continue
+        pending.append(iterator)
+
+
+def bucket_pairs(starts, limit, separation=150):
+    # Sample the complete time span instead of retaining only the first entries.
+    if len(starts) > limit:
+        starts = [starts[index] for index in np.linspace(0, len(starts) - 1, limit, dtype=int)]
+    return ((int(left), int(right)) for left, right in combinations(starts, 2)
+            if right - left >= separation)
+
+
+def overlapping_runs(starts, window):
+    runs = []
+    for start in sorted(starts):
+        if not runs or start > runs[-1][-1] + window:
+            runs.append([])
+        runs[-1].append(start)
+    return runs
+
+
 def discover_source(frames, max_pairs=500000, max_bucket=128):
     if not 1 <= max_pairs <= 5000000 or not 1 <= max_bucket <= 1024:
         raise ValueError('Search limits outside supported research bounds')
@@ -49,38 +79,33 @@ def discover_source(frames, max_pairs=500000, max_bucket=128):
     tables = [(rng.choice(48, 6, replace=False), offset) for offset in [0, .04] for _ in range(4)]
     graph, edges, checked = Components(), [], set()
     saturated, exhausted = False, False
+    table_iterators = []
     for dims, offset in tables:
         buckets = {}
         for start in eligible:
             key = tuple(np.floor((desc[start, dims] + offset) / .08).astype(int))
-            bucket = buckets.setdefault(key, [])
-            if len(bucket) >= max_bucket:
-                saturated = True
-                continue
-            for previous in bucket:
-                if start - previous < minimum_separation:
-                    continue
-                pair = (int(previous), int(start))
-                if pair in checked:
-                    continue
-                if len(checked) >= max_pairs:
-                    exhausted = True
-                    break
-                checked.add(pair)
-                # Cheap rejection followed by full ordered spatial RGB verification.
-                if np.sqrt(np.mean((desc[start] - desc[previous]) ** 2)) * 255 > 20:
-                    continue
-                difference = frames[start:start + window].astype(np.float32)
-                difference -= frames[previous:previous + window]
-                rmse = float(np.sqrt(np.mean(difference ** 2)))
-                if rmse <= 15:
-                    graph.join(pair[0], pair[1])
-                    edges.append((pair[0], pair[1], rmse))
-            if exhausted:
-                break
-            bucket.append(int(start))
-        if exhausted:
+            buckets.setdefault(key, []).append(int(start))
+        saturated |= any(len(bucket) > max_bucket for bucket in buckets.values())
+        table_iterators.append(round_robin(bucket_pairs(bucket, max_bucket, minimum_separation)
+                                          for bucket in buckets.values() if len(bucket) > 1))
+    # Each table and bucket gets turns. Dense early material cannot consume the
+    # entire budget before later buckets or alternative index tables are visited.
+    for previous, start in round_robin(table_iterators):
+        pair = (previous, start)
+        if pair in checked:
+            continue
+        if len(checked) >= max_pairs:
+            exhausted = True
             break
+        checked.add(pair)
+        if np.sqrt(np.mean((desc[start] - desc[previous]) ** 2)) * 255 > 20:
+            continue
+        difference = frames[start:start + window].astype(np.float32)
+        difference -= frames[previous:previous + window]
+        rmse = float(np.sqrt(np.mean(difference ** 2)))
+        if rmse <= 15:
+            graph.join(pair[0], pair[1])
+            edges.append((pair[0], pair[1], rmse))
     nodes = sorted(graph.parents)
     for previous, following in zip(nodes, nodes[1:]):
         if following - previous <= window // 2:
@@ -90,11 +115,7 @@ def discover_source(frames, max_pairs=500000, max_bucket=128):
         groups.setdefault(graph.root(node), []).append(node)
     candidates = []
     for root, starts in groups.items():
-        runs = [[starts[0]]]
-        for start in starts[1:]:
-            if start - runs[-1][-1] > window // 2:
-                runs.append([])
-            runs[-1].append(start)
+        runs = overlapping_runs(starts, window)
         if len(runs) < 3:
             continue
         scores = [score for left, _, score in edges if graph.root(left) == root]
@@ -104,7 +125,7 @@ def discover_source(frames, max_pairs=500000, max_bucket=128):
                                            for run in runs],
                            'supporting_occurrences': len(runs), 'best_rmse': round(min(scores), 3)})
     return {'candidates': sorted(candidates, key=lambda row: -row['supporting_occurrences']),
-            'comparisons': len(checked), 'index_limits_reached': saturated or exhausted,
+            'comparisons': len(checked), 'index_strategy': 'balanced_temporal_buckets_v2', 'index_limits_reached': saturated or exhausted,
             'bucket_limit_reached': saturated, 'pair_limit_reached': exhausted}
 
 

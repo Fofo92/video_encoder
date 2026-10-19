@@ -474,3 +474,28 @@ L'affinement signale trois étapes : lecture/extraction de la source, préparati
 des images, comparaison/affinement. La barre suit ces étapes et l'interface affiche
 le temps écoulé ; elle ne prétend pas donner un pourcentage fin du décodage.
 Les limites calculées, les confirmations requises et les sources restent inchangées.
+
+### Braveheart : limites du premier index et rééquilibrage
+
+Le premier essai sans modèle sur Braveheart (61 499 images à 5 fps) atteint les
+plafonds de 500 000 comparaisons et de 128 entrées par groupe d'index. Les huit
+familles proposées sont toutes rejetées par les critères d'affinement ; plusieurs
+intervalles présentés comme occurrences se chevauchent. Des positions des familles
+3 et 4 sont proches de raccords connus, sans constituer une identification validée.
+Ne pas convertir ces familles en montage ni élargir simplement les critères de
+validation pour les faire passer.
+
+L'index `balanced_temporal_buckets_v2` construit les tables avant les comparaisons,
+répartit les entrées saturées sur leur étendue temporelle complète, puis visite
+les tables et groupes à tour de rôle. Le budget et les seuils visuels restent les
+mêmes. Les noyaux chevauchants d'une famille sont regroupés en une occurrence
+avant de vérifier le support minimal. Les tests couvrent la présence de paires
+vers la fin d'une entrée saturée, l'absence de famine d'une entrée rare et le
+regroupement des noyaux chevauchants. La recherche reste approximative et peut
+encore manquer des motifs ; le résultat sur le cache original Braveheart reste
+à évaluer sur Zeus.
+
+Rejouer avec `--reuse-cache` sur le dossier existant : cela ne lance ni FFmpeg ni
+Comskip et ne modifie ni la source ni le rapport précédent. Les nouveaux numéros
+de familles peuvent changer ; ne pas réutiliser un numéro provenant du premier
+rapport comme un choix confirmé pour le nouveau résultat.
