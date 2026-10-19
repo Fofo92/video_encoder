@@ -73,6 +73,54 @@ séquences indépendantes, le support insuffisant, l'ordre temporel et les entr�
 trop courtes. Une répétition de publicité est explicitement laissée sans
 classification : la répétition seule ne prouve pas qu'il s'agit d'un séparateur.
 
+## Affinement local ajouté après la première mesure
+
+L'option `--refine-local-boundaries` exige pour l'instant des extraits à 25 fps
+constants. Après la recherche à 5 fps, elle aligne une seconde du noyau entre
+extraits à 25 fps, puis étend le passage commun image par image tant que la
+ressemblance conserve le support requis. Plusieurs occurrences dans un même
+extrait ou un alignement insuffisant entraînent une abstention. Le rapport reste
+`unverified_shared_run`, sans création d'un projet.
+
+Sur les quatre extraits reçus, le passage commun dure 75 images, soit 3 secondes :
+
+| Extrait | Début inclusif, chronologie de l'extrait | Fin exclusive |
+| --- | --- | --- |
+| depart-1 | 11,64 s | 14,64 s |
+| depart-2 | 11,60 s | 14,60 s |
+| reprise-1 | 8,56 s | 11,56 s |
+| reprise-2 | 8,56 s | 11,56 s |
+
+Le contrôle visuel des images précédant, suivant et bordant chaque intervalle
+retrouve bien l'animation PUB. Ces observations ne mesurent pas l'erreur de coupe
+dans le fichier source : il manque encore une correspondance source vérifiée.
+
+Attention aux horodatages : les pistes vidéo reçues commencent respectivement
+à 1,00, 0,64, 0,84 et 0,00 seconde dans leurs conteneurs. L'échantillonnage fixe
+désormais explicitement son origine à zéro et évite une synchronisation implicite
+supplémentaire. Les champs `sampled_start_frame` et `sampled_end_frame_exclusive`
+sont des indices dans cette chronologie rééchantillonnée, pas les indices natifs
+des images encodées. Un test FFmpeg réel vérifie le cas vidéo retardée/audio dès
+zéro ; les onze tests de recherche passent.
+
+Une mesure descriptive du contexte, encore hors classificateur, va dans le sens
+des départs et reprises : fraction sombre des premières et dernières lignes de
+l'empreinte RGB, mesurée entre 2 et 0,4 secondes avant le motif puis entre 0,4 et
+2 secondes après, hors images entièrement noires :
+
+| Extrait | Avant | Après |
+| --- | --- | --- |
+| depart-1 | 100 % | 6,8 % |
+| depart-2 | 100 % | 0,2 % |
+| reprise-1 | 0 % | 100 % |
+| reprise-2 | 0 % | 100 % |
+
+Cette observation peut conforter une interprétation en séparateur mais dépend
+du format de l'œuvre ; une scène sombre ou une publicité au même format peut
+contredire cette interprétation. Elle n'est donc pas utilisée pour classifier
+automatiquement les répétitions. La distinction publicité répétée/séparateur
+reste non résolue par ce prototype.
+
 ## Limites et suite nécessaire
 
 Les intervalles indiquent un noyau commun, pas des limites de coupe. Les temps

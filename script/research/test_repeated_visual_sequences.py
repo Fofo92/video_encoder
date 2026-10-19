@@ -1,9 +1,14 @@
 """Algorithm checks; real-clip results are documented separately."""
 
 import unittest
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
 import numpy as np
 
-from repeated_visual_sequences import discover
+from repeated_visual_sequences import decode, discover
+from repeated_sequence_boundaries import refine
 
 
 class RepeatedVisualSequencesTest(unittest.TestCase):
@@ -49,6 +54,45 @@ class RepeatedVisualSequencesTest(unittest.TestCase):
         self.assertEqual(discover([self.core[:2]] * 3), [])
         with self.assertRaises(ValueError):
             discover(self.clips(), window_seconds=0)
+
+    def test_extends_shared_sequence_without_extending_into_different_contexts(self):
+        clips = self.clips()
+        candidate = discover(clips)[0]
+        refined = refine(clips, candidate, fps=5)
+        self.assertEqual(refined["status"], "experimental")
+        self.assertEqual([(row["sampled_start_frame"], row["sampled_end_frame_exclusive"])
+                          for row in refined["occurrences"]], [(5, 19), (13, 27), (20, 34)])
+        self.assertEqual(refined["duration_seconds"], 2.8)
+
+    def test_repeated_advertisement_still_has_unknown_semantics_after_refinement(self):
+        clips = self.clips()
+        refined = refine(clips, discover(clips)[0], fps=5)
+        self.assertEqual(refined["classification"], "unverified_shared_run")
+        self.assertIn("Cannot distinguish", refined["semantic_status"])
+        self.assertTrue(refined["needs_manual_review"])
+
+    def test_refinement_abstains_on_multiple_occurrences_per_clip_or_missing_alignment(self):
+        clips = self.clips()
+        candidate = discover(clips)[0]
+        duplicate = dict(candidate, occurrences=candidate["occurrences"] * 2)
+        self.assertEqual(refine(clips, duplicate, fps=5)["status"], "unavailable")
+        clips[-1] = self.random.random(clips[-1].shape, dtype=np.float32)
+        self.assertEqual(refine(clips, candidate, fps=5)["status"], "unavailable")
+
+    @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "FFmpeg tools required")
+    def test_delayed_video_is_explicitly_sampled_from_media_time_zero(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "delayed.mp4"
+            subprocess.run(
+                ["ffmpeg", "-nostdin", "-v", "error", "-f", "lavfi", "-i",
+                 "testsrc2=size=64x36:rate=25:duration=2", "-f", "lavfi", "-i",
+                 "anullsrc=r=8000:cl=mono", "-map", "0:v:0", "-map", "1:a:0", "-t", "3",
+                 "-vf", "setpts=PTS+1/TB", "-fps_mode", "passthrough", "-c:v", "libx264",
+                 "-c:a", "aac", str(path)], check=True,
+            )
+            frames = decode(path, sample_fps=25)
+            self.assertEqual(len(frames), 75)
+            np.testing.assert_array_equal(frames[0], frames[24])
 
 
 if __name__ == "__main__":

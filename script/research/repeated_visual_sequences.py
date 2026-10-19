@@ -24,12 +24,25 @@ def decode(path, sample_fps=5):
         raise ValueError("Use observation clips of at most 120 seconds; full-capture scanning is not implemented")
     pixels = subprocess.run(
         ["ffmpeg", "-nostdin", "-v", "error", "-i", str(path), "-an", "-sn", "-vf",
-         f"fps={sample_fps},scale=32:18", "-pix_fmt", "rgb24", "-f", "rawvideo", "pipe:1"],
+         f"fps={sample_fps}:start_time=0,scale=32:18", "-pix_fmt", "rgb24",
+         "-fps_mode", "passthrough", "-f", "rawvideo", "pipe:1"],
         check=True, capture_output=True,
     ).stdout
     if len(pixels) % 1728:
         raise ValueError("Incomplete decoded frame")
     return np.frombuffer(pixels, dtype=np.uint8).reshape(-1, 1728).astype(np.float32) / 255
+
+
+def require_25fps(path):
+    """The local refinement pilot currently requires constant 25 fps excerpts."""
+    metadata = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+         "stream=avg_frame_rate,r_frame_rate", "-of", "json", str(path)],
+        check=True, capture_output=True, text=True,
+    )
+    stream = json.loads(metadata.stdout)["streams"][0]
+    if any(stream.get(key) != "25/1" for key in ["avg_frame_rate", "r_frame_rate"]):
+        raise ValueError("Local boundary refinement currently requires constant 25 fps clips")
 
 
 def window_scores(left, right, window):
@@ -125,6 +138,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("clips", type=Path, nargs="+")
     parser.add_argument("--min-clips", type=int, default=3)
+    parser.add_argument("--refine-local-boundaries", action="store_true")
     options = parser.parse_args(argv)
     paths = [path.resolve(strict=True) for path in options.clips]
     if len(set(paths)) != len(paths):
@@ -142,6 +156,14 @@ def main(argv=None):
                         "Times are relative to clips, not original source frame numbers",
                         "No project is created or modified; audio is not analysed"],
     }
+    if options.refine_local_boundaries:
+        from repeated_sequence_boundaries import refine
+        for path in paths:
+            require_25fps(path)
+        full_rate = [decode(path, sample_fps=25) for path in paths]
+        report["local_boundary_experiment"] = [
+            refine(full_rate, candidate, min_clips=options.min_clips) for candidate in report["candidates"]
+        ]
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
