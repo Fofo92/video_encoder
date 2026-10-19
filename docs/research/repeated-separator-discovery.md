@@ -499,3 +499,46 @@ Rejouer avec `--reuse-cache` sur le dossier existant : cela ne lance ni FFmpeg n
 Comskip et ne modifie ni la source ni le rapport précédent. Les nouveaux numéros
 de familles peuvent changer ; ne pas réutiliser un numéro provenant du premier
 rapport comme un choix confirmé pour le nouveau résultat.
+
+### Analyse du cache Braveheart reçu le 20 octobre
+
+Cache vérifié : 61 499 images RGB 32 × 18 à 5 fps, 106 270 272 octets,
+SHA-256 `c78808d6875067e36a70ace2cff65ad3fcb8e569e2d45949d62b7bd2d91a2508`.
+Le résultat v2 contenait une composante de 194 occurrences : le regroupement
+transitif et les ponts entre fenêtres temporellement voisines réunissaient des
+passages sans noyau commun directement vérifié. L'erreur absolue RGB donnait
+également trop de ressemblances entre scènes sombres différentes.
+
+Le prototype `balanced_direct_contrast_v3` conserve l'index et son budget, puis
+exige que chaque occurrence corresponde directement à une même fenêtre d'ancrage.
+Les ancrages ne sont pas fusionnés par transitivité ou proximité temporelle.
+L'erreur RGB doit rester au plus 15 et au plus 0,5 fois le contraste spatial RMS
+moyen des deux fenêtres. Ce dernier seuil est exploratoire, introduit après
+examen de ce cache ; ce n'est pas une validation indépendante. Une comparaison
+avec contraste spatial nul est rejetée. Les occurrences chevauchantes d'un
+ancrage sont représentées par la meilleure correspondance ; les familles dont
+les positions se recouvrent très largement sont dédoublonnées.
+
+Sur le cache Braveheart entier, sans bornes corrigées en entrée : 500 000
+comparaisons, 23 familles, plafonds encore atteints. Les deux premières familles
+ont chacune six occurrences, contrôlées visuellement sur les miniatures :
+
+| Famille | Débuts des noyaux de deux secondes, en secondes du scan | Dans l'œuvre |
+| --- | --- | --- |
+| Violet | 311,4 ; 358,0 ; 4218,6 ; 6855,0 ; 10929,0 ; 11176,6 | 2 |
+| Clair | 168,0 ; 538,0 ; 4418,0 ; 7064,0 ; 11118,8 ; 11269,6 | 2 |
+
+Les autres familles restent non classifiées, certaines pouvant être des annonces
+répétées. Aucun de ces temps n'est une coupe native vérifiée. Le contrôle local
+sur les quatre extraits TF1, avec 20 secondes de noir entre extraits pour ne pas
+violer la séparation minimale de 30 secondes, retrouve une famille de quatre
+occurrences. Cela reste un contrôle sur les extraits connus, pas sur le cache
+complet TF1 ni une preuve de généralisation.
+
+54 tests de recherche passent, notamment le rejet des ponts transitifs, la
+vérification directe de chaque membre et les scènes sombres à faible contraste.
+La suite du parcours reste à faire : sélectionner deux familles complémentaires,
+utiliser leurs occurrences extérieures comme support de l'affinement et proposer
+uniquement les raccords intérieurs. L'interface actuelle, conçue autour d'une
+famille ayant au moins trois occurrences intérieures, ne doit pas être présentée
+comme capable de finaliser automatiquement ce cas Braveheart.

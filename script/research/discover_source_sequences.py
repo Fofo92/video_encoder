@@ -14,7 +14,7 @@ import sys
 import numpy as np
 
 from export_indexed_windows import source_identity
-from repeated_visual_sequences import Components
+from direct_motif_groups import families, window_contrast, relative_error
 from scan_learned_sequence import source_blocks
 
 
@@ -77,7 +77,8 @@ def discover_source(frames, max_pairs=500000, max_bucket=128):
     eligible = np.flatnonzero(motion >= 2)
     rng = np.random.default_rng(20261019)
     tables = [(rng.choice(48, 6, replace=False), offset) for offset in [0, .04] for _ in range(4)]
-    graph, edges, checked = Components(), [], set()
+    contrast = window_contrast(frames, window)
+    edges, checked = [], set()
     saturated, exhausted = False, False
     table_iterators = []
     for dims, offset in tables:
@@ -103,29 +104,11 @@ def discover_source(frames, max_pairs=500000, max_bucket=128):
         difference = frames[start:start + window].astype(np.float32)
         difference -= frames[previous:previous + window]
         rmse = float(np.sqrt(np.mean(difference ** 2)))
-        if rmse <= 15:
-            graph.join(pair[0], pair[1])
+        if rmse <= 15 and relative_error(rmse, contrast[previous], contrast[start]) <= .5:
             edges.append((pair[0], pair[1], rmse))
-    nodes = sorted(graph.parents)
-    for previous, following in zip(nodes, nodes[1:]):
-        if following - previous <= window // 2:
-            graph.join(previous, following)
-    groups = {}
-    for node in nodes:
-        groups.setdefault(graph.root(node), []).append(node)
-    candidates = []
-    for root, starts in groups.items():
-        runs = overlapping_runs(starts, window)
-        if len(runs) < 3:
-            continue
-        scores = [score for left, _, score in edges if graph.root(left) == root]
-        candidates.append({'classification': 'unverified_repeated_visual_sequence',
-                           'occurrences': [{'core_start_seconds': run[0] / 5,
-                                            'core_end_seconds': (run[-1] + window) / 5}
-                                           for run in runs],
-                           'supporting_occurrences': len(runs), 'best_rmse': round(min(scores), 3)})
-    return {'candidates': sorted(candidates, key=lambda row: -row['supporting_occurrences']),
-            'comparisons': len(checked), 'index_strategy': 'balanced_temporal_buckets_v2', 'index_limits_reached': saturated or exhausted,
+    return {'candidates': families(edges, window),
+            'comparisons': len(checked), 'index_strategy': 'balanced_direct_contrast_v3',
+            'max_relative_rmse': .5, 'index_limits_reached': saturated or exhausted,
             'bucket_limit_reached': saturated, 'pair_limit_reached': exhausted}
 
 
