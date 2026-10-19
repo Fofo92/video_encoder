@@ -414,3 +414,44 @@ dernière laisse ainsi le décodage réutilisable. Les sorties sont dans un nouv
 dossier et peuvent référencer le cache précédent sans le recopier. Conserver ce
 cache tant que ces sorties doivent pouvoir être rejouées. Augmenter les plafonds
 permet plus de comparaisons, sans rendre l'index approximatif exhaustif.
+
+## Première interface de revue (expérimentale)
+
+Dans `ui_encoder`, ouvrir une source à 25 fps et poser les bornes extérieures,
+puis utiliser **Montage → Séparateurs répétés (expérimental)…**. Un unique segment
+couvrant l'œuvre est aussi accepté comme enveloppe.
+
+La fenêtre retrouve le dernier `resultat.json` de découverte dans le `tmp` du
+dépôt pour cette source inchangée. Aucun groupe n'est sélectionné par défaut.
+Elle propose aussi d'ouvrir un rapport, lancer une recherche sans modèle ou
+rechercher depuis un cache existant. Les nouveaux résultats sont conservés dans
+`tmp/repeated-sequence-reviews/`, dans un dossier distinct par opération.
+
+Le tableau montre les occurrences totales, celles dans l'œuvre et la durée médiane
+du noyau. La saturation de l'index reste affichée. Choisir un groupe donne accès
+aux occurrences à l'intérieur des bornes et à un aperçu de la source, avec une
+navigation image par image. Les positions avant affinement sont approximatives.
+L'affinement exige actuellement au moins trois occurrences dans l'œuvre : ce
+pilote ne couvre donc pas encore le cas de deux seuls séparateurs intérieurs.
+
+Après l'affinement, vérifier le début et la fin de chaque motif, y compris les
+images voisines. La case de confirmation de l'alternance « départ vers la publicité,
+reprise de l'œuvre » n'est jamais cochée automatiquement. Un nombre pair de motifs
+ordonnés, disjoints et intérieurs est exigé pour proposer les segments. Une fois
+cette confirmation faite, le bouton **Remplacer le montage par ces segments à
+contrôler** charge les segments dans l'éditeur existant. Il ne sauvegarde pas le
+projet, ne lance pas l'encodage et n'ajoute rien à la file ; le parcours existant
+permet ensuite de contrôler les raccords, enregistrer et mettre en file.
+
+Les calculs s'exécutent par QProcess, hors du fil de l'interface. Fermer pendant
+un calcul l'interrompt ; les diagnostics restent conservés. Sur Qt Unix supporté,
+les processus enfants sont arrêtés avec le groupe du processus de recherche.
+L'ouverture de la fenêtre met le transport de l'éditeur en pause. Fermer sans
+charger la proposition conserve le montage existant.
+
+Validation locale : 11 tests de modèle et de fenêtre Qt réelle hors écran,
+plus 3 tests de raccordement au contrôleur (imports MLT et périphérique simulés),
+et 47 tests de recherche. Contrôle visuel de la fenêtre à 880 × 720. La suite
+complète de l'application ne peut pas être validée dans cet environnement sans
+MLT et son périphérique d'entrée ; `bin/check` et l'essai réel restent nécessaires
+sur Zeus. Cette première interface ne remplace pas le bouton historique d'analyse.

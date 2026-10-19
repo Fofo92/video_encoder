@@ -1179,6 +1179,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         montage_menu.addAction(
             self.clear_all_segments_action
         )
+        self.repeated_sequence_action = montage_menu.addAction(
+            "Séparateurs répétés (expérimental)…", self.review_repeated_sequences
+        )
 
         main_toolbar = self.addToolBar(
             "Actions principales"
@@ -1650,6 +1653,8 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.in_button.setEnabled(not busy and not editing)
         self.out_button.setEnabled(not busy and not editing)
         self.propose_ad_trim_button.setEnabled(not busy and not editing)
+        if hasattr(self, "repeated_sequence_action"):
+            self.repeated_sequence_action.setEnabled(not busy and not editing)
         if hasattr(self, "analyze_ads_button"):
             self.analyze_ads_button.setEnabled(not busy and not editing)
         self.save_project_action.setEnabled(not busy and not editing)
@@ -2124,6 +2129,32 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             )
         except (OSError, RuntimeError) as error:
             self.ad_trim_proposal_failed(str(error))
+
+    def review_repeated_sequences(self):
+        if self.export_status != "idle":
+            return
+        bounds = ad_analysis_bounds(
+            self.trim_session, self.source_id, self.in_position, self.out_position, self.frame_source.length,
+        )
+        if bounds is None:
+            QtWidgets.QMessageBox.information(
+                self, "Bornes requises", "Pose IN et OUT, ou ajoute un seul segment couvrant l’œuvre entière.",
+            )
+            return
+        if self.frame_source.frame_rate_numerator != 25 * self.frame_source.frame_rate_denominator:
+            QtWidgets.QMessageBox.warning(self, "Cadence incompatible", "Cette recherche nécessite 25 images/s.")
+            return
+        from .repeated_sequence_dialog import RepeatedSequenceDialog
+        self.set_transport_position(0)
+        self.export_status_changed("proposing")
+        try:
+            dialog = RepeatedSequenceDialog(self.source_path, bounds, self.frame_source, self)
+            accepted = dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted
+            if accepted and dialog.session is not None:
+                self.ad_trim_proposal_succeeded({"session": dialog.session})
+        finally:
+            self.export_status_changed("idle")
+            self.show_frame(self.current_position)
 
     def analyze_ads(self):
         if self.export_status != "idle":
@@ -2627,6 +2658,8 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             not running
         )
         self.propose_ad_trim_button.setEnabled(not running)
+        if hasattr(self, "repeated_sequence_action"):
+            self.repeated_sequence_action.setEnabled(not running)
         self.analyze_ads_button.setEnabled(not running)
         self.segment_list.setEnabled(
             not running
