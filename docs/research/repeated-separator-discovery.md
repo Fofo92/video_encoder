@@ -250,3 +250,24 @@ le projet corrigé par Pascal, à une image près au premier départ (OUT manuel
 centrées sur les bornes manuelles connues. Ce n'est toujours pas une mesure de
 détection à l'aveugle dans toute la capture ni une preuve d'identité globale
 des indices FFmpeg et MLT en présence de discontinuités.
+
+### Full-source search for an already learned motif
+
+`script/research/scan_learned_sequence.py --source RECORDING --clips CLIP1 CLIP2 CLIP3 CLIP4`
+learns a two-second moving core from the observation clips, then streams the full
+source at 5 fps in bounded blocks. Overlap preserves matches crossing block
+boundaries. No corrected project, expected cut positions or channel template is
+accepted. A changing source, ambiguous motif or decoder error stops the run.
+The original recording is read only. Requires Python/NumPy and FFmpeg.
+
+This is **not blind full-recording discovery**: observation clips were selected
+manually. It tests the learned motif's presence and additional matches throughout
+the recording. A repeated advert can match; the output cannot determine which
+side of a match to retain. Report times use the FFmpeg resampled timeline and
+must not be used as verified editor frame indices. No project or cuts are emitted.
+
+The streaming matcher has synthetic checks for source edges, overlapping blocks,
+blocks shorter than a motif, temporal reversal and static sequences. A smoke test
+on recovered Chien & chat departure-1 finds its core at 10 seconds. This smoke
+test uses an observation clip and is not independent validation. The full original
+capture is available only on Zeus; its full-source result is still pending.
