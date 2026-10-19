@@ -89,7 +89,6 @@ class RepeatedSequenceDialogTest(unittest.TestCase):
 
     def test_cancel_stops_a_real_background_process_without_accepting_segments(self):
         import time
-        from PySide6 import QtTest
         root = Path(self.temp.name)
         scripts = root / 'script' / 'research'
         scripts.mkdir(parents=True)
@@ -101,7 +100,7 @@ class RepeatedSequenceDialogTest(unittest.TestCase):
         self.assertFalse(self.dialog.open_button.isEnabled())
         before = time.monotonic()
         self.dialog.reject()
-        QtTest.QTest.qWait(10)
+        self.app.processEvents()
         self.assertLess(time.monotonic() - before, 4)
         self.assertEqual(self.dialog.process.state(), QtCore.QProcess.ProcessState.NotRunning)
         self.assertIsNone(self.dialog.session)
