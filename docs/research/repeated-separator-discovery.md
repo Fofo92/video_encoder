@@ -322,3 +322,47 @@ pas son origine exacte dans Chien & chat. Le rapport conserve maintenant aussi
 les métadonnées de début du conteneur et de la piste vidéo. Une nouvelle exécution
 sur la source originale est nécessaire pour vérifier les écarts ; aucune égalité
 globale entre indices décodés et indices de l'éditeur n'est supposée.
+
+### Affinement corrigé vérifié sur Zeus
+
+Pascal a exécuté le correctif 725dd2c sur la source originale. Les limites du
+motif sont [74 597,74 672[, [83 441,83 516[, [120 823,120 898[ et
+[130 151,130 226[. En utilisant le début moins une image pour les deux départs
+et la fin exclusive pour les reprises, les quatre écarts aux corrections manuelles
+sont +1/0/0/0 image. Le calcul n'avait pas reçu les coupes intérieures.
+Les métadonnées annoncent un début vidéo à 71321,635156 s et un début conteneur
+à 71320,559156 s : leur différence de 1,076 s n'explique pas, à elle seule,
+le décalage de 13 images constaté dans la précédente chronologie rééchantillonnée.
+Le correctif évite cette dépendance aux temps pour la sélection des images.
+
+### Découverte sans extraits modèles : nouveau prototype
+
+```sh
+python3 script/research/discover_source_sequences.py \
+  --source '/commun/to_be_cut/Chien & chat.m2t' \
+  --output tmp/chien-chat-decouverte-source
+```
+
+Cette commande n'accepte ni extrait, ni projet de référence, ni positions de coupe,
+ni bornes extérieures, ni modèle de chaîne. Elle décode à 5 fps vers un cache RGB
+sur disque (environ 62 Mo pour deux heures), puis indexe des descripteurs spatiaux
+et temporels. Les rapprochements indexés sont vérifiés sur dix images RGB
+ordonnées (deux secondes), avec les seuils visuels du prototype existant. Les
+fenêtres statiques sont écartées. Trois occurrences séparées sont exigées.
+
+L'index est approximatif et déterministe, pas une comparaison exhaustive.
+Les limites de taille des groupes indexés et de nombre de comparaisons sont
+signalées dans le rapport ; leur absence ne prouve pas un rappel complet.
+Une publicité ou une séquence de programme répétée peut satisfaire les critères.
+Le programme n'en déduit ni la fonction de séparateur ni une coupe, et ne crée
+aucun projet. Les temps restent ceux du rééchantillonnage ; un affinement par
+indices décodés demeure nécessaire ensuite. Un nouveau dossier est exigé,
+l'identité de la source est contrôlée et une limite de recherche de six heures
+évite une taille non bornée du cache.
+
+Vérification locale : les quatre extraits vidéo reçus, concaténés uniquement sous
+forme d'empreintes, produisent un seul groupe avec les quatre noyaux du motif.
+Il s'agit encore d'extraits sélectionnés par l'humain ; la découverte sur le
+fichier entier sans modèle reste à exécuter sur Zeus. Les tests synthétiques
+couvrent répétitions sans modèle, support insuffisant, source statique, entrée
+courte et signalement du plafond de comparaisons.
