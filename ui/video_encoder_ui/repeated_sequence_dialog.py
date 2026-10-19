@@ -44,6 +44,12 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.notice.setSizePolicy(QtWidgets.QSizePolicy.Policy.Ignored, QtWidgets.QSizePolicy.Policy.Preferred)
         self.notice.setMaximumHeight(64)
         layout.addWidget(self.notice)
+        self.stage = QtWidgets.QLabel()
+        self.stage.setWordWrap(True)
+        layout.addWidget(self.stage)
+        self.activity = QtWidgets.QProgressBar()
+        self.activity.setRange(0, 0)
+        layout.addWidget(self.activity)
         self.groups = QtWidgets.QTableWidget(0, 4)
         self.groups.setHorizontalHeaderLabels(['Groupe', 'Occurrences totales', 'Dans l’œuvre', 'Durée médiane du noyau'])
         self.groups.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
@@ -71,10 +77,12 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.frame.setRange(0, frame_source.length - 1)
         self.frame.valueChanged.connect(self.show_frame)
         navigation.addWidget(self.frame)
+        self.nudge_buttons = []
         for label, step in [('−1 image', -1), ('+1 image', 1)]:
             button = QtWidgets.QPushButton(label)
             button.clicked.connect(lambda _checked=False, delta=step: self.frame.setValue(self.frame.value() + delta))
             navigation.addWidget(button)
+            self.nudge_buttons.append(button)
         layout.addLayout(navigation)
         self.confirm = QtWidgets.QCheckBox('Je confirme l’alternance : départ vers la publicité, puis reprise de l’œuvre.')
         self.confirm.setToolTip('Confirmer ce sens pour chaque paire d’occurrences avant de remplacer le montage.')
@@ -100,17 +108,29 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             parameters.flags = QtCore.QProcess.UnixProcessFlag.CreateNewSession
             self.process.setUnixProcessParameters(parameters)
         self.process.readyReadStandardOutput.connect(self.progress)
-        self.process.finished.connect(self.finished)
+        self.process.finished.connect(self.process_finished)
         self.process.errorOccurred.connect(self.process_error)
         self.update_actions()
         existing = latest_discovery(self.repository, self.source)
         if existing:
             self.load_report(existing)
+        self.restore_completed_refinement()
 
     def update_actions(self):
         selected = self.groups.currentRow() >= 0
         for widget in [self.open_button, self.new_button, self.cache_button, self.groups, self.hits]:
             widget.setEnabled(not self.busy)
+        for widget in [self.edge, self.frame, *self.nudge_buttons]:
+            widget.setEnabled(not self.busy and bool(self.preview_rows))
+        self.confirm.setEnabled(not self.busy and self.refined is not None)
+        self.activity.setVisible(self.busy)
+        if self.busy:
+            self.stage.setText('Calcul en cours : attends la fin avant de contrôler les raccords. '
+                               'Les repères du scan ne sont pas encore des limites de coupe affinées.')
+        elif self.refined is not None:
+            self.stage.setText('Affinement terminé — contrôle maintenant les raccords, puis confirme leur sens.')
+        else:
+            self.stage.setText('Repères du scan approximatifs — affinement nécessaire avant validation.')
         problem = self.selected_group_problem() if selected else 'Choisis un groupe.'
         self.refine_button.setEnabled(not self.busy and selected and problem is None)
         self.refine_button.setToolTip(problem or 'Extraire les fenêtres et affiner les limites du motif.')
@@ -132,6 +152,8 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.clear_refinement()
         self.task, self.output, self.busy = task, output, True
         self.last_progress = ''
+        self.preview.clear()
+        self.preview.setText('Calcul en cours… L’aperçu des raccords sera disponible à la fin.')
         self.update_actions()
         self.notice.setText('Recherche en cours…' if task == 'discovery' else 'Extraction et affinement en cours…')
         self.process.start(sys.executable, [str(self.repository / 'script' / 'research' / script), *arguments])
@@ -156,6 +178,9 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
     def load_report(self, path):
         try:
             report = json.loads(path.read_text())
+            if 'source_motif_limits' in report:
+                self.display_refinement(report)
+                return
             check_source(report, self.source)
             if report.get('sample_fps') != 5 or not isinstance(report.get('candidates'), list):
                 raise ValueError('Choisis le fichier resultat.json d’une découverte sans modèle.')
@@ -212,6 +237,8 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             self.hits.setCurrentRow(0)
 
     def show_occurrence(self, index):
+        if self.busy:
+            return
         if 0 <= index < len(self.preview_rows):
             row = self.preview_rows[index]
             position = row['end'] if self.edge.currentIndex() else row['start']
@@ -219,6 +246,8 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             self.show_frame(self.frame.value())
 
     def show_frame(self, position):
+        if self.busy:
+            return
         try:
             image, actual, _ = self.frame_source.frame_at(position)
             self.preview.setPixmap(QtGui.QPixmap.fromImage(image).scaled(440, 248, QtCore.Qt.AspectRatioMode.KeepAspectRatio))
@@ -241,7 +270,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             self.last_progress = message[-1500:]
             self.notice.setText(message.splitlines()[-1][-200:])
 
-    def finished(self, code, status):
+    def process_finished(self, code, status):
         if not self.busy:
             return
         self.progress()
@@ -255,11 +284,28 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             return
         try:
             refined = json.loads((self.output / 'manifest.json').read_text())
-            # Validate geometry before offering the explicit semantic confirmation.
-            session = proposed_session(refined, self.source, *self.bounds, confirmed=True)
+            self.display_refinement(refined)
         except (OSError, ValueError, KeyError, TypeError) as error:
             self.error(str(error))
-            return
+
+    def restore_completed_refinement(self):
+        paths = sorted((self.repository / 'tmp' / 'repeated-sequence-reviews').glob('*/manifest.json'),
+                       key=lambda path: path.stat().st_mtime_ns, reverse=True)
+        for path in paths:
+            try:
+                refined = json.loads(path.read_text())
+                proposed_session(refined, self.source, *self.bounds, confirmed=True)
+                self.display_refinement(refined)
+                self.notice.setText('Affinement terminé retrouvé sur disque. Contrôle les raccords ; '
+                                    'aucun nouveau calcul n’a été lancé.')
+                return
+            except (OSError, ValueError, KeyError, TypeError):
+                continue
+
+    def display_refinement(self, refined):
+        # Geometric validation does not replace the unchecked semantic confirmation.
+        session = proposed_session(refined, self.source, *self.bounds, confirmed=True)
+        self.clear_refinement()
         self.refined = refined
         self.preview_rows = [{'start': row['motif_start_decoded_frame'], 'end': row['motif_end_decoded_frame_exclusive']}
                              for row in refined['source_motif_limits']]

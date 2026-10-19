@@ -79,7 +79,7 @@ class RepeatedSequenceDialogTest(unittest.TestCase):
         output.mkdir()
         (output / 'manifest.json').write_text(json.dumps(refined))
         self.dialog.output, self.dialog.task, self.dialog.busy = output, 'refinement', True
-        self.dialog.finished(0, QtCore.QProcess.ExitStatus.NormalExit)
+        self.dialog.process_finished(0, QtCore.QProcess.ExitStatus.NormalExit)
         self.assertFalse(self.dialog.apply_button.isEnabled())
         self.dialog.confirm.setChecked(True)
         self.assertTrue(self.dialog.apply_button.isEnabled())
@@ -127,3 +127,60 @@ class RepeatedSequenceDialogTest(unittest.TestCase):
         self.dialog.show()
         self.app.processEvents()
         self.assertLessEqual(self.dialog.width(), 1000)
+
+    def test_approximate_preview_cannot_be_reviewed_while_refinement_runs(self):
+        self.dialog.load_report(self.path)
+        self.dialog.groups.selectRow(0)
+        with patch.object(self.dialog.process, 'start'):
+            self.dialog.refine_group()
+        self.assertTrue(self.dialog.busy)
+        self.assertIn('Calcul en cours', self.dialog.stage.text())
+        for widget in [self.dialog.hits, self.dialog.edge, self.dialog.frame,
+                       self.dialog.confirm, self.dialog.apply_button, *self.dialog.nudge_buttons]:
+            self.assertFalse(widget.isEnabled())
+        self.assertIn('Calcul en cours', self.dialog.preview.text())
+        self.dialog.busy = False
+
+    def test_real_process_completion_unlocks_review_without_manual_callback(self):
+        root = Path(self.temp.name)
+        scripts = root / 'script' / 'research'
+        scripts.mkdir(parents=True)
+        output = root / 'completed'
+        code = ('from pathlib import Path\n'
+                f'output = Path({str(output)!r})\n'
+                'output.mkdir()\n'
+                f'(output / "resultat.json").write_text({json.dumps(self.report)!r})\n')
+        (scripts / 'complete.py').write_text(code)
+        self.dialog.repository = root
+        loop = QtCore.QEventLoop()
+        self.dialog.process.finished.connect(loop.quit)
+        QtCore.QTimer.singleShot(3000, loop.quit)
+        self.dialog.start('discovery', 'complete.py', [], output)
+        loop.exec()
+        self.assertEqual(self.dialog.process.state(), QtCore.QProcess.ProcessState.NotRunning)
+        self.assertFalse(self.dialog.busy)
+        self.assertEqual(self.dialog.cancel_button.text(), 'Fermer')
+        self.assertEqual(self.dialog.groups.rowCount(), 1)
+
+    def test_restores_completed_refinement_without_recomputing_or_confirming(self):
+        root = Path(self.temp.name)
+        output = root / 'tmp' / 'repeated-sequence-reviews' / 'previous'
+        output.mkdir(parents=True)
+        refined = {'status': 'experimental', 'source': str(self.source), 'source_identity': identity(self.source),
+                   'outer_bounds': [10, 1900], 'refinement': {'status': 'experimental'},
+                   'coordinate_basis': 'FFmpeg decoded source frame index; editor mapping unverified',
+                   'source_motif_limits': [{'motif_start_decoded_frame': start, 'motif_end_decoded_frame_exclusive': start + 75}
+                                          for start in [125, 500, 1000, 1500]]}
+        (output / 'manifest.json').write_text(json.dumps(refined))
+        self.dialog.repository = root
+        with patch.object(self.dialog.process, 'start') as start:
+            self.dialog.restore_completed_refinement()
+        start.assert_not_called()
+        self.assertEqual(self.dialog.hits.count(), 4)
+        self.assertIn('retrouvé', self.dialog.notice.text())
+        self.assertFalse(self.dialog.busy)
+        self.assertTrue(self.dialog.confirm.isEnabled())
+        self.assertFalse(self.dialog.confirm.isChecked())
+        self.assertFalse(self.dialog.apply_button.isEnabled())
+        self.assertIn('Affinement terminé', self.dialog.stage.text())
+        self.assertTrue(self.dialog.edge.isEnabled())
