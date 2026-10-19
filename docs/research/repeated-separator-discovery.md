@@ -132,6 +132,69 @@ modifier un projet source.
 Il reste à retrouver le début et la fin complets du motif, vérifier la
 correspondance avec la source, distinguer les répétitions publicitaires ou de
 programme, puis évaluer le procédé sur des fenêtres et captures non utilisées
-pour sa conception. Le son n'est pas analysé dans cette version. Les décisions
+pour sa conception. Les descripteurs sonores optionnels décrits ci-dessous ne
+déterminent pas la classification. Les décisions
 ambiguës doivent rester des propositions à vérifier. Aucun changement n'est
 apporté au bouton d'analyse ni à la file d'encodage.
+
+## Contexte sonore et validation par retrait d'un extrait
+
+Options supplémentaires : `--characterize-candidates` (exige
+`--refine-local-boundaries`) et `--leave-one-clip-out`.
+
+La première calcule des descripteurs spectraux sur le son mono à 8 kHz, avec une
+comparaison tolérant un petit décalage temporel. Elle rapporte aussi le contexte
+des bordures avant/après le motif et la présence des deux sens de changement.
+Ces indications restent descriptives, même si toutes sont positives. Un motif
+visuel et sonore répété peut être une publicité ; ce problème n'est pas résolu
+par un seuil de ressemblance supplémentaire.
+
+Sur les six paires de séparateurs TF1 : ressemblance sonore médiane 0,686,
+minimum 0,662 ; deux paires sont particulièrement proches, 0,964 et 0,988.
+Les passages de même durée placés 5 secondes avant et 5 secondes après les motifs
+donnent des médianes de 0,322 et 0,342. Ce score n'est pas une probabilité de
+publicité. Les sons ne sont pas identiques sur les quatre occurrences, ce qui
+invite à ne pas imposer une stricte identité sonore comme condition obligatoire.
+
+Le retrait successif de chaque extrait de la découverte, avec recherche du motif
+appris sur les trois autres, donne une correspondance unique dans chaque extrait
+retiré : noyaux locaux 12–14 s pour les deux départs et 9–11 s pour les deux
+reprises. Le protocole conserve les paramètres existants et ne fournit pas les
+bornes de l'extrait retiré au détecteur. Les quatre extraits restent ceux du même
+enregistrement connu : cela ne remplace pas une validation sur une autre capture
+ou une recherche dans tout un enregistrement.
+
+## Préparation du contrôle sur la source
+
+`script/research/export_indexed_windows.py` prépare des fenêtres autour des
+bornes intérieures d'un projet corrigé, pour comparer précisément les images de
+la source à celles de l'éditeur. Il sélectionne les images par indice décodé,
+sans chercher leur position avec `-ss`, réinitialise les temps des extraits et
+écrit un manifeste donnant les indices de début et fin exclusive. Les quatre
+fenêtres sont produites en un seul décodage. La durée de ce décodage peut rester
+importante sur une longue source ; ce n'est pas un nouveau scan Comskip.
+
+```sh
+python3 script/research/export_indexed_windows.py \
+  --project projet-corrige.json \
+  --output tmp/controle-images-source \
+  --radius 250
+```
+
+L'outil exige une source de cadence moyenne 25 fps, refuse un dossier existant,
+contrôle l'identité du fichier avant/après, conserve les diagnostics et refuse
+de clôturer le manifeste si une fenêtre est tronquée. Il n'exporte que la vidéo
+pour ne pas prétendre avoir résolu l'alignement audio d'un flux TNT.
+
+Un test FFmpeg réel sur une source synthétique rouge/bleu/vert vérifie la
+transition attendue à l'image 25 d'une fenêtre de 50 images. Les tests vérifient
+aussi le refus des chevauchements, des sorties déjà présentes et des fenêtres
+tronquées. Les 24 tests de recherche passent.
+
+Ce contrôle n'a pas encore été exécuté sur le fichier original Chien & chat,
+qui n'est pas accessible dans l'environnement de travail : seuls les extraits
+et diagnostics reçus le sont. Le manifeste annonce donc explicitement
+`requires_visual_verification` pour l'accord avec les indices de l'éditeur.
+L'indice d'une image décodée FFmpeg et celui d'une timeline MLT ne doivent pas
+être supposés identiques sur une capture avec discontinuités. Aucun projet de
+découpage automatique n'est généré à partir de ces résultats de recherche.

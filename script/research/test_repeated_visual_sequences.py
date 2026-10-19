@@ -9,6 +9,7 @@ import numpy as np
 
 from repeated_visual_sequences import decode, discover
 from repeated_sequence_boundaries import refine
+from repetition_holdout import evaluate
 
 
 class RepeatedVisualSequencesTest(unittest.TestCase):
@@ -70,6 +71,19 @@ class RepeatedVisualSequencesTest(unittest.TestCase):
         self.assertEqual(refined["classification"], "unverified_shared_run")
         self.assertIn("Cannot distinguish", refined["semantic_status"])
         self.assertTrue(refined["needs_manual_review"])
+
+    def test_withheld_occurrence_can_be_found_without_participating_in_discovery(self):
+        clips = self.clips()
+        frames = self.random.random((45, 48), dtype=np.float32)
+        frames[9:23] = self.core
+        clips.append(frames)
+        report = evaluate(clips)
+        self.assertTrue(all(len(row["matches"]) == 1 for row in report["results"]))
+        clips[-1] = self.random.random((45, 48), dtype=np.float32)
+        self.assertEqual(evaluate(clips)["results"][-1]["matches"], [])
+
+    def test_holdout_does_not_silently_lower_its_support_requirement(self):
+        self.assertEqual(evaluate(self.clips())["status"], "unavailable")
 
     def test_refinement_abstains_on_multiple_occurrences_per_clip_or_missing_alignment(self):
         clips = self.clips()

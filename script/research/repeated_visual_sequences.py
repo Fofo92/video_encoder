@@ -139,7 +139,11 @@ def main(argv=None):
     parser.add_argument("clips", type=Path, nargs="+")
     parser.add_argument("--min-clips", type=int, default=3)
     parser.add_argument("--refine-local-boundaries", action="store_true")
+    parser.add_argument("--characterize-candidates", action="store_true")
+    parser.add_argument("--leave-one-clip-out", action="store_true")
     options = parser.parse_args(argv)
+    if options.characterize_candidates and not options.refine_local_boundaries:
+        parser.error('--characterize-candidates requires --refine-local-boundaries')
     paths = [path.resolve(strict=True) for path in options.clips]
     if len(set(paths)) != len(paths):
         raise ValueError("The same clip cannot count as independent support twice")
@@ -154,8 +158,12 @@ def main(argv=None):
         "limitations": ["Repeated advertisements or programme sequences can also match",
                         "Intervals describe repeated cores, not separator or cut boundaries",
                         "Times are relative to clips, not original source frame numbers",
-                        "No project is created or modified; audio is not analysed"],
+                        "No project is created or modified",
+                        "Audio descriptors are optional and do not establish separator semantics"],
     }
+    if options.leave_one_clip_out:
+        from repetition_holdout import evaluate
+        report["holdout_experiment"] = evaluate(features, min_clips=options.min_clips)
     if options.refine_local_boundaries:
         from repeated_sequence_boundaries import refine
         for path in paths:
@@ -164,6 +172,12 @@ def main(argv=None):
         report["local_boundary_experiment"] = [
             refine(full_rate, candidate, min_clips=options.min_clips) for candidate in report["candidates"]
         ]
+        if options.characterize_candidates:
+            from repeated_sequence_context import characterize, decode_audio
+            audios = [decode_audio(path) for path in paths]
+            report["candidate_context_experiment"] = [
+                characterize(full_rate, audios, refined) for refined in report["local_boundary_experiment"]
+            ]
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
