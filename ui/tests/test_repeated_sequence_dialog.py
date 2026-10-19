@@ -111,6 +111,8 @@ class RepeatedSequenceDialogTest(unittest.TestCase):
             {'core_start_seconds': value, 'core_end_seconds': value + 2} for value in range(1, 61, 4)]
         self.path.write_text(json.dumps(self.report))
         self.dialog.load_report(self.path)
+        self.assertEqual(self.dialog.groups.rowCount(), 0)
+        self.dialog.advanced.setChecked(True)
         self.dialog.groups.selectRow(0)
         self.assertFalse(self.dialog.refine_button.isEnabled())
         self.assertIn('15 occurrences', self.dialog.notice.text())
@@ -184,3 +186,51 @@ class RepeatedSequenceDialogTest(unittest.TestCase):
         self.assertFalse(self.dialog.apply_button.isEnabled())
         self.assertIn('Affinement terminé', self.dialog.stage.text())
         self.assertTrue(self.dialog.edge.isEnabled())
+
+    def test_hidden_groups_keep_their_original_candidate_number(self):
+        valid = self.report['candidates'][0]
+        invalid = {'occurrences': [{'core_start_seconds': value, 'core_end_seconds': value + 2}
+                                  for value in range(1, 61, 4)]}
+        self.report['candidates'] = [invalid, valid]
+        self.path.write_text(json.dumps(self.report))
+        self.dialog.load_report(self.path)
+        self.assertEqual(self.dialog.groups.rowCount(), 1)
+        self.assertEqual(self.dialog.groups.item(0, 0).text(), '2')
+        self.dialog.groups.selectRow(0)
+        with patch.object(self.dialog, 'start') as start:
+            self.dialog.refine_group()
+        args = start.call_args.args[2]
+        self.assertEqual(args[args.index('--candidate') + 1], '2')
+
+    def test_cut_review_previews_adjacent_kept_and_discarded_frames(self):
+        refined = {'status': 'experimental', 'source': str(self.source), 'source_identity': identity(self.source),
+                   'outer_bounds': [10, 1900], 'refinement': {'status': 'experimental'},
+                   'coordinate_basis': 'FFmpeg decoded source frame index; editor mapping unverified',
+                   'source_motif_limits': [{'motif_start_decoded_frame': start, 'motif_end_decoded_frame_exclusive': start + 75}
+                                          for start in [125, 500, 1000, 1500]]}
+        self.dialog.display_refinement(refined)
+        self.assertIn('Départ proposé 1', self.dialog.hits.item(0).text())
+        self.assertEqual(self.dialog.edge.currentText(), 'Dernière image conservée (OUT)')
+        self.assertEqual(self.dialog.frame.value(), 124)
+        self.dialog.edge.setCurrentIndex(1)
+        self.assertEqual(self.dialog.frame.value(), 125)
+        self.dialog.hits.setCurrentRow(1)
+        self.assertIn('Reprise proposée 1', self.dialog.hits.item(1).text())
+        self.assertEqual(self.dialog.edge.currentText(), 'Première image conservée (IN)')
+        self.assertEqual(self.dialog.frame.value(), 575)
+        self.dialog.edge.setCurrentIndex(0)
+        self.assertEqual(self.dialog.frame.value(), 574)
+
+    def test_stage_progress_handles_split_output_and_shows_elapsed_time(self):
+        self.dialog.busy = True
+        self.dialog.elapsed.start()
+        first = b'REVIEW_STAGE {"step": 2, "label": '
+        second = b'"Preparation"}\n'
+        with patch.object(self.dialog.process, 'readAllStandardOutput', side_effect=[first, second]):
+            self.dialog.progress()
+            self.dialog.progress()
+        self.assertEqual(self.dialog.activity.maximum(), 3)
+        self.assertEqual(self.dialog.activity.value(), 1)
+        self.assertIn('Preparation', self.dialog.stage.text())
+        self.assertIn('écoulé', self.dialog.stage.text())
+        self.dialog.busy = False

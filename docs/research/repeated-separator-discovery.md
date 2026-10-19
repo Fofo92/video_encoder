@@ -455,3 +455,22 @@ et 47 tests de recherche. Contrôle visuel de la fenêtre à 880 × 720. La suit
 complète de l'application ne peut pas être validée dans cet environnement sans
 MLT et son périphérique d'entrée ; `bin/check` et l'essai réel restent nécessaires
 sur Zeus. Cette première interface ne remplace pas le bouton historique d'analyse.
+
+### Revue des raccords et avancement
+
+La vue normale masque maintenant les groupes qui ne peuvent pas être affinés
+(nombre d'occurrences intérieures ou fenêtres incompatibles). La vue avancée les
+conserve pour diagnostic. Les numéros de groupe restent ceux du rapport original,
+y compris après filtrage : une ligne « Groupe 2 » appelle bien `--candidate 2`.
+
+Après affinement, la liste propose des départs et reprises, à confirmer. Un départ
+montre OUT = début du motif moins une image et, au choix, la première image
+écartée. Une reprise montre IN = fin exclusive du motif et, au choix, la dernière
+image écartée. Il ne s'agit pas de présenter le jingle de trois secondes comme la
+plage publicitaire complète. Les boutons ±1 parcourent les images ; ils ne changent
+pas le découpage. Les ajustements restent possibles dans l'éditeur après chargement.
+
+L'affinement signale trois étapes : lecture/extraction de la source, préparation
+des images, comparaison/affinement. La barre suit ces étapes et l'interface affiche
+le temps écoulé ; elle ne prétend pas donner un pourcentage fin du décodage.
+Les limites calculées, les confirmations requises et les sources restent inchangées.

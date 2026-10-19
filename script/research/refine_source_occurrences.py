@@ -9,6 +9,7 @@ import json
 import math
 from pathlib import Path
 import subprocess
+import sys
 
 from export_indexed_windows import source_identity
 from repeated_visual_sequences import decode, discover
@@ -101,15 +102,18 @@ def run(report_path, output, start_frame, end_frame, candidate_index=None):
         command += ['-map', f'[out{index}]', '-an', '-c:v', 'libx264', '-preset', 'fast',
                     '-crf', '24', '-r', '25', '-enc_time_base', '1:25', '-fps_mode', 'cfr',
                     str(output / row['name'])]
+    print('REVIEW_STAGE ' + json.dumps({'step': 1, 'label': 'Lecture et extraction de la source'}), file=sys.stderr, flush=True)
     with (output / 'export.log').open('wb') as log:
         subprocess.run(command, stdout=log, stderr=log, check=True)
     if source_identity(source) != identity:
         raise ValueError('Source changed during extraction')
     paths = [output / row['name'] for row in windows]
+    print('REVIEW_STAGE ' + json.dumps({'step': 2, 'label': 'Préparation des images des raccords'}), file=sys.stderr, flush=True)
     full_rate = [decode(path, sample_fps=25) for path in paths]
     for row, frames in zip(windows, full_rate):
         if len(frames) != row['end_decoded_frame_exclusive'] - row['first_decoded_frame']:
             raise ValueError('Truncated window; no refinement accepted')
+    print('REVIEW_STAGE ' + json.dumps({'step': 3, 'label': 'Comparaison et affinement des raccords'}), file=sys.stderr, flush=True)
     candidates = discover([frames[::5] for frames in full_rate])
     if len(candidates) != 1 or candidates[0]['supporting_clips'] != len(windows):
         raise ValueError('No unique repeated motif in source windows')
