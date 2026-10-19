@@ -1,0 +1,11 @@
+{
+  "format": "video_encoder.ad_reference",
+  "version": 1,
+  "source": "/commun/to_be_cut/Chien & chat.m2t",
+  "frame_rate": "25/1",
+  "coverage": "known_intervals_only",
+  "provenance": "Projet corrigé fourni par Pascal le 19 octobre 2026 : chien et chats proposal-locked-20243-157947.json. Bornes inclusives ; référence d'évaluation uniquement.",
+  "reviewed_envelope": [20243, 157947],
+  "kept_intervals": [[20243, 74595], [83516, 120822], [130226, 157947]],
+  "excluded_intervals": [[74596, 83515], [120823, 130225]]
+}

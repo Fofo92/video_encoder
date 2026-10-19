@@ -198,3 +198,55 @@ et diagnostics reçus le sont. Le manifeste annonce donc explicitement
 L'indice d'une image décodée FFmpeg et celui d'une timeline MLT ne doivent pas
 être supposés identiques sur une capture avec discontinuités. Aucun projet de
 découpage automatique n'est généré à partir de ces résultats de recherche.
+
+## Diagnostic des exports indexés reçus le 19 octobre à 12:10
+
+Les quatre MP4 reçus contiennent chacun 500 images encodées, mais seulement 499
+sont décodées en lecture normale. Leurs durées annoncées sont 19,96 secondes,
+avec une cadence moyenne de 12500/499. Le paquet de la dernière image, à 19,96 s,
+porte le drapeau discard. Ignorer la liste d'édition MP4 permet de relire les
+500 images. L'erreur « Truncated window » était donc trop générale : dans ce cas,
+les images sont présentes mais une métadonnée du conteneur masque la dernière.
+
+L'exporteur fixe maintenant explicitement la base de temps 1/25, les PTS N, la
+cadence d'encodage 25 fps et la cadence de sortie constante. Cette correction
+évite de dépendre des indications de cadence et de durée héritées du flux TNT.
+
+`recover_indexed_windows.py` permet de récupérer les fichiers déjà produits
+dans un nouveau dossier : il exige que toutes les images attendues soient
+décodables en ignorant la liste d'édition, réencode sans perte et vérifie que
+la suite des empreintes de toutes les images décodées reste identique. Il ne
+relit pas la capture originale et n'écrase aucun fichier. Une image réellement
+absente entraîne un refus, pas une duplication pour atteindre le compte attendu.
+
+```sh
+python3 script/research/recover_indexed_windows.py \
+  --input tmp/chien-chat-indexed-20261019-120634 \
+  --output tmp/chien-chat-indexed-recovered
+```
+
+La récupération a été exécutée dans l'environnement de travail sur les quatre
+fichiers reçus : 500 images chacun, 20 secondes, 25 fps, origine zéro et empreintes
+ordonnées identiques pour toutes les images. Un test supplémentaire reproduit
+une liste d'édition raccourcie, constate 49 images lisibles sur 50 encodées et
+vérifie la récupération sans changement de pixels ni d'ordre. Les 25 tests de
+recherche passent.
+
+La découverte puis l'affinement ont été relancés sur ces fenêtres indexées,
+avec les paramètres existants. Les limites du motif partagé sont :
+
+| Fenêtre | Début inclusif local | Fin exclusive locale | Repère déduit dans les indices décodés source |
+| --- | --- | --- | --- |
+| departure-1 | 251 | 326 | OUT 74 596 |
+| departure-2 | 250 | 325 | OUT 120 822 |
+| resume-1 | 175 | 250 | IN 83 516 |
+| resume-2 | 175 | 250 | IN 130 226 |
+
+Le calcul utilise le début du motif moins une image pour OUT, et sa fin exclusive
+pour IN. Le contrôle visuel des images adjacentes retrouve bien le passage du
+film au séparateur et du séparateur au film. Ces quatre repères concordent avec
+le projet corrigé par Pascal, à une image près au premier départ (OUT manuel
+74 595). Cela donne un accord local sur cette capture ; les fenêtres étaient
+centrées sur les bornes manuelles connues. Ce n'est toujours pas une mesure de
+détection à l'aveugle dans toute la capture ni une preuve d'identité globale
+des indices FFmpeg et MLT en présence de discontinuités.

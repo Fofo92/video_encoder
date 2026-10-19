@@ -68,12 +68,12 @@ def export(project_path, output, radius=250):
     for index, row in enumerate(windows):
         filters.append(f"[v{index}]trim=start_frame={row['first_decoded_frame']}:"
                        f"end_frame={row['end_decoded_frame_exclusive']},"
-                       f"setpts=N/(25*TB),scale=960:-2[out{index}]")
+                       f"settb=1/25,setpts=N,scale=960:-2[out{index}]")
     command = ["ffmpeg", "-nostdin", "-v", "error", "-n", "-i", str(source),
                "-filter_complex_threads", "1", "-filter_complex", ";".join(filters)]
     for index, row in enumerate(windows):
         command += ["-map", f"[out{index}]", "-an", "-c:v", "libx264", "-preset", "fast", "-crf", "24",
-                    "-fps_mode", "passthrough", str(output / row["name"])]
+                    "-r", "25", "-enc_time_base", "1:25", "-fps_mode", "cfr", str(output / row["name"])]
     with (output / "export.log").open("wb") as log:
         subprocess.run(command, stdout=log, stderr=log, check=True)
     if source_identity(source) != identity:

@@ -44,7 +44,7 @@ class IndexedExportTest(unittest.TestCase):
             ['ffmpeg', '-nostdin', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=red:s=64x36:r=25:d=3',
              '-f', 'lavfi', '-i', 'color=c=blue:s=64x36:r=25:d=3', '-f', 'lavfi', '-i',
              'color=c=green:s=64x36:r=25:d=3', '-filter_complex', '[0:v][1:v][2:v]concat=n=3:v=1:a=0[v]',
-             '-map', '[v]', '-c:v', 'libx264', str(cls.source)], check=True,
+             '-map', '[v]', '-c:v', 'libx264', '-video_track_timescale', '90000', str(cls.source)], check=True,
         )
 
     @classmethod
