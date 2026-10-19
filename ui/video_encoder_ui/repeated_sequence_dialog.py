@@ -8,7 +8,7 @@ import uuid
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from .repeated_sequence_review import check_source, inside_occurrences, proposed_session, latest_discovery
+from .repeated_sequence_review import check_source, inside_occurrences, proposed_session, latest_discovery, refinement_problem
 
 
 class RepeatedSequenceDialog(QtWidgets.QDialog):
@@ -40,6 +40,9 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.cache_button.clicked.connect(self.discover_from_cache)
         self.notice = QtWidgets.QLabel('Aucune recherche chargée.')
         self.notice.setWordWrap(True)
+        self.notice.setTextFormat(QtCore.Qt.TextFormat.PlainText)
+        self.notice.setSizePolicy(QtWidgets.QSizePolicy.Policy.Ignored, QtWidgets.QSizePolicy.Policy.Preferred)
+        self.notice.setMaximumHeight(64)
         layout.addWidget(self.notice)
         self.groups = QtWidgets.QTableWidget(0, 4)
         self.groups.setHorizontalHeaderLabels(['Groupe', 'Occurrences totales', 'Dans l’œuvre', 'Durée médiane du noyau'])
@@ -73,8 +76,8 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             button.clicked.connect(lambda _checked=False, delta=step: self.frame.setValue(self.frame.value() + delta))
             navigation.addWidget(button)
         layout.addLayout(navigation)
-        self.confirm = QtWidgets.QCheckBox('Je confirme : départ vers la publicité, reprise de l’œuvre, '
-                                          'puis alternance identique pour les occurrences suivantes.')
+        self.confirm = QtWidgets.QCheckBox('Je confirme l’alternance : départ vers la publicité, puis reprise de l’œuvre.')
+        self.confirm.setToolTip('Confirmer ce sens pour chaque paire d’occurrences avant de remplacer le montage.')
         self.confirm.setEnabled(False)
         self.confirm.toggled.connect(self.update_actions)
         layout.addWidget(self.confirm)
@@ -108,9 +111,17 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         selected = self.groups.currentRow() >= 0
         for widget in [self.open_button, self.new_button, self.cache_button, self.groups, self.hits]:
             widget.setEnabled(not self.busy)
-        self.refine_button.setEnabled(not self.busy and selected)
+        problem = self.selected_group_problem() if selected else 'Choisis un groupe.'
+        self.refine_button.setEnabled(not self.busy and selected and problem is None)
+        self.refine_button.setToolTip(problem or 'Extraire les fenêtres et affiner les limites du motif.')
         self.apply_button.setEnabled(not self.busy and self.refined is not None and self.confirm.isChecked())
         self.cancel_button.setText('Interrompre et fermer' if self.busy else 'Fermer')
+
+    def selected_group_problem(self):
+        index = self.groups.currentRow()
+        if self.report is None or index < 0:
+            return 'Choisis un groupe.'
+        return refinement_problem(inside_occurrences(self.report['candidates'][index], *self.bounds))
 
     def new_workspace(self):
         return self.repository / 'tmp' / 'repeated-sequence-reviews' / uuid.uuid4().hex
@@ -181,6 +192,10 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
                                   'end': round(row['core_end_seconds'] * 25), 'approximate': True}
                                  for row in inside_occurrences(self.report['candidates'][index], *self.bounds)]
         self.populate_hits()
+        if index >= 0:
+            problem = self.selected_group_problem()
+            prefix = 'Recherche partielle : plafonds atteints. ' if self.report.get('index_limits_reached') else ''
+            self.notice.setText(prefix + (problem or 'Examine les occurrences, puis affine le groupe sélectionné.'))
         self.update_actions()
 
     def populate_hits(self):
@@ -212,7 +227,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             self.preview.setText(f'Aperçu indisponible : {error}')
 
     def refine_group(self):
-        if self.groups.currentRow() < 0 or self.busy:
+        if self.groups.currentRow() < 0 or self.busy or self.selected_group_problem():
             return
         self.clear_refinement()
         output = self.new_workspace()
@@ -224,7 +239,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         message = bytes(self.process.readAllStandardOutput()).decode(errors='replace').strip()
         if message:
             self.last_progress = message[-1500:]
-            self.notice.setText(message[-350:])
+            self.notice.setText(message.splitlines()[-1][-200:])
 
     def finished(self, code, status):
         if not self.busy:
@@ -271,8 +286,10 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
     def error(self, message):
         self.clear_refinement()
         self.update_actions()
-        self.notice.setText(message)
-        QtWidgets.QMessageBox.warning(self, 'Séparateurs répétés', message)
+        summary = str(message).strip().splitlines()[-1] if str(message).strip() else 'Opération impossible.'
+        summary = summary[:240]
+        self.notice.setText(summary)
+        QtWidgets.QMessageBox.warning(self, 'Séparateurs répétés', summary)
 
     def reject(self):
         if self.busy:

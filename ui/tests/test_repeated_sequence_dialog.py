@@ -105,3 +105,25 @@ class RepeatedSequenceDialogTest(unittest.TestCase):
         self.assertEqual(self.dialog.process.state(), QtCore.QProcess.ProcessState.NotRunning)
         self.assertIsNone(self.dialog.session)
         self.assertFalse(self.dialog.busy)
+
+    def test_group_above_limit_cannot_launch_refinement(self):
+        self.report['candidates'][0]['occurrences'] = [
+            {'core_start_seconds': value, 'core_end_seconds': value + 2} for value in range(1, 61, 4)]
+        self.path.write_text(json.dumps(self.report))
+        self.dialog.load_report(self.path)
+        self.dialog.groups.selectRow(0)
+        self.assertFalse(self.dialog.refine_button.isEnabled())
+        self.assertIn('15 occurrences', self.dialog.notice.text())
+        with patch.object(self.dialog, 'start') as start:
+            self.dialog.refine_group()
+        start.assert_not_called()
+
+    def test_long_traceback_does_not_expand_window_or_error_popup(self):
+        trace = 'Traceback\\n' + '/long/path/' * 1000 + '\nValueError: invalid group'
+        with patch('video_encoder_ui.repeated_sequence_dialog.QtWidgets.QMessageBox.warning') as warning:
+            self.dialog.error(trace)
+        self.assertEqual(warning.call_args.args[2], 'ValueError: invalid group')
+        self.assertEqual(self.dialog.notice.text(), 'ValueError: invalid group')
+        self.dialog.show()
+        self.app.processEvents()
+        self.assertLessEqual(self.dialog.width(), 1000)

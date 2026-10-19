@@ -69,3 +69,11 @@ def latest_discovery(repository, source):
         except (OSError, ValueError, KeyError, TypeError):
             continue
     return None
+
+
+def refinement_problem(rows):
+    if not 3 <= len(rows) <= 12:
+        return f'{len(rows)} occurrences dans l’œuvre : l’affinement en accepte de 3 à 12. Choisis un autre groupe.'
+    if any(left['core_end_seconds'] + 12 > right['core_start_seconds'] for left, right in zip(rows, rows[1:])):
+        return 'Les occurrences sont trop proches pour être affinées séparément. Choisis un autre groupe.'
+    return None
