@@ -37,6 +37,11 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v6
 
+      - name: Install headless Qt runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libegl1 libopengl0
+
       - name: Install isolated Qt test dependencies
         run: |
           python3 -m venv "$RUNNER_TEMP/cut-review-tests"
