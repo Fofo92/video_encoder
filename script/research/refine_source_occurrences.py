@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -57,16 +58,38 @@ def plan(report, start_frame, end_frame):
     return windows
 
 
-def extraction_filters(windows):
+def extraction_filters(windows, observe=False):
     # Count the original decoded images before resetting timestamps. An fps filter
     # here could duplicate/drop images and invalidate origin + local-index mapping.
     labels = ''.join(f'[v{i}]' for i in range(len(windows)))
-    filters = [f'[0:v:0]split={len(windows)}{labels}']
+    filters = [f'[0:v:0]split={len(windows) + int(observe)}{labels}' + ('[watch]' if observe else '')]
+    if observe:
+        filters.append("[watch]select=not(mod(n\\,250)),showinfo@review_progress,nullsink")
     for index, row in enumerate(windows):
         filters.append(f"[v{index}]trim=start_frame={row['first_decoded_frame']}:"
                        f"end_frame={row['end_decoded_frame_exclusive']},"
                        f'settb=1/25,setpts=N,scale=960:-2[out{index}]')
     return filters
+
+
+def export_with_progress(command, log_path):
+    """Observe source decoding, independently of the short extracted outputs."""
+    with log_path.open('w') as log:
+        with subprocess.Popen(command, stdout=log, stderr=subprocess.PIPE, text=True,
+                              errors='replace') as process:
+            for line in process.stderr:
+                log.write(line)
+                if 'showinfo@review_progress' in line:
+                    match = re.search(r'\bn:\s*(\d+)', line)
+                    if match:
+                        frames = int(match[1]) * 250 + 1
+                        print('REVIEW_STAGE ' + json.dumps({
+                            'step': 1, 'label': f'Source parcourue : {frames:,} images '
+                            f'({frames / 25 / 60:.1f} min à 25 images/s)'}),
+                            file=sys.stderr, flush=True)
+                        log.flush()
+            if process.wait():
+                raise subprocess.CalledProcessError(process.returncode, command)
 
 
 def run(report_path, output, start_frame, end_frame, candidate_index=None, departure_index=None, resume_index=None):
@@ -101,21 +124,24 @@ def run(report_path, output, start_frame, end_frame, candidate_index=None, depar
                 'window_localization': 'scanner seconds times 25 are approximate centers only'}
     manifest_path = output / 'manifest.json'
     manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
-    filters = extraction_filters(windows)
-    command = ['ffmpeg', '-nostdin', '-v', 'error', '-n', '-i', str(source),
+    filters = extraction_filters(windows, observe=True)
+    command = ['ffmpeg', '-nostdin', '-v', 'info', '-nostats', '-n', '-i', str(source),
                '-filter_complex_threads', '1', '-filter_complex', ';'.join(filters)]
     for index, row in enumerate(windows):
         command += ['-map', f'[out{index}]', '-an', '-c:v', 'libx264', '-preset', 'fast',
                     '-crf', '24', '-r', '25', '-enc_time_base', '1:25', '-fps_mode', 'cfr',
                     str(output / row['name'])]
     print('REVIEW_STAGE ' + json.dumps({'step': 1, 'label': 'Lecture et extraction de la source'}), file=sys.stderr, flush=True)
-    with (output / 'export.log').open('wb') as log:
-        subprocess.run(command, stdout=log, stderr=log, check=True)
+    export_with_progress(command, output / 'export.log')
     if source_identity(source) != identity:
         raise ValueError('Source changed during extraction')
     paths = [output / row['name'] for row in windows]
     print('REVIEW_STAGE ' + json.dumps({'step': 2, 'label': 'Préparation des images des raccords'}), file=sys.stderr, flush=True)
-    full_rate = [decode(path, sample_fps=25) for path in paths]
+    full_rate = []
+    for index, path in enumerate(paths):
+        full_rate.append(decode(path, sample_fps=25))
+        print('REVIEW_STAGE ' + json.dumps({'step': 2, 'label':
+              f'Fenêtres préparées : {index + 1}/{len(paths)}'}), file=sys.stderr, flush=True)
     for row, frames in zip(windows, full_rate):
         if len(frames) != row['end_decoded_frame_exclusive'] - row['first_decoded_frame']:
             raise ValueError('Truncated window; no refinement accepted')

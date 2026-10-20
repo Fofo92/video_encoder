@@ -48,6 +48,31 @@ class SourceRefinementTest(unittest.TestCase):
         self.assertEqual(len(old) // (32 * 18), 38)
         self.assertEqual(len(current) // (960 * 540), 25)
 
+    def test_live_progress_counts_source_images_beyond_extracted_window(self):
+        import contextlib
+        import io
+        import json
+        import shutil
+        import tempfile
+        from pathlib import Path
+        from refine_source_occurrences import export_with_progress
+        if not shutil.which('ffmpeg'):
+            self.skipTest('FFmpeg unavailable')
+        windows = [{'first_decoded_frame': 0, 'end_decoded_frame_exclusive': 25}]
+        command = ['ffmpeg', '-nostdin', '-v', 'info', '-nostats', '-f', 'lavfi', '-i',
+                   'testsrc2=size=32x18:rate=25:duration=20.04',
+                   '-filter_complex_threads', '1', '-filter_complex',
+                   ';'.join(extraction_filters(windows, observe=True)),
+                   '-map', '[out0]', '-f', 'null', '-']
+        progress = io.StringIO()
+        with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stderr(progress):
+            export_with_progress(command, Path(directory) / 'export.log')
+        rows = [json.loads(line.removeprefix('REVIEW_STAGE '))
+                for line in progress.getvalue().splitlines()]
+        self.assertEqual(len(rows), 3)
+        self.assertIn('501 images', rows[-1]['label'])
+        self.assertTrue(all(row['step'] == 1 for row in rows))
+
 
 class DiscoveryCandidateSelectionTest(unittest.TestCase):
     def report(self):
