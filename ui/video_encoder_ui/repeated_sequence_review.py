@@ -39,6 +39,10 @@ def proposed_session(report, source, first, last, confirmed=False):
     rows = report['source_motif_limits']
     if not 2 <= len(rows) <= 12 or len(rows) % 2:
         raise ValueError('Il faut un nombre pair de séparateurs : départ, reprise, puis éventuellement départ, reprise.')
+    if any('family_role' in row for row in rows):
+        if any(row.get('family_role') != ('departure' if index % 2 == 0 else 'resume')
+               for index, row in enumerate(rows)):
+            raise ValueError('Les familles ne forment pas une alternance départ/reprise.')
     previous = first
     for row in rows:
         start, end = row['motif_start_decoded_frame'], row['motif_end_decoded_frame_exclusive']
@@ -76,4 +80,42 @@ def refinement_problem(rows):
         return f'{len(rows)} occurrences dans l’œuvre : l’affinement en accepte de 3 à 12. Choisis un autre groupe.'
     if any(left['core_end_seconds'] + 12 > right['core_start_seconds'] for left, right in zip(rows, rows[1:])):
         return 'Les occurrences sont trop proches pour être affinées séparément. Choisis un autre groupe.'
+    return None
+
+
+def support_family_problem(candidate, first, last):
+    if candidate.get('grouping') != 'each_occurrence_directly_matches_one_anchor':
+        return 'Actualise la découverte depuis son cache pour utiliser deux familles.'
+    rows = candidate['occurrences']
+    if not 3 <= len(rows) <= 12:
+        return 'Il faut de 3 à 12 répétitions dans l’enregistrement pour soutenir cette famille.'
+    if not inside_occurrences(candidate, first, last):
+        return 'Cette famille ne contient aucune occurrence dans l’œuvre.'
+    if any(left['core_end_seconds'] + 20 > right['core_start_seconds'] for left, right in zip(rows, rows[1:])):
+        return 'Les fenêtres de cette famille sont trop proches.'
+    return None
+
+
+def pair_problem(report, departure, resume, first, last):
+    if report is None or type(departure) is not int or type(resume) is not int:
+        return 'Choisis la famille des départs et celle des reprises.'
+    if departure == resume:
+        return 'Choisis deux familles distinctes.'
+    rows, supports = [], []
+    for role, index in [('departure', departure), ('resume', resume)]:
+        if not 1 <= index <= len(report['candidates']):
+            return 'Famille inconnue.'
+        candidate = report['candidates'][index - 1]
+        problem = support_family_problem(candidate, first, last)
+        if problem:
+            return problem
+        rows.extend((row['core_start_seconds'], role) for row in inside_occurrences(candidate, first, last))
+        supports.extend(candidate['occurrences'])
+    supports.sort(key=lambda row: row['core_start_seconds'])
+    if any(left['core_end_seconds'] + 20 > right['core_start_seconds'] for left, right in zip(supports, supports[1:])):
+        return 'Les fenêtres des deux familles se chevauchent.'
+    rows.sort()
+    if not 2 <= len(rows) <= 12 or len(rows) % 2 or any(role != ('departure' if i % 2 == 0 else 'resume')
+                                                       for i, (_, role) in enumerate(rows)):
+        return 'Les occurrences dans l’œuvre doivent alterner départ, reprise, puis départ, reprise.'
     return None

@@ -14,6 +14,7 @@ import sys
 from export_indexed_windows import source_identity
 from repeated_visual_sequences import decode, discover
 from repeated_sequence_boundaries import refine
+from paired_motif_refinement import plan_pair, refine_pair
 
 
 def select_candidate(report, candidate_index=None):
@@ -68,10 +69,14 @@ def extraction_filters(windows):
     return filters
 
 
-def run(report_path, output, start_frame, end_frame, candidate_index=None):
+def run(report_path, output, start_frame, end_frame, candidate_index=None, departure_index=None, resume_index=None):
     encoded = report_path.read_bytes()
-    report = select_candidate(json.loads(encoded), candidate_index)
-    windows = plan(report, start_frame, end_frame)
+    paired = departure_index is not None or resume_index is not None
+    if paired and candidate_index is not None:
+        raise ValueError('Choose one common family or two role families, not both')
+    report = json.loads(encoded) if paired else select_candidate(json.loads(encoded), candidate_index)
+    windows = (plan_pair(report, departure_index, resume_index, start_frame, end_frame) if paired
+               else plan(report, start_frame, end_frame))
     source = Path(report['source']).resolve(strict=True)
     identity = source_identity(source)
     if report.get('source_identity', identity) != identity:
@@ -88,6 +93,7 @@ def run(report_path, output, start_frame, end_frame, candidate_index=None):
     manifest = {'status': 'prepared', 'source': str(source), 'source_identity': identity,
                 'scan_report_sha256': hashlib.sha256(encoded).hexdigest(),
                 'selected_candidate': candidate_index,
+                'selected_families': {'departure': departure_index, 'resume': resume_index} if paired else None,
                 'discovery_limits_reached': report.get('index_limits_reached', False),
                 'outer_bounds': [start_frame, end_frame], 'windows': windows,
                 'coordinate_basis': 'FFmpeg decoded source frame index; editor mapping unverified',
@@ -114,19 +120,22 @@ def run(report_path, output, start_frame, end_frame, candidate_index=None):
         if len(frames) != row['end_decoded_frame_exclusive'] - row['first_decoded_frame']:
             raise ValueError('Truncated window; no refinement accepted')
     print('REVIEW_STAGE ' + json.dumps({'step': 3, 'label': 'Comparaison et affinement des raccords'}), file=sys.stderr, flush=True)
-    candidates = discover([frames[::5] for frames in full_rate])
-    if len(candidates) != 1 or candidates[0]['supporting_clips'] != len(windows):
-        raise ValueError('No unique repeated motif in source windows')
-    refined = refine(full_rate, candidates[0])
-    manifest['refinement'] = refined
-    if refined['status'] == 'experimental':
-        mapped = []
-        for row in refined['occurrences']:
-            origin = windows[row['clip_index']]['first_decoded_frame']
-            mapped.append({'occurrence': row['clip_index'] + 1,
-                           'motif_start_decoded_frame': origin + row['sampled_start_frame'],
-                           'motif_end_decoded_frame_exclusive': origin + row['sampled_end_frame_exclusive']})
-        manifest['source_motif_limits'] = mapped
+    if paired:
+        manifest.update(refine_pair(full_rate, windows, start_frame, end_frame))
+    else:
+        candidates = discover([frames[::5] for frames in full_rate])
+        if len(candidates) != 1 or candidates[0]['supporting_clips'] != len(windows):
+            raise ValueError('No unique repeated motif in source windows')
+        refined = refine(full_rate, candidates[0])
+        manifest['refinement'] = refined
+        if refined['status'] == 'experimental':
+            mapped = []
+            for row in refined['occurrences']:
+                origin = windows[row['clip_index']]['first_decoded_frame']
+                mapped.append({'occurrence': row['clip_index'] + 1,
+                               'motif_start_decoded_frame': origin + row['sampled_start_frame'],
+                               'motif_end_decoded_frame_exclusive': origin + row['sampled_end_frame_exclusive']})
+            manifest['source_motif_limits'] = mapped
     manifest.update(status='experimental', needs_manual_review=True,
                     limitations=['Motif limits are not automatically cut decisions',
                                  'No departure/resume classification or edit project',
@@ -140,7 +149,9 @@ if __name__ == '__main__':
     parser.add_argument('--scan-report', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--candidate', type=int)
+    parser.add_argument('--departure-candidate', type=int)
+    parser.add_argument('--resume-candidate', type=int)
     parser.add_argument('--start-frame', type=int, required=True)
     parser.add_argument('--end-frame', type=int, required=True)
     args = parser.parse_args()
-    print(json.dumps(run(args.scan_report, args.output, args.start_frame, args.end_frame, args.candidate), indent=2))
+    print(json.dumps(run(args.scan_report, args.output, args.start_frame, args.end_frame, args.candidate, args.departure_candidate, args.resume_candidate), indent=2))

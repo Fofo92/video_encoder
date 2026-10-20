@@ -1,5 +1,6 @@
 """Experimental motif discovery and review, with cancellable child processes."""
 import json
+import hashlib
 import os
 from pathlib import Path
 import signal
@@ -8,7 +9,7 @@ import uuid
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from .repeated_sequence_review import check_source, inside_occurrences, proposed_session, latest_discovery, refinement_problem
+from .repeated_sequence_review import check_source, inside_occurrences, proposed_session, latest_discovery, refinement_problem, support_family_problem, pair_problem
 
 
 class RepeatedSequenceDialog(QtWidgets.QDialog):
@@ -31,7 +32,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.setWindowTitle('Séparateurs répétés — expérimental')
         self.resize(880, 720)
         layout = QtWidgets.QVBoxLayout(self)
-        intro = QtWidgets.QLabel('Choisis un motif, vérifie ses occurrences, puis affine les limites. '
+        intro = QtWidgets.QLabel('Choisis un motif commun, ou deux familles pour les départs et les reprises. '
                                 'Une répétition ne suffit pas à identifier une publicité.')
         intro.setWordWrap(True)
         layout.addWidget(intro)
@@ -67,6 +68,20 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.advanced = QtWidgets.QCheckBox('Vue avancée : afficher aussi les groupes non affinables')
         self.advanced.toggled.connect(self.render_groups)
         layout.addWidget(self.advanced)
+        self.paired = QtWidgets.QCheckBox('Deux familles distinctes : départs et reprises')
+        self.paired.toggled.connect(self.render_groups)
+        layout.addWidget(self.paired)
+        self.role_controls = QtWidgets.QWidget()
+        roles = QtWidgets.QHBoxLayout(self.role_controls)
+        roles.setContentsMargins(0, 0, 0, 0)
+        self.departure_family = QtWidgets.QComboBox()
+        self.resume_family = QtWidgets.QComboBox()
+        for title, combo in [('Départs vers la publicité', self.departure_family), ('Reprises de l’œuvre', self.resume_family)]:
+            roles.addWidget(QtWidgets.QLabel(title))
+            roles.addWidget(combo, 1)
+            combo.currentIndexChanged.connect(self.role_changed)
+        layout.addWidget(self.role_controls)
+        self.role_controls.setVisible(False)
         self.groups.itemSelectionChanged.connect(self.group_changed)
         preview_layout = QtWidgets.QHBoxLayout()
         self.hits = QtWidgets.QListWidget()
@@ -128,7 +143,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
 
     def update_actions(self):
         selected = self.groups.currentRow() >= 0
-        for widget in [self.open_button, self.new_button, self.cache_button, self.groups, self.hits, self.advanced]:
+        for widget in [self.open_button, self.new_button, self.cache_button, self.groups, self.hits, self.advanced, self.paired, self.departure_family, self.resume_family]:
             widget.setEnabled(not self.busy)
         for widget in [self.edge, self.frame, *self.nudge_buttons]:
             widget.setEnabled(not self.busy and bool(self.preview_rows))
@@ -140,8 +155,10 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             self.stage.setText('Affinement terminé — contrôle maintenant les raccords, puis confirme leur sens.')
         else:
             self.stage.setText('Repères du scan approximatifs — affinement nécessaire avant validation.')
-        problem = self.selected_group_problem() if selected else 'Choisis un groupe.'
-        self.refine_button.setEnabled(not self.busy and selected and problem is None)
+        self.refine_button.setText('Affiner les deux familles' if self.paired.isChecked() else 'Affiner le groupe sélectionné')
+        ready = selected or self.paired.isChecked()
+        problem = self.selected_group_problem() if ready else 'Choisis un groupe.'
+        self.refine_button.setEnabled(not self.busy and ready and problem is None)
         self.refine_button.setToolTip(problem or 'Extraire les fenêtres et affiner les limites du motif.')
         self.apply_button.setEnabled(not self.busy and self.refined is not None and self.confirm.isChecked())
         self.cancel_button.setText('Interrompre et fermer' if self.busy else 'Fermer')
@@ -158,6 +175,8 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         return self.visible_candidates[row] if 0 <= row < len(self.visible_candidates) else -1
 
     def selected_group_problem(self):
+        if self.paired.isChecked():
+            return pair_problem(self.report, self.departure_family.currentData(), self.resume_family.currentData(), *self.bounds)
         index = self.selected_candidate_index()
         if self.report is None or index < 0:
             return 'Choisis un groupe.'
@@ -193,6 +212,14 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.start('discovery', 'discover_source_sequences.py', args, output)
 
     def discover_from_cache(self):
+        if self.report_path is not None:
+            manifest = self.report_path.parent / 'manifest.json'
+            try:
+                if json.loads(manifest.read_text()).get('status') == 'completed':
+                    self.discover(self.report_path.parent)
+                    return
+            except (OSError, ValueError):
+                pass
         directory = QtWidgets.QFileDialog.getExistingDirectory(self, 'Choisir le dossier du cache de découverte', str(self.repository / 'tmp'))
         if directory:
             self.discover(Path(directory))
@@ -211,11 +238,8 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             check_source(report, self.source)
             if report.get('sample_fps') != 5 or not isinstance(report.get('candidates'), list):
                 raise ValueError('Choisis le fichier resultat.json d’une découverte sans modèle.')
-            rows = []
             for candidate in report['candidates']:
-                inside = inside_occurrences(candidate, *self.bounds)
-                durations = sorted(row['core_end_seconds'] - row['core_start_seconds'] for row in candidate['occurrences'])
-                rows.append((len(candidate['occurrences']), len(inside), durations[len(durations) // 2] if durations else 0))
+                inside_occurrences(candidate, *self.bounds)
         except (OSError, ValueError, KeyError, TypeError) as error:
             self.error(str(error))
             return
@@ -226,12 +250,28 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.groups.setRowCount(0)
         self.visible_candidates = []
         self.clear_refinement()
+        self.role_controls.setVisible(self.paired.isChecked())
+        for combo in [self.departure_family, self.resume_family]:
+            combo.blockSignals(True)
+            combo.clear()
+            combo.addItem('Choisir…', None)
         if self.report is None:
+            for combo in [self.departure_family, self.resume_family]:
+                combo.blockSignals(False)
             return
+        for index, candidate in enumerate(self.report['candidates']):
+            if support_family_problem(candidate, *self.bounds) is None:
+                count = len(inside_occurrences(candidate, *self.bounds))
+                for combo in [self.departure_family, self.resume_family]:
+                    combo.addItem(f'Groupe {index + 1} — {count} dans l’œuvre', index + 1)
+        for combo in [self.departure_family, self.resume_family]:
+            combo.blockSignals(False)
         total = len(self.report['candidates'])
         for index, candidate in enumerate(self.report['candidates']):
             inside = inside_occurrences(candidate, *self.bounds)
-            if refinement_problem(inside) and not self.advanced.isChecked():
+            problem = (support_family_problem(candidate, *self.bounds) if self.paired.isChecked()
+                       else refinement_problem(inside))
+            if problem and not self.advanced.isChecked():
                 continue
             row = self.groups.rowCount()
             self.visible_candidates.append(index)
@@ -243,6 +283,11 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
                 self.groups.setItem(row, column, QtWidgets.QTableWidgetItem(value))
         self.notice.setText(('Recherche partielle : plafonds atteints. ' if self.report.get('index_limits_reached') else '') +
                             f'{self.groups.rowCount()} groupes affichés sur {total}. Choisis une proposition à affiner.')
+        self.update_actions()
+
+    def role_changed(self):
+        self.clear_refinement()
+        self.notice.setText(self.selected_group_problem() or 'Deux familles choisies : affine-les puis contrôle les raccords.')
         self.update_actions()
 
     def clear_refinement(self):
@@ -262,7 +307,8 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         if index >= 0:
             problem = self.selected_group_problem()
             prefix = 'Recherche partielle : plafonds atteints. ' if self.report.get('index_limits_reached') else ''
-            self.notice.setText(prefix + (problem or 'Examine les occurrences, puis affine le groupe sélectionné.'))
+            self.notice.setText(prefix + (problem or ('Examine les occurrences, puis affine les deux familles choisies.'
+                                                  if self.paired.isChecked() else 'Examine les occurrences, puis affine le groupe sélectionné.')))
         self.update_actions()
 
     def populate_hits(self):
@@ -317,12 +363,15 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             self.preview.setText(f'Aperçu indisponible : {error}')
 
     def refine_group(self):
-        if self.groups.currentRow() < 0 or self.busy or self.selected_group_problem():
+        if self.busy or self.selected_group_problem():
             return
         self.clear_refinement()
         output = self.new_workspace()
+        choice = (['--departure-candidate', str(self.departure_family.currentData()),
+                   '--resume-candidate', str(self.resume_family.currentData())] if self.paired.isChecked()
+                  else ['--candidate', str(self.selected_candidate_index() + 1)])
         self.start('refinement', 'refine_source_occurrences.py',
-                   ['--scan-report', str(self.report_path), '--candidate', str(self.selected_candidate_index() + 1),
+                   ['--scan-report', str(self.report_path), *choice,
                     '--start-frame', str(self.bounds[0]), '--end-frame', str(self.bounds[1]), '--output', str(output)], output)
 
     def progress(self):
@@ -382,6 +431,14 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
     def display_refinement(self, refined):
         # Geometric validation does not replace the unchecked semantic confirmation.
         session = proposed_session(refined, self.source, *self.bounds, confirmed=True)
+        roles = refined.get('selected_families')
+        if roles:
+            self.paired.setChecked(True)
+            if self.report_path is not None and hashlib.sha256(self.report_path.read_bytes()).hexdigest() == refined.get('scan_report_sha256'):
+                for combo, role in [(self.departure_family, 'departure'), (self.resume_family, 'resume')]:
+                    combo.blockSignals(True)
+                    combo.setCurrentIndex(max(0, combo.findData(roles[role])))
+                    combo.blockSignals(False)
         self.clear_refinement()
         self.refined = refined
         self.preview_rows = [{'start': row['motif_start_decoded_frame'], 'end': row['motif_end_decoded_frame_exclusive']}

@@ -234,3 +234,44 @@ class RepeatedSequenceDialogTest(unittest.TestCase):
         self.assertIn('Preparation', self.dialog.stage.text())
         self.assertIn('écoulé', self.dialog.stage.text())
         self.dialog.busy = False
+
+    def test_two_role_families_with_outside_support_can_be_chosen_and_refined(self):
+        self.dialog.bounds = (1750, 4874)
+        self.report['candidates'] = [
+            {'classification': 'unverified_repeated_visual_sequence',
+             'grouping': 'each_occurrence_directly_matches_one_anchor',
+             'occurrences': [{'core_start_seconds': value, 'core_end_seconds': value + 2} for value in times]}
+            for times in [[25, 85, 145], [55, 115, 175]]]
+        self.path.write_text(json.dumps(self.report))
+        self.dialog.load_report(self.path)
+        # Neither has the three inside occurrences required by common-motif mode.
+        self.assertEqual(self.dialog.groups.rowCount(), 0)
+        self.dialog.paired.setChecked(True)
+        self.assertEqual(self.dialog.groups.rowCount(), 2)
+        self.assertFalse(self.dialog.refine_button.isEnabled())
+        self.dialog.departure_family.setCurrentIndex(1)
+        self.dialog.resume_family.setCurrentIndex(2)
+        self.assertTrue(self.dialog.refine_button.isEnabled())
+        with patch.object(self.dialog, 'start') as start:
+            self.dialog.refine_group()
+        args = start.call_args.args[2]
+        self.assertNotIn('--candidate', args)
+        self.assertEqual(args[args.index('--departure-candidate') + 1], '1')
+        self.assertEqual(args[args.index('--resume-candidate') + 1], '2')
+        self.assertFalse(self.dialog.confirm.isChecked())
+
+    def test_role_families_cannot_be_identical_or_reversed(self):
+        self.dialog.bounds = (1750, 4874)
+        self.report['candidates'] = [
+            {'grouping': 'each_occurrence_directly_matches_one_anchor',
+             'occurrences': [{'core_start_seconds': value, 'core_end_seconds': value + 2} for value in times]}
+            for times in [[25, 85, 145], [55, 115, 175]]]
+        self.path.write_text(json.dumps(self.report))
+        self.dialog.load_report(self.path)
+        self.dialog.paired.setChecked(True)
+        self.dialog.departure_family.setCurrentIndex(1)
+        self.dialog.resume_family.setCurrentIndex(1)
+        self.assertFalse(self.dialog.refine_button.isEnabled())
+        self.dialog.departure_family.setCurrentIndex(2)
+        self.dialog.resume_family.setCurrentIndex(1)
+        self.assertFalse(self.dialog.refine_button.isEnabled())

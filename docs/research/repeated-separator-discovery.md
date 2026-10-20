@@ -542,3 +542,49 @@ utiliser leurs occurrences extérieures comme support de l'affinement et propose
 uniquement les raccords intérieurs. L'interface actuelle, conçue autour d'une
 famille ayant au moins trois occurrences intérieures, ne doit pas être présentée
 comme capable de finaliser automatiquement ce cas Braveheart.
+
+## Combinaison explicite de deux familles
+
+Le mode **Deux familles distinctes : départs et reprises** complète le mode à
+motif commun. La personne choisit séparément les deux rôles ; aucun rôle n'est
+inféré d'un nom de chaîne ou d'une couleur. Seules les familles v3 vérifiées par
+ancrage direct peuvent être combinées. Chacune doit fournir 3 à 12 répétitions
+dans l'enregistrement et au moins une dans l'œuvre. Les répétitions extérieures
+servent de support visuel ; elles ne deviennent pas des raccords du montage.
+
+L'option de recherche depuis cache utilise directement le cache du rapport
+chargé s'il possède un manifeste complet. Cela permet de mettre à jour un ancien
+rapport v2 vers v3 sans redécoder la source. Sinon, le choix de dossier reste
+accessible. En mode deux familles, le tableau et les sélecteurs incluent les
+familles qui n'ont que deux occurrences intérieures mais un support suffisant
+sur l'enregistrement entier.
+
+```sh
+python3 script/research/refine_source_occurrences.py \
+  --scan-report RAPPORT_V3/resultat.json \
+  --departure-candidate 1 --resume-candidate 2 \
+  --start-frame 14073 --end-frame 271036 --output NOUVEAU_DOSSIER
+```
+
+Les numéros 1 et 2 ci-dessus correspondent uniquement au résultat Braveheart v3
+analysé ; ce ne sont pas des choix par défaut. Les options de deux rôles sont
+incompatibles avec `--candidate`, conservé pour le mode à motif commun.
+
+Une seule lecture de la source prépare les fenêtres des deux familles. Chaque
+noyau est entouré de dix secondes de contexte pour absorber une partie de l'écart
+entre la chronologie du scan et les indices décodés. Si une limite commune touche
+le bord d'une fenêtre, l'outil refuse de proposer une coupe. Chaque famille est
+alignée et affinée indépendamment avec ses répétitions extérieures. Les limites
+natives intérieures sont ensuite réunies par ordre chronologique ; l'alternance
+départ/reprise, les paires complètes et l'absence de chevauchement sont exigées.
+Le manifeste conserve les rôles choisis, les fenêtres et les affinements de support.
+L'interface confirme encore explicitement les rôles avant de charger les segments.
+
+Validation locale : 21 tests de modèle/fenêtre Qt ; 60 tests de recherche cumulés,
+dont six tests de cette combinaison. Le test FFmpeg de bout en bout crée deux
+motifs distincts répétés trois fois, affine avec les six occurrences puis ne
+garde que les quatre intérieures attendues, avec leurs indices exacts. Le plan
+sur le cache Braveheart réel produit douze fenêtres de support et quatre noyaux
+intérieurs ordonnés. L'affinement sur le fichier source Braveheart original et
+l'accord avec les raccords humains restent à exécuter sur Zeus : les miniatures
+à 5 fps seules ne constituent pas cette validation.
