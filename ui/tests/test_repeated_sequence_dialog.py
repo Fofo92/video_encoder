@@ -130,6 +130,15 @@ class RepeatedSequenceDialogTest(unittest.TestCase):
         self.app.processEvents()
         self.assertLessEqual(self.dialog.width(), 1000)
 
+    def test_error_keeps_output_folder_available_for_copy_without_long_label(self):
+        self.dialog.output = Path(self.temp.name) / 'failed-refinement'
+        with patch('video_encoder_ui.repeated_sequence_dialog.QtWidgets.QMessageBox.warning'):
+            self.dialog.error('Traceback\nValueError: ambiguous motif')
+        self.assertFalse(self.dialog.copy_diagnostic.isHidden())
+        self.dialog.copy_diagnostic.click()
+        self.assertEqual(self.app.clipboard().text(), str(self.dialog.output.resolve()))
+        self.assertEqual(self.dialog.notice.text(), 'ValueError: ambiguous motif')
+
     def test_approximate_preview_cannot_be_reviewed_while_refinement_runs(self):
         self.dialog.load_report(self.path)
         self.dialog.groups.selectRow(0)

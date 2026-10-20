@@ -52,6 +52,10 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.notice.setSizePolicy(QtWidgets.QSizePolicy.Policy.Ignored, QtWidgets.QSizePolicy.Policy.Preferred)
         self.notice.setMaximumHeight(64)
         layout.addWidget(self.notice)
+        self.copy_diagnostic = QtWidgets.QPushButton('Copier le chemin du dossier de diagnostic')
+        self.copy_diagnostic.setVisible(False)
+        self.copy_diagnostic.clicked.connect(self.copy_diagnostic_path)
+        layout.addWidget(self.copy_diagnostic)
         self.stage = QtWidgets.QLabel()
         self.stage.setWordWrap(True)
         layout.addWidget(self.stage)
@@ -189,6 +193,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         if self.busy:
             return
         self.clear_refinement()
+        self.copy_diagnostic.setVisible(False)
         self.task, self.output, self.busy = task, output, True
         self.last_progress = ''
         self.progress_buffer = ''
@@ -464,12 +469,18 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             return
         self.accept()
 
+    def copy_diagnostic_path(self):
+        if self.output is not None:
+            QtWidgets.QApplication.clipboard().setText(str(self.output.resolve()))
+
     def error(self, message):
         self.clear_refinement()
         self.update_actions()
         summary = str(message).strip().splitlines()[-1] if str(message).strip() else 'Opération impossible.'
         summary = summary[:240]
         self.notice.setText(summary)
+        self.copy_diagnostic.setVisible(self.output is not None)
+        self.copy_diagnostic.setToolTip(str(self.output.resolve()) if self.output is not None else '')
         QtWidgets.QMessageBox.warning(self, 'Séparateurs répétés', summary)
 
     def reject(self):
