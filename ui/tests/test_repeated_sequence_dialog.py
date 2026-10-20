@@ -149,6 +149,19 @@ class RepeatedSequenceDialogTest(unittest.TestCase):
         self.assertFalse(self.dialog.confirm.isChecked())
         self.assertFalse(self.dialog.apply_button.isEnabled())
 
+    def test_graphical_fallback_is_labelled_and_never_auto_confirmed(self):
+        refined = {'status': 'experimental', 'source': str(self.source), 'source_identity': identity(self.source),
+                   'outer_bounds': list(self.dialog.bounds),
+                   'refinement': {'status': 'experimental', 'graphic_fallback_used': True},
+                   'coordinate_basis': 'FFmpeg decoded source frame index; editor mapping unverified',
+                   'source_motif_limits': [{'motif_start_decoded_frame': start,
+                                           'motif_end_decoded_frame_exclusive': start + 75}
+                                          for start in [125, 500, 1000, 1500]]}
+        self.dialog.display_refinement(refined)
+        self.assertIn('graphiques expérimentaux', self.dialog.notice.text())
+        self.assertFalse(self.dialog.confirm.isChecked())
+        self.assertFalse(self.dialog.apply_button.isEnabled())
+
     def test_automatic_failure_does_not_claim_no_advertisements(self):
         self.dialog.expert.setChecked(False)
         self.report['candidates'] = []

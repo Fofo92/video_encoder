@@ -8,6 +8,7 @@ import hashlib
 import json
 import math
 import re
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -92,7 +93,30 @@ def export_with_progress(command, log_path):
                 raise subprocess.CalledProcessError(process.returncode, command)
 
 
-def run(report_path, output, start_frame, end_frame, candidate_index=None, departure_index=None, resume_index=None):
+def reuse_windows(directory, output, expected):
+    previous = json.loads((directory / 'manifest.json').read_text())
+    keys = ['source', 'source_identity', 'scan_report_sha256', 'outer_bounds',
+            'coordinate_basis', 'selected_candidate', 'selected_families', 'windows']
+    if any(previous.get(key) != expected.get(key) for key in keys):
+        raise ValueError('Saved extraction no longer matches source, discovery or selected hypothesis')
+    sealed = previous.get('window_sha256', {})
+    for row in expected['windows']:
+        name = row['name']
+        if Path(name).name != name:
+            raise ValueError('Invalid observation filename')
+        source = directory / name
+        digest = hashlib.sha256(source.read_bytes()).hexdigest()
+        if name in sealed and sealed[name] != digest:
+            raise ValueError('Saved observation checksum changed')
+        shutil.copyfile(source, output / name)
+        if hashlib.sha256((output / name).read_bytes()).hexdigest() != digest:
+            raise ValueError('Observation changed during reuse')
+    return {'directory': str(directory),
+            'integrity': 'verified_sha256' if all(row['name'] in sealed for row in expected['windows']) else
+                         'legacy_unsealed_frame_counts_checked_before_acceptance'}
+
+
+def run(report_path, output, start_frame, end_frame, candidate_index=None, departure_index=None, resume_index=None, reuse_extraction=None):
     encoded = report_path.read_bytes()
     paired = departure_index is not None or resume_index is not None
     if paired and candidate_index is not None:
@@ -131,8 +155,16 @@ def run(report_path, output, start_frame, end_frame, candidate_index=None, depar
         command += ['-map', f'[out{index}]', '-an', '-c:v', 'libx264', '-preset', 'fast',
                     '-crf', '24', '-r', '25', '-enc_time_base', '1:25', '-fps_mode', 'cfr',
                     str(output / row['name'])]
-    print('REVIEW_STAGE ' + json.dumps({'step': 1, 'label': 'Lecture et extraction de la source'}), file=sys.stderr, flush=True)
-    export_with_progress(command, output / 'export.log')
+    print('REVIEW_STAGE ' + json.dumps({'step': 1, 'label':
+          'Réutilisation des extraits déjà calculés' if reuse_extraction is not None else
+          'Lecture et extraction de la source'}), file=sys.stderr, flush=True)
+    if reuse_extraction is None:
+        export_with_progress(command, output / 'export.log')
+    else:
+        manifest['reused_extraction'] = reuse_windows(reuse_extraction, output, manifest)
+    manifest['window_sha256'] = {row['name']: hashlib.sha256((output / row['name']).read_bytes()).hexdigest()
+                                 for row in windows}
+    manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
     if source_identity(source) != identity:
         raise ValueError('Source changed during extraction')
     paths = [output / row['name'] for row in windows]
@@ -174,10 +206,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--scan-report', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--reuse-extraction', type=Path)
     parser.add_argument('--candidate', type=int)
     parser.add_argument('--departure-candidate', type=int)
     parser.add_argument('--resume-candidate', type=int)
     parser.add_argument('--start-frame', type=int, required=True)
     parser.add_argument('--end-frame', type=int, required=True)
     args = parser.parse_args()
-    print(json.dumps(run(args.scan_report, args.output, args.start_frame, args.end_frame, args.candidate, args.departure_candidate, args.resume_candidate), indent=2))
+    print(json.dumps(run(args.scan_report, args.output, args.start_frame, args.end_frame, args.candidate, args.departure_candidate, args.resume_candidate, args.reuse_extraction), indent=2))

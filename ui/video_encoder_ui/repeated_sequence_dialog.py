@@ -9,7 +9,7 @@ import uuid
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from .repeated_sequence_review import check_source, inside_occurrences, proposed_session, latest_discovery, refinement_problem, support_family_problem, pair_problem, automatic_hypothesis
+from .repeated_sequence_review import check_source, inside_occurrences, proposed_session, latest_discovery, refinement_problem, support_family_problem, pair_problem, automatic_hypothesis, latest_extraction
 
 
 class RepeatedSequenceDialog(QtWidgets.QDialog):
@@ -410,8 +410,10 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
                       else ['--candidate', str(self.selected_candidate_index() + 1)])
         self.clear_refinement()
         output = self.new_workspace()
+        previous = latest_extraction(self.repository, self.source, self.bounds, self.report_path, choice)
+        reuse = ['--reuse-extraction', str(previous)] if previous else []
         self.start('refinement', 'refine_source_occurrences.py',
-                   ['--scan-report', str(self.report_path), *choice,
+                   [*reuse, '--scan-report', str(self.report_path), *choice,
                     '--start-frame', str(self.bounds[0]), '--end-frame', str(self.bounds[1]), '--output', str(output)], output)
 
     def progress(self):
@@ -462,8 +464,10 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
                 refined = json.loads(path.read_text())
                 proposed_session(refined, self.source, *self.bounds, confirmed=True)
                 self.display_refinement(refined)
-                self.notice.setText('Affinement terminé retrouvé sur disque. Contrôle les raccords ; '
-                                    'aucun nouveau calcul n’a été lancé.')
+                self.notice.setText(('Repères graphiques expérimentaux retrouvés. ' if
+                                     refined.get('refinement', {}).get('graphic_fallback_used') else
+                                     'Affinement terminé retrouvé sur disque. ') +
+                                    'Contrôle les raccords ; aucun nouveau calcul n’a été lancé.')
                 return
             except (OSError, ValueError, KeyError, TypeError):
                 continue
@@ -485,7 +489,9 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
                              for row in refined['source_motif_limits']]
         self.populate_hits()
         self.confirm.setEnabled(True)
-        self.notice.setText(f'{len(session.segments)} segments possibles si tu confirmes l’alternance départ/reprise. '
+        self.notice.setText(('Repères graphiques expérimentaux : vérifie chaque raccord. ' if
+                             refined.get('refinement', {}).get('graphic_fallback_used') else '') +
+                            f'{len(session.segments)} segments possibles si tu confirmes l’alternance départ/reprise. '
                             'Contrôle les images autour des limites avant de charger le montage.')
         self.update_actions()
 

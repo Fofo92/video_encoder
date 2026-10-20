@@ -77,6 +77,13 @@ class PairedMotifEndToEndTest(unittest.TestCase):
             self.assertEqual([row['family_role'] for row in rows], ['departure', 'resume'] * 2)
             self.assertEqual([(row['motif_start_decoded_frame'], row['motif_end_decoded_frame_exclusive'])
                               for row in rows], [(2125, 2175), (2875, 2925), (3625, 3675), (4375, 4425)])
+            from unittest.mock import patch
+            with patch('refine_source_occurrences.export_with_progress', side_effect=AssertionError('must reuse')):
+                resumed = run(path, root / 'resumed', 1750, 4874, departure_index=1, resume_index=2,
+                              reuse_extraction=root / 'output')
+            self.assertEqual(resumed['source_motif_limits'], rows)
+            self.assertEqual(resumed['reused_extraction']['integrity'], 'verified_sha256')
+
 
 
 class PairedContextTest(unittest.TestCase):
@@ -94,3 +101,41 @@ class PairedContextTest(unittest.TestCase):
              patch('paired_motif_refinement.refine', return_value=boundary):
             with self.assertRaisesRegex(ValueError, 'Insufficient context'):
                 refine_pair(features, windows, 1, 10000)
+
+
+class GraphicFallbackTest(unittest.TestCase):
+    def test_ambiguous_old_refinement_can_use_direct_graphic_context(self):
+        from unittest.mock import patch
+        from paired_motif_refinement import refine_pair
+        rng = np.random.default_rng(431)
+        features, windows = [], []
+        for index in range(6):
+            role = 'departure' if index % 2 == 0 else 'resume'
+            frames = rng.random((300, 1728), dtype=np.float32)
+            colour = [.1, .8, .2] if role == 'departure' else [.9, .8, .1]
+            frames[80:230] = np.tile(colour, 576)
+            # A small moving graphic is repeated; contexts remain independent.
+            logo = np.random.default_rng(123 if role == 'departure' else 124).random((50, 30), dtype=np.float32)
+            frames[150:200, :30] = logo
+            features.append(frames)
+            windows.append({'family_role': role, 'first_decoded_frame': index * 500,
+                            'candidate_index': 1 if role == 'departure' else 2,
+                            'inside_coarse_bounds': index >= 2})
+        with patch('paired_motif_refinement.discover', return_value=[]):
+            result = refine_pair(features, windows, 750, 2900)
+        self.assertTrue(result['refinement']['graphic_fallback_used'])
+        self.assertTrue(result['refinement']['needs_manual_review'])
+        self.assertEqual([(row['motif_start_decoded_frame'], row['motif_end_decoded_frame_exclusive'])
+                          for row in result['source_motif_limits']],
+                         [(1080,1230), (1580,1730), (2080,2230), (2580,2730)])
+
+    def test_animated_graphics_without_a_flat_background_abstain(self):
+        from unittest.mock import patch
+        from paired_motif_refinement import graphic_family
+        rng = np.random.default_rng(32)
+        frames = [rng.random((300, 1728), dtype=np.float32) for _ in range(3)]
+        common = rng.random((50, 1728), dtype=np.float32)
+        for value in frames:
+            value[150:200] = common
+        result = graphic_family(frames, [{'inside_coarse_bounds': True}] * 3, 'ambiguous')
+        self.assertEqual(result['status'], 'unavailable')

@@ -49,3 +49,12 @@ class DirectCommonCoreTest(unittest.TestCase):
 
     def test_two_disjoint_identical_cores_are_ambiguous(self):
         self.assertEqual(discover(self.features(duplicate=True)), [])
+
+    def test_two_different_shared_sequences_separated_by_context_are_ambiguous(self):
+        rng = np.random.default_rng(82)
+        clips = [rng.random((150,72), dtype=np.float32) for _ in range(3)]
+        first, second = [rng.random((10,72), dtype=np.float32) for _ in range(2)]
+        for clip in clips:
+            clip[20:30] = first
+            clip[100:110] = second
+        self.assertEqual(discover(clips), [])

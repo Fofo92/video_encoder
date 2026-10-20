@@ -101,3 +101,31 @@ class DiscoveryCandidateSelectionTest(unittest.TestCase):
         from refine_source_occurrences import select_candidate
         report = {'occurrences': []}
         self.assertIs(select_candidate(report), report)
+
+
+class ReuseObservationTest(unittest.TestCase):
+    def test_reuse_checks_hypothesis_and_sealed_content(self):
+        import hashlib
+        import json
+        import tempfile
+        from pathlib import Path
+        from refine_source_occurrences import reuse_windows
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            previous, output = root / 'previous', root / 'output'
+            previous.mkdir()
+            output.mkdir()
+            expected = {'source': 'source', 'source_identity': {'bytes': 1},
+                        'windows': [{'name': 'observation.mp4'}]}
+            clip = previous / 'observation.mp4'
+            clip.write_bytes(b'original')
+            record = {**expected, 'window_sha256': {'observation.mp4': hashlib.sha256(clip.read_bytes()).hexdigest()}}
+            (previous / 'manifest.json').write_text(json.dumps(record))
+            result = reuse_windows(previous, output, expected)
+            self.assertEqual(result['integrity'], 'verified_sha256')
+            self.assertEqual((output / clip.name).read_bytes(), b'original')
+            with self.assertRaisesRegex(ValueError, 'hypothesis'):
+                reuse_windows(previous, output, {**expected, 'outer_bounds': [1, 2]})
+            clip.write_bytes(b'modified')
+            with self.assertRaisesRegex(ValueError, 'checksum'):
+                reuse_windows(previous, output, expected)

@@ -3,6 +3,8 @@ import math
 
 from repeated_visual_sequences import discover
 from repeated_sequence_boundaries import refine
+from direct_clip_motifs import discover as direct_discover
+from inspect_graphic_motif_context import graphic_context
 
 
 def plan_pair(report, departure, resume, first, last):
@@ -45,6 +47,32 @@ def plan_pair(report, departure, resume, first, last):
     return windows
 
 
+def graphic_family(features, windows, reason):
+    """A reviewed graphical fallback, not separator classification."""
+    candidates = direct_discover([value[::5] for value in features])
+    if len(candidates) != 1:
+        return {'status': 'unavailable', 'reason': reason}
+    occurrences = []
+    for core in candidates[0]['occurrences']:
+        index = core['clip_index']
+        if not windows[index].get('inside_coarse_bounds'):
+            continue
+        context = graphic_context(features[index], round(core['core_start_seconds'] * 25),
+                                  round(core['core_end_seconds'] * 25))
+        if context['status'] != 'experimental':
+            return {'status': 'unavailable', 'reason': context['reason']}
+        occurrences.append({'clip_index': index,
+                            'sampled_start_frame': context['graphic_start_local_frame'],
+                            'sampled_end_frame_exclusive': context['graphic_end_local_frame_exclusive']})
+    if not occurrences:
+        return {'status': 'unavailable', 'reason': 'No interior graphical occurrence'}
+    return {'status': 'experimental', 'needs_manual_review': True,
+            'method': 'graphic_context_fallback', 'original_failure': reason,
+            'classification': 'unverified_graphic_region', 'occurrences': occurrences,
+            'limitations': ['Uniform graphics do not prove separator semantics',
+                            'Experimental thresholds; editor alignment still unverified']}
+
+
 def refine_pair(frames, windows, first, last):
     supports, inside = [], []
     for role in ['departure', 'resume']:
@@ -52,9 +80,10 @@ def refine_pair(frames, windows, first, last):
         features = [frames[index] for index in indices]
         candidates = discover([value[::5] for value in features])
         complete = [row for row in candidates if row['supporting_clips'] == len(indices)]
-        if len(complete) != 1:
-            raise ValueError(f'No unique common motif for the {role} family')
-        refined = refine(features, complete[0])
+        refined = (refine(features, complete[0]) if len(complete) == 1 else
+                   {'status': 'unavailable', 'reason': 'No unique common motif'})
+        if refined.get('status') != 'experimental':
+            refined = graphic_family(features, [windows[index] for index in indices], refined['reason'])
         if refined.get('status') != 'experimental':
             raise ValueError(f'Cannot refine {role}: {refined.get("reason", "unknown reason")}')
         supports.append({'family_role': role, 'refinement': refined, 'window_indices': indices})
@@ -78,5 +107,7 @@ def refine_pair(frames, windows, first, last):
         if row['family_role'] != expected or row['motif_start_decoded_frame'] <= previous:
             raise ValueError('The chosen families do not alternate departure then resume inside the work')
         previous = row['motif_end_decoded_frame_exclusive']
-    return {'refinement': {'status': 'experimental', 'roles_explicitly_selected': True},
+    return {'refinement': {'status': 'experimental', 'roles_explicitly_selected': True, 'needs_manual_review': True,
+                           'graphic_fallback_used': any(row['refinement'].get('method') == 'graphic_context_fallback'
+                                                        for row in supports)},
             'support_refinements': supports, 'source_motif_limits': inside}

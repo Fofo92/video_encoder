@@ -154,3 +154,28 @@ def automatic_hypothesis(report, first, last):
     result = {**choices[0], 'alternatives': len(choices) - 1,
               'needs_manual_review': True, 'search_partial': bool(report.get('index_limits_reached'))}
     return result, None
+
+
+def latest_extraction(repository, source, bounds, report_path, choice):
+    """Locate compatible extracted windows; the worker rechecks their contents."""
+    import hashlib
+    import json
+    options = dict(zip(choice[::2], choice[1::2]))
+    selected = int(options['--candidate']) if '--candidate' in options else None
+    families = ({'departure': int(options['--departure-candidate']),
+                 'resume': int(options['--resume-candidate'])} if selected is None else None)
+    report_hash = hashlib.sha256(Path(report_path).read_bytes()).hexdigest()
+    current = identity(source)
+    paths = sorted((Path(repository) / 'tmp/repeated-sequence-reviews').glob('*/manifest.json'),
+                   key=lambda path: path.stat().st_mtime_ns, reverse=True)
+    for path in paths:
+        try:
+            data = json.loads(path.read_text())
+            if (data.get('source') == str(Path(source).resolve()) and data.get('source_identity') == current
+                    and data.get('outer_bounds') == list(bounds) and data.get('scan_report_sha256') == report_hash
+                    and data.get('selected_candidate') == selected and data.get('selected_families') == families
+                    and data.get('windows') and all((path.parent / row['name']).is_file() for row in data['windows'])):
+                return path.parent
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+    return None

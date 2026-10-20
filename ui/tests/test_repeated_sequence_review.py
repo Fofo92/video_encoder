@@ -105,3 +105,29 @@ class AutomaticHypothesisTest(unittest.TestCase):
         result, error = automatic_hypothesis({'candidates': [self.family([100,200,300,400,500,600])]}, 0, 20000)
         self.assertIsNone(result)
         self.assertIsNotNone(error)
+
+
+class ReuseExtractionSelectionTest(unittest.TestCase):
+    def test_same_source_and_hypothesis_reuse_but_changed_source_or_bounds_do_not(self):
+        import hashlib
+        import json
+        from video_encoder_ui.repeated_sequence_review import latest_extraction
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, report = root / 'source.m2t', root / 'resultat.json'
+            source.write_bytes(b'source')
+            report.write_text('{}')
+            extracted = root / 'tmp/repeated-sequence-reviews/failed'
+            extracted.mkdir(parents=True)
+            (extracted / 'observation.mp4').write_bytes(b'clip')
+            (extracted / 'manifest.json').write_text(json.dumps({
+                'source': str(source.resolve()), 'source_identity': identity(source),
+                'outer_bounds': [100, 200], 'scan_report_sha256': hashlib.sha256(report.read_bytes()).hexdigest(),
+                'selected_candidate': 1, 'selected_families': None,
+                'windows': [{'name': 'observation.mp4'}]}))
+            choice = ['--candidate', '1']
+            self.assertEqual(latest_extraction(root, source, (100, 200), report, choice), extracted)
+            self.assertIsNone(latest_extraction(root, source, (101, 200), report, choice))
+            self.assertIsNone(latest_extraction(root, source, (100, 200), report, ['--candidate', '2']))
+            source.write_bytes(b'changed')
+            self.assertIsNone(latest_extraction(root, source, (100, 200), report, choice))

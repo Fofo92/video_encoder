@@ -32,7 +32,13 @@ def discover(features, sample_fps=5, window_seconds=2, max_rmse=15):
         return []
     choices.sort(key=lambda row: row[0])
     starts = choices[0][1]
-    if any(any(abs(a - b) > window for a, b in zip(starts, other)) for _, other in choices):
+    anchors = sorted(other[0] for _, other in choices)
+    if any(right - left > window for left, right in zip(anchors, anchors[1:])):
+        return []
+    # Sliding cores within one long repeated sequence are one occurrence,
+    # provided every clip preserves the same alignment relative to the anchor.
+    if any(any(abs((b - a) - (other[0] - starts[0])) > 1
+                   for a, b in zip(starts, other)) for _, other in choices):
         return []
     return [{'supporting_clips': len(features),
              'grouping': 'direct_common_anchor',

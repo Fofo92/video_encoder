@@ -1,6 +1,6 @@
 # Graphic context around repeated motifs
 
-Research diagnostic, not an editor proposal or a correction to the existing UI.
+Experimental research diagnostic, also available as a guarded fallback for paired-family refinement.
 
 ## Problem
 
@@ -61,7 +61,28 @@ replacing the in-memory montage. Group selection remains available under
 advanced settings. No result means unresolved analysis, never proven absence
 of advertisements. Discovery budget limits remain visible.
 
-This UI change does not integrate the graphic-background experiment and does
-not repair the known transitive local refinement failure. Existing encoding
-jobs are unaffected. In particular, do not repeat a known failed refinement
-solely to try the simplified selection.
+Paired refinement now attempts the direct-anchor graphic fallback only after
+ordinary common-run refinement fails. Every interior occurrence must have a
+bounded eligible region; one failure blocks the whole proposal. Animated or
+nonuniform backgrounds abstain. Outside occurrences support identification of
+the common core but do not force their preceding animations onto interior
+occurrences. The review explicitly labels graphical fallback proposals and
+still requires confirmation. This is not universal ad detection or calibrated
+frame precision. Existing encoding jobs are unaffected.
+
+## Reuse after failed refinement
+
+The worker seals observation file hashes immediately after extraction, before
+attempting refinement. A subsequent attempt can copy the previous windows into
+a new work directory using `--reuse-extraction DIRECTORY`. The source identity,
+discovery hash, outer bounds, chosen families, window plan and coordinate basis
+must match. Sealed hashes are checked before reuse, copied contents are checked
+again, and decoded frame counts must match before acceptance. No full-source
+FFmpeg export is launched on this path; source metadata is still inspected.
+
+Legacy extractions without hashes may be reused but are explicitly recorded as
+historically unsealed. Their prior content integrity cannot be proven; frame
+counts and all matching metadata are checked. Original extractions are retained.
+The dialog finds a compatible extraction automatically. Changed source or
+bounds cannot silently reuse it. Failed integrity checks stop the attempt
+rather than masking corruption by rereading the source.
