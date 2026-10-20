@@ -212,6 +212,9 @@ class RepeatedSequenceDialogTest(unittest.TestCase):
         self.assertFalse(self.dialog.busy)
         self.assertEqual(self.dialog.cancel_button.text(), 'Fermer')
         self.assertEqual(self.dialog.groups.rowCount(), 1)
+        self.assertNotIn('Calcul en cours', self.dialog.preview.text())
+        self.assertFalse(self.dialog.activity.isVisible())
+        self.assertIn('Recherche', self.dialog.notice.text())
 
     def test_restores_completed_refinement_without_recomputing_or_confirming(self):
         root = Path(self.temp.name)
@@ -324,3 +327,38 @@ class RepeatedSequenceDialogTest(unittest.TestCase):
         self.dialog.departure_family.setCurrentIndex(2)
         self.dialog.resume_family.setCurrentIndex(1)
         self.assertFalse(self.dialog.refine_button.isEnabled())
+
+    def test_leaving_expert_mode_clears_hidden_group_instructions(self):
+        self.dialog.load_report(self.path)
+        self.assertIn('groupes affichés', self.dialog.notice.text())
+        self.dialog.expert.setChecked(False)
+        self.assertTrue(self.dialog.groups.isHidden())
+        self.assertNotIn('groupes affichés', self.dialog.notice.text())
+        self.assertIn('Recherche terminée', self.dialog.notice.text())
+
+    def test_ambiguous_hypothesis_is_visible_in_idle_preview_not_only_tooltip(self):
+        self.dialog.expert.setChecked(False)
+        self.dialog.bounds = (0, 20000)
+        self.report['candidates'] = [
+            {'occurrences': [{'core_start_seconds': value, 'core_end_seconds': value + 2}
+                             for value in starts]}
+            for starts in [[100,200,300,400], [110,210,310,410]]]
+        self.path.write_text(json.dumps(self.report))
+        self.dialog.preview.setText('Calcul en cours…')
+        self.dialog.load_report(self.path)
+        self.assertFalse(self.dialog.refine_button.isEnabled())
+        self.assertIn('même soutien', self.dialog.stage.text())
+        self.assertIn('même soutien', self.dialog.preview.text())
+        self.assertNotIn('Calcul en cours', self.dialog.preview.text())
+        self.assertIn('Recherche terminée', self.dialog.notice.text())
+
+    def test_starting_new_research_removes_old_preview_positions(self):
+        self.dialog.load_report(self.path)
+        self.dialog.groups.selectRow(0)
+        self.assertTrue(self.dialog.preview_rows)
+        with patch.object(self.dialog.process, 'start'):
+            self.dialog.start('discovery', 'unused.py', [], Path(self.temp.name) / 'new-output')
+        self.assertEqual(self.dialog.preview_rows, [])
+        self.assertEqual(self.dialog.hits.count(), 0)
+        self.assertIn('Calcul en cours', self.dialog.preview.text())
+        self.dialog.busy = False

@@ -150,7 +150,8 @@ def automatic_hypothesis(report, first, last):
     choices.sort(key=lambda row: -row['support'])
     if len(choices) > 1 and choices[0]['support'] == choices[1]['support']:
         return None, ('Plusieurs hypothèses ont le même soutien : arbitrage nécessaire. '
-                      'Aucun découpage n’est choisi automatiquement.')
+                      'Aucun découpage n’est choisi automatiquement.' +
+                      fragmented_repeat_diagnostic(report, first, last))
     result = {**choices[0], 'alternatives': len(choices) - 1,
               'needs_manual_review': True, 'search_partial': bool(report.get('index_limits_reached'))}
     return result, None
@@ -179,3 +180,64 @@ def latest_extraction(repository, source, bounds, report_path, choice):
         except (OSError, ValueError, KeyError, TypeError):
             continue
     return None
+
+
+def repeated_trajectories(report, tolerance=.4):
+    """Group fragments with directly consistent recording-wide temporal offsets.
+
+    Bounding spans include unobserved gaps. They are neither a verified continuous
+    visual match nor separator/cut limits. No colours, reference cuts or channel
+    identifiers are used.
+    """
+    groups = []
+    for index, candidate in enumerate(report.get('candidates', []), 1):
+        rows = candidate.get('occurrences', [])
+        if candidate.get('grouping') != 'each_occurrence_directly_matches_one_anchor' or len(rows) < 3:
+            continue
+        starts = [row['core_start_seconds'] for row in rows]
+        if starts != sorted(starts):
+            continue
+        offsets = [value - starts[0] for value in starts]
+        matching = next((group for group in groups
+                         if len(group['anchor_offsets']) == len(offsets)
+                         and all(abs(a - b) <= tolerance
+                                 for a, b in zip(group['anchor_offsets'], offsets))), None)
+        if matching is None:
+            matching = {'anchor_offsets': offsets, 'member_candidates': [], 'members': []}
+            groups.append(matching)
+        matching['member_candidates'].append(index)
+        matching['members'].append(rows)
+    result = []
+    for group in groups:
+        spans, observed, gaps = [], [], []
+        for occurrence in range(len(group['anchor_offsets'])):
+            ranges = sorted((member[occurrence]['core_start_seconds'],
+                             member[occurrence]['core_end_seconds']) for member in group['members'])
+            merged = []
+            for first, last in ranges:
+                if merged and first <= merged[-1][1]:
+                    merged[-1][1] = max(merged[-1][1], last)
+                else:
+                    merged.append([first, last])
+            spans.append([merged[0][0], merged[-1][1]])
+            observed.append(merged)
+            gaps.append(sum(right[0] - left[1] for left, right in zip(merged, merged[1:])))
+        result.append({'classification': 'unclassified_repeated_trajectory',
+                       'member_candidates': group['member_candidates'],
+                       'occurrence_spans': spans, 'observed_ranges': observed,
+                       'unobserved_gap_seconds': gaps})
+    return result
+
+
+def fragmented_repeat_diagnostic(report, first, last):
+    active = {index for index, candidate in enumerate(report.get('candidates', []), 1)
+              if inside_occurrences(candidate, first, last)}
+    covered = set()
+    for trajectory in repeated_trajectories(report):
+        if (len(trajectory['member_candidates']) >= 3
+                and min(end - start for start, end in trajectory['occurrence_spans']) >= 10):
+            covered.update(trajectory['member_candidates'])
+    if active and len(covered & active) / len(active) >= .8:
+        return (' Les résultats sont dominés par des fragments de longues séquences répétées. '
+                'Leurs limites ne définissent pas celles des pauses publicitaires.')
+    return ''

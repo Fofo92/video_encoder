@@ -26,3 +26,22 @@ jobs:
 
       - name: Run the quality checks
         run: bin/check
+
+  repeated_sequence_ui:
+    name: Experimental cut review UI
+    runs-on: ubuntu-latest
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONPATH: ui
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      - name: Install isolated Qt test dependencies
+        run: |
+          python3 -m venv "$RUNNER_TEMP/cut-review-tests"
+          "$RUNNER_TEMP/cut-review-tests/bin/python" -m pip install PySide6-Essentials==6.8.3
+
+      - name: Run the repeated-sequence review tests
+        run: |
+          "$RUNNER_TEMP/cut-review-tests/bin/python" -m unittest discover -s ui/tests -p 'test_repeated_sequence*.py'

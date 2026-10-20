@@ -92,6 +92,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         preview_layout.addWidget(self.hits, 1)
         self.preview = QtWidgets.QLabel('Sélectionne une occurrence pour voir la source.')
         self.preview.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.preview.setWordWrap(True)
         self.preview.setMinimumSize(320, 180)
         preview_layout.addWidget(self.preview, 2)
         layout.addLayout(preview_layout, 2)
@@ -156,6 +157,17 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.role_controls.setVisible(expert and self.paired.isChecked())
         if hasattr(self, 'process'):
             self.update_actions()
+            self.update_discovery_notice()
+
+    def update_discovery_notice(self):
+        if self.busy or self.report is None or self.refined is not None:
+            return
+        prefix = 'Recherche partielle : plafonds atteints. ' if self.report.get('index_limits_reached') else ''
+        if self.expert.isChecked():
+            self.notice.setText(prefix + f'{self.groups.rowCount()} groupes affichés sur '
+                                f"{len(self.report['candidates'])}. Choisis une proposition à affiner.")
+        else:
+            self.notice.setText(prefix + 'Recherche terminée. Aucun découpage encore validé.')
 
     def update_actions(self):
         selected = self.groups.currentRow() >= 0
@@ -187,6 +199,9 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.refine_button.setToolTip(problem or 'Extraire les fenêtres et affiner les limites du motif.')
         self.apply_button.setEnabled(not self.busy and self.refined is not None and self.confirm.isChecked())
         self.cancel_button.setText('Interrompre et fermer' if self.busy else 'Fermer')
+        if not self.busy and not self.preview_rows:
+            self.preview.clear()
+            self.preview.setText(self.stage.text())
 
     def update_task_status(self):
         if self.busy:
@@ -216,6 +231,8 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.clear_refinement()
         self.copy_diagnostic.setVisible(False)
         self.task, self.output, self.busy = task, output, True
+        self.preview_rows = []
+        self.hits.clear()
         self.last_progress = ''
         self.progress_buffer = ''
         self.phase_label = 'Lecture et extraction de la source' if task == 'refinement' else 'Découverte des répétitions'
@@ -307,12 +324,8 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             values = [str(index + 1), str(len(candidate['occurrences'])), str(len(inside)), f'{median:.2f} s']
             for column, value in enumerate(values):
                 self.groups.setItem(row, column, QtWidgets.QTableWidgetItem(value))
-        self.notice.setText(('Recherche partielle : plafonds atteints. ' if self.report.get('index_limits_reached') else '') +
-                            f'{self.groups.rowCount()} groupes affichés sur {total}. Choisis une proposition à affiner.')
         self.update_actions()
-        if not self.expert.isChecked():
-            self.notice.setText('Recherche partielle : plafonds atteints.' if self.report.get('index_limits_reached')
-                                else 'Recherche chargée. Aucun découpage encore validé.')
+        self.update_discovery_notice()
 
     def role_changed(self):
         self.clear_refinement()
@@ -520,6 +533,8 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         summary = str(message).strip().splitlines()[-1] if str(message).strip() else 'Opération impossible.'
         summary = summary[:240]
         self.notice.setText(summary)
+        if not self.busy:
+            self.preview.setText('Opération terminée sans nouvelle proposition. ' + summary)
         self.copy_diagnostic.setVisible(self.output is not None)
         self.copy_diagnostic.setToolTip(str(self.output.resolve()) if self.output is not None else '')
         QtWidgets.QMessageBox.warning(self, 'Séparateurs répétés', summary)

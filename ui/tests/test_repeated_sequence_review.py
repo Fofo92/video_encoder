@@ -131,3 +131,58 @@ class ReuseExtractionSelectionTest(unittest.TestCase):
             self.assertIsNone(latest_extraction(root, source, (100, 200), report, ['--candidate', '2']))
             source.write_bytes(b'changed')
             self.assertIsNone(latest_extraction(root, source, (100, 200), report, choice))
+
+
+class RepeatedTrajectoryTest(unittest.TestCase):
+    def fragments(self, starts, count, step=2.2):
+        return [{'grouping': 'each_occurrence_directly_matches_one_anchor',
+                 'occurrences': [{'core_start_seconds': start + offset * step,
+                                  'core_end_seconds': start + offset * step + 2}
+                                 for start in starts]}
+                for offset in range(count)]
+
+    def test_many_short_groups_form_two_temporally_consistent_trajectories(self):
+        from video_encoder_ui.repeated_sequence_review import repeated_trajectories
+        report = {'candidates': self.fragments([100,600,1100], 13)
+                               + self.fragments([200,900,1500], 7)}
+        result = repeated_trajectories(report)
+        self.assertEqual([len(row['member_candidates']) for row in result], [13, 7])
+        self.assertEqual(len(result[0]['occurrence_spans']), 3)
+        self.assertTrue(all(row['classification'] == 'unclassified_repeated_trajectory'
+                            for row in result))
+
+    def test_gaps_remain_unobserved_not_filled_as_verified_video(self):
+        from video_encoder_ui.repeated_sequence_review import repeated_trajectories
+        report = {'candidates': self.fragments([100,600,1100], 2, step=6)}
+        result = repeated_trajectories(report)[0]
+        self.assertEqual(result['occurrence_spans'][0], [100,108])
+        self.assertEqual(result['observed_ranges'][0], [[100,102], [106,108]])
+        self.assertEqual(result['unobserved_gap_seconds'], [4,4,4])
+
+    def test_similar_first_occurrence_does_not_merge_inconsistent_other_occurrences(self):
+        from video_encoder_ui.repeated_sequence_review import repeated_trajectories
+        report = {'candidates': self.fragments([100,600,1100], 1)
+                               + self.fragments([102,700,1200], 1)}
+        self.assertEqual(len(repeated_trajectories(report)), 2)
+
+    def test_no_transitive_offset_drift_between_fragment_groups(self):
+        from video_encoder_ui.repeated_sequence_review import repeated_trajectories
+        candidates = [self.fragments(starts, 1)[0] for starts in
+                      [[100,600,1100], [102,602.3,1102.3], [104,604.6,1104.6]]]
+        result = repeated_trajectories({'candidates': candidates})
+        self.assertEqual([len(row['member_candidates']) for row in result], [2,1])
+
+    def test_tied_hypotheses_explain_long_fragments_but_do_not_become_cuts(self):
+        from video_encoder_ui.repeated_sequence_review import automatic_hypothesis
+        report = {'candidates': self.fragments([100,600,1100], 13)
+                               + self.fragments([200,900,1500], 7)}
+        result, reason = automatic_hypothesis(report, 12500, 25000)
+        self.assertIsNone(result)
+        self.assertIn('même soutien', reason)
+        self.assertIn('fragments de longues séquences', reason)
+
+    def test_short_independent_jingles_do_not_trigger_long_fragment_diagnostic(self):
+        from video_encoder_ui.repeated_sequence_review import fragmented_repeat_diagnostic
+        report = {'candidates': self.fragments([100,600,1100], 1)
+                               + self.fragments([200,900,1500], 1)}
+        self.assertEqual(fragmented_repeat_diagnostic(report, 12500, 25000), '')
