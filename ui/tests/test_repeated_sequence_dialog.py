@@ -30,6 +30,7 @@ class RepeatedSequenceDialogTest(unittest.TestCase):
         image.fill(QtCore.Qt.GlobalColor.blue)
         frame_source = SimpleNamespace(length=2000, frame_at=lambda position: (image, position, 1))
         self.dialog = RepeatedSequenceDialog(self.source, (10, 1900), frame_source)
+        self.dialog.expert.setChecked(True)
         self.addCleanup(self.dialog.reject)
         self.report = {'status': 'experimental', 'source': str(self.source), 'sample_fps': 5,
                        'source_identity': identity(self.source), 'index_limits_reached': True,
@@ -129,6 +130,32 @@ class RepeatedSequenceDialogTest(unittest.TestCase):
         self.dialog.show()
         self.app.processEvents()
         self.assertLessEqual(self.dialog.width(), 1000)
+
+    def test_automatic_mode_hides_groups_and_launches_common_family_without_selection(self):
+        self.dialog.expert.setChecked(False)
+        self.dialog.bounds = (0, 20000)
+        self.report['candidates'] = [{'occurrences': [
+            {'core_start_seconds': t, 'core_end_seconds': t + 2} for t in [100, 200, 300, 400]]}]
+        self.path.write_text(json.dumps(self.report))
+        self.dialog.load_report(self.path)
+        self.assertTrue(self.dialog.groups.isHidden())
+        self.assertTrue(self.dialog.paired.isHidden())
+        self.assertTrue(self.dialog.refine_button.isEnabled())
+        self.assertEqual(self.dialog.groups.currentRow(), -1)
+        with patch.object(self.dialog, 'start') as start:
+            self.dialog.refine_group()
+        self.assertIn('--candidate', start.call_args.args[2])
+        self.assertIn('2 plage', self.dialog.stage.text())
+        self.assertFalse(self.dialog.confirm.isChecked())
+        self.assertFalse(self.dialog.apply_button.isEnabled())
+
+    def test_automatic_failure_does_not_claim_no_advertisements(self):
+        self.dialog.expert.setChecked(False)
+        self.report['candidates'] = []
+        self.path.write_text(json.dumps(self.report))
+        self.dialog.load_report(self.path)
+        self.assertFalse(self.dialog.refine_button.isEnabled())
+        self.assertIn('ne prouve pas', self.dialog.stage.text())
 
     def test_error_keeps_output_folder_available_for_copy_without_long_label(self):
         self.dialog.output = Path(self.temp.name) / 'failed-refinement'

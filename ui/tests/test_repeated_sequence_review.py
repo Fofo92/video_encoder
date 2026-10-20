@@ -62,3 +62,46 @@ class RepeatedSequenceReviewTest(unittest.TestCase):
         self.assertEqual(latest_discovery(repository, self.source), path)
         self.source.write_bytes(b'changed')
         self.assertIsNone(latest_discovery(repository, self.source))
+
+
+class AutomaticHypothesisTest(unittest.TestCase):
+    def family(self, times):
+        return {'grouping': 'each_occurrence_directly_matches_one_anchor',
+                'occurrences': [{'core_start_seconds': t, 'core_end_seconds': t + 2} for t in times]}
+
+    def test_two_families_infer_roles_from_order_without_colour_or_reference_cuts(self):
+        from video_encoder_ui.repeated_sequence_review import automatic_hypothesis
+        report = {'index_limits_reached': True,
+                  'candidates': [self.family([25, 85, 145]), self.family([55, 115, 175])]}
+        result, error = automatic_hypothesis(report, 1750, 4874)
+        self.assertIsNone(error)
+        self.assertEqual((result['departure'], result['resume'], result['breaks']), (1, 2, 2))
+        self.assertTrue(result['search_partial'])
+        self.assertTrue(result['needs_manual_review'])
+
+    def test_one_break_can_use_outside_support(self):
+        from video_encoder_ui.repeated_sequence_review import automatic_hypothesis
+        report = {'candidates': [self.family([25, 85, 145]), self.family([55, 115, 175])]}
+        result, error = automatic_hypothesis(report, 1750, 3374)
+        self.assertIsNone(error)
+        self.assertEqual(result['breaks'], 1)
+
+    def test_absence_of_hypothesis_is_unresolved_not_zero_ad_breaks(self):
+        from video_encoder_ui.repeated_sequence_review import automatic_hypothesis
+        result, error = automatic_hypothesis({'candidates': []}, 0, 10000)
+        self.assertIsNone(result)
+        self.assertIn('ne prouve pas', error)
+
+    def test_equal_support_does_not_silently_choose_by_group_number(self):
+        from video_encoder_ui.repeated_sequence_review import automatic_hypothesis
+        report = {'candidates': [self.family([100, 200, 300, 400]),
+                                 self.family([110, 210, 310, 410])]}
+        result, error = automatic_hypothesis(report, 0, 20000)
+        self.assertIsNone(result)
+        self.assertIn('même soutien', error)
+
+    def test_more_than_two_breaks_is_not_automatically_selected(self):
+        from video_encoder_ui.repeated_sequence_review import automatic_hypothesis
+        result, error = automatic_hypothesis({'candidates': [self.family([100,200,300,400,500,600])]}, 0, 20000)
+        self.assertIsNone(result)
+        self.assertIsNotNone(error)

@@ -43,3 +43,25 @@ local source provenance; review it before sharing.
   integrating it into the editor.
 - The UI now offers a button to copy the diagnostic folder after a failed task;
   long traceback summaries remain bounded so action buttons stay accessible.
+
+## Simplified selection in the experimental dialog
+
+The default view now prepares a priority hypothesis without exposing group
+selection. One common family with four interior occurrences, or two distinct
+families with two/four alternating occurrences, can supply a hypothesis.
+Recording-wide repetition support sets the search priority. This is not a
+confidence estimate or proof of an advertisement. The view reports how many
+other hypotheses remain. Equal support ties require arbitration rather than
+silently using group order. The pilot does not select more than two ad ranges;
+this is a workflow limit, not an assertion about broadcasting rules.
+
+After loading discovery results, choose “Préparer les raccords à contrôler”.
+Refinement must still succeed, followed by explicit review/confirmation before
+replacing the in-memory montage. Group selection remains available under
+advanced settings. No result means unresolved analysis, never proven absence
+of advertisements. Discovery budget limits remain visible.
+
+This UI change does not integrate the graphic-background experiment and does
+not repair the known transitive local refinement failure. Existing encoding
+jobs are unaffected. In particular, do not repeat a known failed refinement
+solely to try the simplified selection.

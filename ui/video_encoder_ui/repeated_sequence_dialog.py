@@ -9,7 +9,7 @@ import uuid
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from .repeated_sequence_review import check_source, inside_occurrences, proposed_session, latest_discovery, refinement_problem, support_family_problem, pair_problem
+from .repeated_sequence_review import check_source, inside_occurrences, proposed_session, latest_discovery, refinement_problem, support_family_problem, pair_problem, automatic_hypothesis
 
 
 class RepeatedSequenceDialog(QtWidgets.QDialog):
@@ -32,7 +32,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.setWindowTitle('Séparateurs répétés — expérimental')
         self.resize(880, 720)
         layout = QtWidgets.QVBoxLayout(self)
-        intro = QtWidgets.QLabel('Choisis un motif commun, ou deux familles pour les départs et les reprises. '
+        intro = QtWidgets.QLabel('Prépare une hypothèse de coupures, puis contrôle chaque départ et chaque reprise. '
                                 'Une répétition ne suffit pas à identifier une publicité.')
         intro.setWordWrap(True)
         layout.addWidget(intro)
@@ -129,6 +129,10 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.refine_button.clicked.connect(self.refine_group)
         self.apply_button.clicked.connect(self.apply_segments)
         self.cancel_button.clicked.connect(self.reject)
+        self.expert = QtWidgets.QCheckBox('Réglages avancés : examiner et choisir les groupes')
+        layout.insertWidget(5, self.expert)
+        self.expert.toggled.connect(self.refresh_selection_mode)
+        self.refresh_selection_mode()
         self.process = QtCore.QProcess(self)
         self.process.setProcessChannelMode(QtCore.QProcess.ProcessChannelMode.MergedChannels)
         self.group_process = hasattr(QtCore.QProcess.UnixProcessFlag, 'CreateNewSession') if hasattr(QtCore.QProcess, 'UnixProcessFlag') else False
@@ -145,9 +149,17 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             self.load_report(existing)
         self.restore_completed_refinement()
 
+    def refresh_selection_mode(self):
+        expert = self.expert.isChecked()
+        for widget in [self.groups, self.advanced, self.paired]:
+            widget.setVisible(expert)
+        self.role_controls.setVisible(expert and self.paired.isChecked())
+        if hasattr(self, 'process'):
+            self.update_actions()
+
     def update_actions(self):
         selected = self.groups.currentRow() >= 0
-        for widget in [self.open_button, self.new_button, self.cache_button, self.groups, self.hits, self.advanced, self.paired, self.departure_family, self.resume_family]:
+        for widget in [self.open_button, self.new_button, self.cache_button, self.groups, self.hits, self.advanced, self.paired, self.departure_family, self.resume_family, self.expert]:
             widget.setEnabled(not self.busy)
         for widget in [self.edge, self.frame, *self.nudge_buttons]:
             widget.setEnabled(not self.busy and bool(self.preview_rows))
@@ -162,6 +174,15 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.refine_button.setText('Affiner les deux familles' if self.paired.isChecked() else 'Affiner le groupe sélectionné')
         ready = selected or self.paired.isChecked()
         problem = self.selected_group_problem() if ready else 'Choisis un groupe.'
+        if not self.expert.isChecked():
+            hypothesis, problem = automatic_hypothesis(self.report, *self.bounds)
+            ready = hypothesis is not None
+            self.refine_button.setText('Préparer les raccords à contrôler')
+            if not self.busy and self.refined is None:
+                self.stage.setText(problem or (
+                    f"Hypothèse prioritaire : {hypothesis['breaks']} plage(s) possible(s), à vérifier. "
+                    f"{hypothesis['alternatives']} autre(s) hypothèse(s). "
+                    'Les limites seront calculées avant validation.'))
         self.refine_button.setEnabled(not self.busy and ready and problem is None)
         self.refine_button.setToolTip(problem or 'Extraire les fenêtres et affiner les limites du motif.')
         self.apply_button.setEnabled(not self.busy and self.refined is not None and self.confirm.isChecked())
@@ -255,7 +276,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.groups.setRowCount(0)
         self.visible_candidates = []
         self.clear_refinement()
-        self.role_controls.setVisible(self.paired.isChecked())
+        self.role_controls.setVisible(self.expert.isChecked() and self.paired.isChecked())
         for combo in [self.departure_family, self.resume_family]:
             combo.blockSignals(True)
             combo.clear()
@@ -289,6 +310,9 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.notice.setText(('Recherche partielle : plafonds atteints. ' if self.report.get('index_limits_reached') else '') +
                             f'{self.groups.rowCount()} groupes affichés sur {total}. Choisis une proposition à affiner.')
         self.update_actions()
+        if not self.expert.isChecked():
+            self.notice.setText('Recherche partielle : plafonds atteints.' if self.report.get('index_limits_reached')
+                                else 'Recherche chargée. Aucun découpage encore validé.')
 
     def role_changed(self):
         self.clear_refinement()
@@ -368,13 +392,24 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             self.preview.setText(f'Aperçu indisponible : {error}')
 
     def refine_group(self):
-        if self.busy or self.selected_group_problem():
+        if self.busy:
             return
+        if not self.expert.isChecked():
+            hypothesis, problem = automatic_hypothesis(self.report, *self.bounds)
+            if problem:
+                self.notice.setText(problem)
+                return
+            choice = (['--candidate', str(hypothesis['candidate'])] if 'candidate' in hypothesis else
+                      ['--departure-candidate', str(hypothesis['departure']),
+                       '--resume-candidate', str(hypothesis['resume'])])
+        elif self.selected_group_problem():
+            return
+        else:
+            choice = (['--departure-candidate', str(self.departure_family.currentData()),
+                       '--resume-candidate', str(self.resume_family.currentData())] if self.paired.isChecked()
+                      else ['--candidate', str(self.selected_candidate_index() + 1)])
         self.clear_refinement()
         output = self.new_workspace()
-        choice = (['--departure-candidate', str(self.departure_family.currentData()),
-                   '--resume-candidate', str(self.resume_family.currentData())] if self.paired.isChecked()
-                  else ['--candidate', str(self.selected_candidate_index() + 1)])
         self.start('refinement', 'refine_source_occurrences.py',
                    ['--scan-report', str(self.report_path), *choice,
                     '--start-frame', str(self.bounds[0]), '--end-frame', str(self.bounds[1]), '--output', str(output)], output)

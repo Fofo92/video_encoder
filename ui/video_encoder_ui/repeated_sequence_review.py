@@ -119,3 +119,38 @@ def pair_problem(report, departure, resume, first, last):
                                                        for i, (_, role) in enumerate(rows)):
         return 'Les occurrences dans l’œuvre doivent alterner départ, reprise, puis départ, reprise.'
     return None
+
+
+def automatic_hypothesis(report, first, last):
+    """Prioritise a review hypothesis, never certify advertisements or their absence.
+
+    Repetition support is a search priority, not a calibrated confidence score.
+    Exact support ties require arbitration rather than an arbitrary group number.
+    """
+    if report is None:
+        return None, 'Charge ou lance une recherche pour préparer les raccords.'
+    if len(report.get('candidates', [])) > 100:
+        return None, 'Trop de candidats pour la sélection automatique de ce pilote.'
+    choices = []
+    candidates = report.get('candidates', [])
+    for index, candidate in enumerate(candidates, 1):
+        inside = inside_occurrences(candidate, first, last)
+        # The common-family extractor currently needs at least three clips.
+        if len(inside) == 4 and refinement_problem(inside) is None:
+            choices.append({'candidate': index, 'breaks': 2,
+                            'support': len(candidate['occurrences'])})
+        for other_index, other in enumerate(candidates, 1):
+            count = len(inside) + len(inside_occurrences(other, first, last))
+            if count in (2, 4) and pair_problem(report, index, other_index, first, last) is None:
+                choices.append({'departure': index, 'resume': other_index, 'breaks': count // 2,
+                                'support': len(candidate['occurrences']) + len(other['occurrences'])})
+    if not choices:
+        return None, ('Aucune hypothèse exploitable d’une ou deux plages publicitaires. '
+                      'Cela ne prouve pas l’absence de publicité.')
+    choices.sort(key=lambda row: -row['support'])
+    if len(choices) > 1 and choices[0]['support'] == choices[1]['support']:
+        return None, ('Plusieurs hypothèses ont le même soutien : arbitrage nécessaire. '
+                      'Aucun découpage n’est choisi automatiquement.')
+    result = {**choices[0], 'alternatives': len(choices) - 1,
+              'needs_manual_review': True, 'search_partial': bool(report.get('index_limits_reached'))}
+    return result, None
