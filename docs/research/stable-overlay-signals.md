@@ -12,6 +12,14 @@ A useful evaluation holds out one observation clip, learns regions on the others
 
 The existing UI, source sampling, detector thresholds and encoding queue are unchanged. No captured images, learned channel-specific template or private recording metadata are part of the repository.
 
+## Polarity-invariant contrast hypothesis
+
+The research scanner also accepts `--edge-mode contrast`; the default remains `white`. This alternative takes the maximum local RGB range over the centre pixel and its four direct neighbours, keeping contrast of at least 45/255. It is invariant to replacing every RGB value by `255-value`, so an inverted graphic may retain the same contours. It does not use a channel name, a logo template or a hand-selected region. Persistence, shared-region refinement and sustained-presence requirements remain the same. The selected mode is recorded in the model and scan report and is used again during presence scoring.
+
+In a four-observation leave-one-out check, the contrast hypothesis recovered a late-jingle fragment in all four colour-inverted observations, where the white hypothesis had three training abstentions and one held-out miss. It also recovered a fragment in all four observations of the translucent moving style. On the original changing-background style, however, two contrast trainings abstained and two transferred; the white hypothesis had transferred in all four. Neither mode is a universal replacement for the other. Contrast also admitted much larger regions in the moving-style observations, which warrants full-recording false-positive checks before any promotion.
+
+These checks concern selected observation clips from existing recordings. They do not establish independent accuracy, full-source specificity, complete jingle bounds or exact cut coordinates. A late graphic fragment may be several seconds after the start of the jingle; do not assume the current native boundary search necessarily reaches that start. No UI choice, automatic fallback, montage or queue operation is introduced by this research option.
+
 ## Cross-habillage check
 
 Before treating this signal as a general jingle detector, repeat the observation-level evaluation with unchanged thresholds on other graphic styles. For four observations, learn on three and score the fourth, rotating the held-out clip. Report training abstentions, missing held-out detections and misplaced detections separately. A training peak alone is not a successful transfer.

@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from stable_overlay_signals import persistent_edges, shared_persistent_edges, overlay_candidates, presence_scores, refine_shared_candidate
+from stable_overlay_signals import persistent_edges, shared_persistent_edges, overlay_candidates, presence_scores, refine_shared_candidate, contrast_edges, graphic_edges
 
 
 class StableOverlaySignalsTest(unittest.TestCase):
@@ -58,6 +58,38 @@ class StableOverlaySignalsTest(unittest.TestCase):
         with self.assertRaises(ValueError):shared_persistent_edges(clips[:1])
         with self.assertRaises(ValueError):persistent_edges(np.zeros((301,40,64,3),dtype=np.uint8))
         with self.assertRaises(ValueError):presence_scores(clips[0],np.zeros((40,64),dtype=bool),[0,0,20,20])
+
+    def test_contrast_edges_are_invariant_to_colour_inversion(self):
+        frames=self.clips()[0]
+        np.testing.assert_array_equal(contrast_edges(frames),contrast_edges(255-frames))
+
+    def test_uniform_colour_changes_and_flashes_do_not_establish_contrast_graphic(self):
+        frames=np.zeros((20,40,64,3),dtype=np.uint8)
+        frames[::2]=[200,80,120]
+        self.assertFalse(persistent_edges(frames,edge_mode='contrast').any())
+        frames[10,20:30,40:50]=255
+        self.assertFalse(persistent_edges(frames,edge_mode='contrast').any())
+
+    def test_contrast_rejects_bad_input_and_unknown_modes(self):
+        with self.assertRaises(ValueError):contrast_edges(np.zeros((301,40,64,3),dtype=np.uint8))
+        with self.assertRaises(ValueError):graphic_edges(self.clips()[0],'unknown')
+
+    def test_contrast_model_transfers_to_held_out_inverted_graphic(self):
+        from scan_stable_overlays import learn_model, scan_blocks
+        clips=[]
+        for seed in range(4):
+            rng=np.random.default_rng(seed)
+            frames=np.broadcast_to(rng.integers(20,80,(20,1,1,3),dtype=np.uint8),
+                                   (20,40,64,3)).copy()
+            frames[6:13,20:32,40:44]=240
+            frames[6:13,28:32,40:54]=240
+            clips.append(255-frames if seed%2 else frames)
+        model=learn_model(clips[:3],edge_mode='contrast')
+        self.assertEqual(model['edge_mode'],'contrast')
+        x,y,w,h=model['crop']
+        count,intervals=scan_blocks([clips[3][:,y:y+h,x:x+w]],model)
+        self.assertEqual(count,20)
+        self.assertEqual([(row['first_sample'],row['end_sample_exclusive']) for row in intervals],[(6,13)])
 
 
 if __name__=='__main__':unittest.main()
