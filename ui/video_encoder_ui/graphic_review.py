@@ -43,7 +43,7 @@ def observation_manifest(repository,source,bounds):
 
 
 def check_graphic_source(report,source,first,last):
-    if (report.get('review_origin')!='graphic_hypotheses' or report.get('fps')!=25
+    if (report.get('review_origin') not in ('graphic_hypotheses','format_hypotheses') or report.get('fps')!=25
             or Path(report['source']).resolve()!=Path(source).resolve()
             or report.get('source_identity')!=identity(source) or report.get('outer_bounds')!=[first,last]):
         raise ValueError('La revue graphique ne correspond pas à la source inchangée et à ses bornes extérieures.')

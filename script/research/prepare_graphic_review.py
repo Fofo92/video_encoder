@@ -10,12 +10,13 @@ from pathlib import Path
 import time
 from scan_stable_overlays import run as scan
 from group_overlay_occurrences import group_occurrences
-from prepare_overlay_review import export, plan, verify_native_rate
+from prepare_overlay_review import export, export_windows, plan, verify_native_rate
 from refine_overlay_review import refine
 from export_indexed_windows import source_identity
 from graphic_observation_manifest import observations_from_manifest
 from bootstrap_graphic_observations import export_observations,plan_observations
-from graphic_review_cache import completed_scan,completed_review,copy_scan,copy_review
+from graphic_review_cache import completed_scan,completed_review,completed_export,copy_scan,copy_review
+from format_break_hypotheses import cached_format_review
 
 
 def write_json(path,value):
@@ -51,17 +52,53 @@ def run(source,observations,in_frame,out_frame,output,observation_manifest=None,
     def stage(name):
         report['stage']=name;save()
         print(f'Review preparation: {name}; elapsed {report["elapsed_seconds"]} s',flush=True)
-        steps={'scanning':(1,'Analyse graphique de l’enregistrement'),
-               'grouping':(2,'Regroupement des repères graphiques'),
+        format_method=report.get('preparation_method')=='format_hypotheses'
+        steps={'scanning':(1,'Analyse rapide du cache de cadrage' if format_method else 'Analyse graphique de l’enregistrement'),
+               'grouping':(2,'Repérage des changements de cadrage' if format_method else 'Regroupement des repères graphiques'),
                'extracting':(3,'Extraction des raccords à contrôler'),
                'refining':(4,'Préparation des images de raccord')}
         if name=='observing':step,label=1,'Préparation des extraits d’observation'
         else:
             step,label=steps[name]
-            if discovery_report is not None:step+=1
-        print('REVIEW_STAGE '+json.dumps({'step':step,'total':5 if discovery_report is not None else 4,'label':label}),flush=True)
+            if discovery_report is not None and not format_method:step+=1
+        print('REVIEW_STAGE '+json.dumps({'step':step,'total':5 if discovery_report is not None and not format_method else 4,'label':label}),flush=True)
     save()
     try:
+        try:
+            format_result=cached_format_review(source,cache_root,in_frame,out_frame)
+        except (OSError,ValueError,KeyError,TypeError) as error:
+            format_result={'status':'unavailable','reason':str(error)}
+        write_json(output/'format-check.json',format_result)
+        report['format_preflight_status']=format_result['status']
+        if format_result['status']=='candidate_format_windows':
+            report.update(preparation_method='format_hypotheses',recording_scan_started=False,
+                          observation_selection='not_used_for_format_review',limitations=format_result['limitations'])
+            stage('scanning');stage('grouping')
+            grouping={key:value for key,value in format_result.items() if key!='windows'}
+            write_json(output/'groups.json',grouping)
+            report.update(grouping_report=str(output/'groups.json'),
+                          candidate_group_count=len(format_result['groups']),unresolved_group_count=0,
+                          straddling_occurrence_count=0,review_directory=str(output/'raccords'))
+            stage('extracting')
+            format_path=output/'format-check.json'
+            previous=completed_export(cache_root,source,format_path,grouping,format_result['windows'])
+            if previous is not None:
+                copy_review(previous,output/'raccords')
+                report['reused_review_from']=str(previous)
+            else:
+                export_windows(format_path,format_path.read_bytes(),grouping,format_result['windows'],output/'raccords')
+            report['review_manifest']=str(output/'raccords/frame-map.json')
+            stage('refining')
+            result=refine(output/'raccords')
+            if source_identity(source)!=report['source_identity']:
+                raise ValueError('Recording changed during format review')
+            result.update(outer_bounds=[in_frame,out_frame],review_origin='format_hypotheses')
+            write_json(output/'raccords.json',result)
+            report.update(raccord_report=str(output/'raccords.json'),stage='completed',
+                          candidate_raccord_count=sum(r['status']=='candidate_raccord' for r in result['raccords']),
+                          status='ready_for_review' if result['status']=='candidate_raccords' else 'needs_review')
+            save()
+            return report_path
         if discovery_report is not None:
             discovery_report=discovery_report.resolve(strict=True)
             stage('observing')

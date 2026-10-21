@@ -1,5 +1,12 @@
 # Integrated observation-assisted raccord preparation
 
+The coordinator first tries a conditional format review using an existing sealed
+discovery cache. Stable bilateral bands and positively full-frame excursions can
+provide native windows without graphic learning or a full presence scan. If the
+format hypothesis is unavailable or unsuitable, the graphic route below remains
+available. See [conditional format review](conditional-format-review.md) for the
+eligibility conditions, native refinement, cache reuse and recording evaluation.
+
 `script/research/prepare_graphic_review.py` runs the research stages in one invocation: learn graphic hypotheses, scan the source once, group occurrences within the exterior programme bounds, extract native review clips, and propose raccord candidates. It requires a 25 fps source and either existing observations or a compatible initial discovery report. The discovery route can prepare initial observations automatically; none of its proposals are verified separators.
 
 ## UI entry

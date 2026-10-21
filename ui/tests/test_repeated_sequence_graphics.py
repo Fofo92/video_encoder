@@ -55,6 +55,15 @@ class GraphicFixture:
 class GraphicReviewTest(GraphicFixture,unittest.TestCase):
     def setUp(self):self.fixture()
 
+    def test_format_proposals_use_the_same_explicit_confirmation_and_source_checks(self):
+        self.report['review_origin']='format_hypotheses';self.save()
+        _,report=load_graphic_review(self.output/'pipeline.json',self.source,self.bounds)
+        with self.assertRaises(ValueError):proposed_graphic_session(report,self.source,*self.bounds)
+        session=proposed_graphic_session(report,self.source,*self.bounds,confirmed=True)
+        self.assertEqual([(r.start_frame,r.end_frame) for r in session.segments],[(10,124),(500,999),(1500,1900)])
+        self.source.write_bytes(b'changed')
+        with self.assertRaises(ValueError):proposed_graphic_session(report,self.source,*self.bounds,confirmed=True)
+
     def test_geometric_review_does_not_accept_segments_before_confirmation(self):
         pipeline,report=load_graphic_review(self.output/'pipeline.json',self.source,self.bounds)
         with self.assertRaises(ValueError):proposed_graphic_session(report,self.source,*self.bounds)
@@ -98,6 +107,14 @@ class GraphicDialogTest(GraphicFixture,unittest.TestCase):
         self.frame_source=SimpleNamespace(length=2000,frame_at=lambda position:(image,position,1))
         self.dialog=RepeatedSequenceDialog(self.source,self.bounds,self.frame_source)
         self.dialog.repository=self.root;self.addCleanup(self.dialog.reject)
+
+    def test_format_result_loads_without_group_selection_or_automatic_acceptance(self):
+        self.report['review_origin']='format_hypotheses';self.pipeline['preparation_method']='format_hypotheses'
+        self.save();self.dialog.load_report(self.output/'raccords.json')
+        self.assertEqual(self.dialog.hits.count(),4)
+        self.assertFalse(self.dialog.confirm.isChecked())
+        self.assertFalse(self.dialog.apply_button.isEnabled())
+        self.assertIsNone(self.dialog.session)
 
     def test_prepare_uses_existing_observations_without_group_or_detector_choice(self):
         teacher=self.teacher();self.dialog.refresh_observations();self.dialog.update_actions()

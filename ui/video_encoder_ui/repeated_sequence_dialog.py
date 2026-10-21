@@ -304,7 +304,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.output = path.parent
         try:
             report = json.loads(path.read_text())
-            if path.name == 'pipeline.json' or report.get('review_origin') == 'graphic_hypotheses':
+            if path.name == 'pipeline.json' or report.get('review_origin') in ('graphic_hypotheses','format_hypotheses'):
                 self.display_graphic_review(path if path.name == 'pipeline.json' else path.parent / 'pipeline.json')
                 return
             if 'source_motif_limits' in report:
@@ -587,9 +587,9 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.populate_hits()
         self.copy_diagnostic.setVisible(True)
         self.copy_diagnostic.setToolTip(str(self.output.resolve()))
-        self.notice.setText('Recherche graphique terminée. Contrôle chaque départ et chaque reprise avant confirmation.'
+        self.notice.setText('Préparation terminée. Contrôle chaque départ et chaque reprise avant confirmation.'
                             if self.refined is not None else
-                            'Recherche graphique terminée avec des cas non résolus. ' +
+                            'Préparation terminée avec des cas non résolus. ' +
                             pipeline.get('reason', 'Les raccords incomplets restent à examiner.'))
         reused = ('Scan réutilisé. ' if pipeline.get('reused_scan_from') else '')
         reused += ('Extraits natifs réutilisés. ' if pipeline.get('reused_review_from') else '')

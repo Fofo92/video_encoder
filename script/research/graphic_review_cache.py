@@ -61,6 +61,11 @@ def completed_scan(root,source,observations):
 def completed_review(root,source,scan_path,first,last):
     encoded=scan_path.read_bytes();report=json.loads(encoded)
     grouping,windows=plan(report,first/25,(last+1)/25)
+    return completed_export(root,source,scan_path,grouping,windows)
+
+
+def completed_export(root,source,scan_path,grouping,windows):
+    encoded=scan_path.read_bytes()
     current=source_identity(source);sha=hashlib.sha256(encoded).hexdigest()
     for path in newest(root,'**/frame-map.json'):
         try:

@@ -5,12 +5,47 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import numpy as np
 from unittest import mock
 from prepare_graphic_review import run
 from export_indexed_windows import source_identity
 
 
 class PrepareGraphicReviewTest(unittest.TestCase):
+    @unittest.skipUnless(shutil.which('ffmpeg') and shutil.which('ffprobe'),'FFmpeg unavailable')
+    def test_real_format_cache_to_native_review_without_graphic_scan_and_reuses_export(self):
+        with tempfile.TemporaryDirectory() as name:
+            root=Path(name);source=root/'format.mkv'
+            enable='lt(t,180)+gte(t,240)'
+            filters=','.join([f"drawbox=x=0:y={y}:w=iw:h=12:color=black:t=fill:enable='{enable}'" for y in [0,78]])
+            subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i','color=c=0x646464:s=160x90:r=25:d=420',
+                            '-vf',filters,'-c:v','ffv1',str(source)],check=True)
+            before=hashlib.sha256(source.read_bytes()).hexdigest()
+            pixels=np.full((2100,18,32,3),100,dtype=np.uint8)
+            pixels[:900,:2]=0;pixels[:900,-2:]=0
+            pixels[1200:,:2]=0;pixels[1200:,-2:]=0
+            cache=root/'sampled-rgb.bin';cache.write_bytes(pixels.tobytes())
+            (root/'manifest.json').write_text(json.dumps({'status':'completed','source':str(source),
+                'source_identity':source_identity(source),'sampled_frames':2100,'cache_path':str(cache),
+                'cache_sha256':hashlib.sha256(cache.read_bytes()).hexdigest()}))
+            with mock.patch('prepare_graphic_review.scan',side_effect=AssertionError('Full graphic scan started')):
+                path=run(source,[],0,10499,root/'review',cache_root=root)
+            report=json.loads(path.read_text())
+            self.assertEqual(report['status'],'ready_for_review',report)
+            self.assertEqual(report['preparation_method'],'format_hypotheses')
+            self.assertFalse(report['recording_scan_started'])
+            result=json.loads((path.parent/'raccords.json').read_text())
+            self.assertEqual(result['review_origin'],'format_hypotheses')
+            self.assertEqual([r['candidate_kept_decoded_frame'] for r in result['raccords']],[4499,6000])
+            self.assertTrue(result['needs_manual_review'])
+            with mock.patch('prepare_graphic_review.scan',side_effect=AssertionError('Full scan repeated')), \
+                 mock.patch('prepare_graphic_review.export_windows',side_effect=AssertionError('Native export repeated')):
+                retry=run(source,[],0,10499,root/'retry',cache_root=root)
+            repeated=json.loads(retry.read_text())
+            self.assertEqual(repeated['status'],'ready_for_review')
+            self.assertEqual(repeated['reused_review_from'],str(root/'review/raccords'))
+            self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest(),before)
+
     def test_learning_abstention_is_a_review_case_without_extraction_or_refinement(self):
         with tempfile.TemporaryDirectory() as name:
             root=Path(name);source=root/'source.mkv';source.write_bytes(b'original')
