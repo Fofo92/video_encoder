@@ -64,3 +64,26 @@ exact frame references afterwards and fails if a graphic source scan is called.
 The retry fails if native extraction is called again, requires the same review
 result and checks the unchanged source digest. UI tests cover the format origin,
 unchecked initial confirmation and current-source validation.
+
+## Manual adjustment after reviewing a candidate
+
+In the separator dialog, navigating with the frame field or the one-frame
+buttons changes the preview only. The explicit **Retenir cette image pour le
+raccord** action changes the selected proposal. The displayed edge determines
+the convention: last-kept OUT / first-discarded for a departure, last-discarded /
+first-kept IN for a return. The helper validates the full ordered montage against
+current source identity and exterior bounds before updating the proposal.
+
+Edited rows show **ajusté**, keep their revised positions when reselected and
+clear the confirmation checkbox. The user reviews, confirms again and chooses
+**Remplacer le montage**; the revised segments then enter the main editor and are
+saved through its normal project workflow. Closing the dialog without replacing
+the montage discards these in-dialog edits. Preview movement itself never changes
+a cut, and unavailable or inexact previews cannot be retained as adjustments.
+
+This works for format, graphic and legacy motif proposals. Invalid moves retain
+the previous valid proposal. The common apply dispatcher handles both geometric
+origins, including format results. Tests exercise the complete dialog-to-montage
+path and the Expendables regression: proposed OUT 113349 manually changed to
+113346 becomes the inclusive OUT of segment 2. Reference corrections do not
+change detector timing or introduce a fixed global offset.

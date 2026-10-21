@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from video_encoder_ui.repeated_sequence_review import identity, inside_occurrences, proposed_session
+from video_encoder_ui.repeated_sequence_review import identity, inside_occurrences, proposed_session, adjust_review_boundary
 
 
 class RepeatedSequenceReviewTest(unittest.TestCase):
@@ -28,6 +28,13 @@ class RepeatedSequenceReviewTest(unittest.TestCase):
     def test_no_segments_without_explicit_semantic_confirmation(self):
         with self.assertRaises(ValueError):
             proposed_session(self.report, self.source, 20243, 157947)
+
+    def test_legacy_proposals_support_manual_out_and_in_adjustment(self):
+        for index,frame,expected in [(0,74593,74593),(1,83513,83513)]:
+            report=adjust_review_boundary(self.report,self.source,20243,157947,index,frame,0 if index==0 else 1)
+            session=proposed_session(report,self.source,20243,157947,confirmed=True)
+            self.assertEqual(session.segments[0].end_frame if index==0 else session.segments[1].start_frame,expected)
+        self.assertEqual(self.report['source_motif_limits'][0]['motif_start_decoded_frame'],74597)
 
     def test_rejects_odd_or_overlapping_occurrences(self):
         self.report['source_motif_limits'].pop()

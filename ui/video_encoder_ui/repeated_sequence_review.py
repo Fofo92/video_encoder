@@ -29,7 +29,7 @@ def inside_occurrences(candidate, first, last):
 
 
 def proposed_session(report, source, first, last, confirmed=False):
-    if report.get('review_origin') == 'graphic_hypotheses':
+    if report.get('review_origin') in ('graphic_hypotheses','format_hypotheses'):
         from .graphic_review import proposed_graphic_session
         return proposed_graphic_session(report, source, first, last, confirmed=confirmed)
     check_source(report, source)
@@ -60,6 +60,40 @@ def proposed_session(report, source, first, last, confirmed=False):
         beginning = resume['motif_end_decoded_frame_exclusive']
     session.add_segment(SegmentSelection('source', beginning, last))
     return session
+
+
+def adjust_review_boundary(report, source, first, last, index, frame, edge):
+    """Return a validated edited proposal; preview navigation alone edits nothing.
+
+    edge 0/1 follows the displayed pair: last-kept/first-discarded for a
+    departure, last-discarded/first-kept for a return. Confirmation remains a
+    separate UI action. No source or project file is written here.
+    """
+    import copy
+    proposed_session(report,source,first,last,confirmed=True)
+    geometric=report.get('review_origin') in ('graphic_hypotheses','format_hypotheses')
+    rows=report['raccords'] if geometric else report['source_motif_limits']
+    if (type(index) is not int or not 0<=index<len(rows) or type(frame) is not int
+            or type(edge) is not int or edge not in (0,1) or not first<=frame<=last):
+        raise ValueError('Image ou raccord à ajuster invalide.')
+    departure=index%2==0
+    kept=frame-edge if departure else frame+1-edge
+    edited=copy.deepcopy(report)
+    row=(edited['raccords'] if geometric else edited['source_motif_limits'])[index]
+    if geometric:
+        previous=row['candidate_kept_decoded_frame']
+        row.update(candidate_kept_decoded_frame=kept,
+                   candidate_transition_decoded_frame=kept+1 if departure else kept)
+    else:
+        previous=row['motif_start_decoded_frame']-1 if departure else row['motif_end_decoded_frame_exclusive']
+        row['motif_start_decoded_frame' if departure else 'motif_end_decoded_frame_exclusive']=kept+1 if departure else kept
+    # Validate the complete sequence, including neighbours, before returning it.
+    proposed_session(edited,source,first,last,confirmed=True)
+    if kept!=previous:
+        edited.setdefault('manual_adjustments',[]).append({'index':index,
+            'role':'departure' if departure else 'resume','previous_kept_frame':previous,
+            'kept_frame':kept,'selected_source_frame':frame,'selected_edge':edge})
+    return edited
 
 
 def latest_discovery(repository, source):

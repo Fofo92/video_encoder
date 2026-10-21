@@ -8,6 +8,7 @@ import unittest
 from unittest.mock import patch
 from video_encoder_ui.graphic_review import (observation_manifest, proposed_graphic_session, load_graphic_review)
 from video_encoder_ui.repeated_sequence_review import identity
+from video_encoder_ui.repeated_sequence_review import proposed_session, adjust_review_boundary
 
 try:
     from PySide6 import QtCore,QtGui,QtWidgets
@@ -54,6 +55,39 @@ class GraphicFixture:
 
 class GraphicReviewTest(GraphicFixture,unittest.TestCase):
     def setUp(self):self.fixture()
+
+    def test_manual_edges_keep_inclusive_out_and_first_kept_in_for_both_origins(self):
+        for origin in ['graphic_hypotheses','format_hypotheses']:
+            for index,frame,edge,expected in [(0,121,0,121),(0,122,1,121),(1,503,1,503),(1,502,0,503)]:
+                with self.subTest(origin=origin,index=index,edge=edge):
+                    report=copy.deepcopy(self.report);report['review_origin']=origin
+                    edited=adjust_review_boundary(report,self.source,*self.bounds,index,frame,edge)
+                    self.assertEqual(edited['raccords'][index]['candidate_kept_decoded_frame'],expected)
+                    self.assertEqual(report['raccords'][index],self.report['raccords'][index])
+                    with self.assertRaises(ValueError):proposed_session(edited,self.source,*self.bounds)
+                    session=proposed_session(edited,self.source,*self.bounds,confirmed=True)
+                    self.assertEqual(session.segments[0].end_frame if index==0 else session.segments[1].start_frame,expected)
+        self.assertEqual(self.source.read_bytes(),b'source')
+
+    def test_expendables_departure_adjustment_transfers_113346_to_the_montage(self):
+        report=copy.deepcopy(self.report);bounds=(11019,161908)
+        report.update(review_origin='format_hypotheses',outer_bounds=list(bounds))
+        for row,transition in zip(report['raccords'],[57256,65626,113350,122380]):
+            departure=row['candidate_role']=='departure'
+            row.update(candidate_transition_decoded_frame=transition,
+                       candidate_kept_decoded_frame=transition-1 if departure else transition)
+        edited=adjust_review_boundary(report,self.source,*bounds,2,113346,0)
+        session=proposed_session(edited,self.source,*bounds,confirmed=True)
+        self.assertEqual(session.segments[1].end_frame,113346)
+        self.assertEqual(report['raccords'][2]['candidate_kept_decoded_frame'],113349)
+
+    def test_invalid_adjustment_or_changed_source_preserves_original_proposal(self):
+        before=copy.deepcopy(self.report)
+        for index,frame,edge in [(-1,100,0),(0,700,0),(1,1901,1),(0,True,0)]:
+            with self.assertRaises(ValueError):adjust_review_boundary(self.report,self.source,*self.bounds,index,frame,edge)
+            self.assertEqual(self.report,before)
+        self.source.write_bytes(b'changed')
+        with self.assertRaises(ValueError):adjust_review_boundary(self.report,self.source,*self.bounds,0,121,0)
 
     def test_format_proposals_use_the_same_explicit_confirmation_and_source_checks(self):
         self.report['review_origin']='format_hypotheses';self.save()
@@ -107,6 +141,46 @@ class GraphicDialogTest(GraphicFixture,unittest.TestCase):
         self.frame_source=SimpleNamespace(length=2000,frame_at=lambda position:(image,position,1))
         self.dialog=RepeatedSequenceDialog(self.source,self.bounds,self.frame_source)
         self.dialog.repository=self.root;self.addCleanup(self.dialog.reject)
+
+    def test_adjustment_requires_explicit_action_and_reconfirmation_before_format_apply(self):
+        self.report['review_origin']='format_hypotheses';self.save()
+        self.dialog.display_graphic_review(self.output/'pipeline.json')
+        self.dialog.hits.setCurrentRow(2);self.dialog.edge.setCurrentIndex(0)
+        self.dialog.confirm.setChecked(True)
+        self.dialog.frame.setValue(996)
+        self.assertEqual(self.dialog.refined['raccords'][2]['candidate_kept_decoded_frame'],999)
+        self.dialog.adjust_button.click()
+        self.assertFalse(self.dialog.confirm.isChecked());self.assertFalse(self.dialog.apply_button.isEnabled())
+        self.assertEqual(self.dialog.frame.value(),996)
+        self.assertEqual(self.dialog.hits.currentRow(),2)
+        self.assertIn('ajusté',self.dialog.hits.item(2).text())
+        self.dialog.hits.setCurrentRow(0);self.dialog.hits.setCurrentRow(2)
+        self.assertEqual(self.dialog.frame.value(),996)
+        self.dialog.confirm.setChecked(True);self.dialog.apply_segments()
+        self.assertEqual(self.dialog.result(),QtWidgets.QDialog.DialogCode.Accepted)
+        self.assertEqual(self.dialog.session.segments[1].end_frame,996)
+        disk=json.loads((self.output/'raccords.json').read_text())
+        self.assertEqual(disk['raccords'][2]['candidate_kept_decoded_frame'],999)
+
+    def test_invalid_adjustment_retains_the_available_proposal(self):
+        self.dialog.display_graphic_review(self.output/'pipeline.json')
+        before=copy.deepcopy(self.dialog.refined)
+        self.dialog.frame.setValue(700)
+        with patch('video_encoder_ui.repeated_sequence_dialog.QtWidgets.QMessageBox.warning'):
+            self.dialog.adjust_button.click()
+        self.assertEqual(self.dialog.refined,before)
+        self.assertEqual(self.dialog.hits.count(),4)
+
+    def test_inexact_or_unavailable_preview_cannot_be_recorded_as_an_adjustment(self):
+        self.dialog.display_graphic_review(self.output/'pipeline.json')
+        before=copy.deepcopy(self.dialog.refined)
+        original=self.frame_source.frame_at
+        self.frame_source.frame_at=lambda position:(original(position)[0],position+1,1)
+        self.dialog.frame.setValue(121)
+        self.assertFalse(self.dialog.adjust_button.isEnabled())
+        self.dialog.adjust_boundary()
+        self.assertEqual(self.dialog.refined,before)
+
 
     def test_format_result_loads_without_group_selection_or_automatic_acceptance(self):
         self.report['review_origin']='format_hypotheses';self.pipeline['preparation_method']='format_hypotheses'
