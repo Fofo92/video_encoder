@@ -70,12 +70,20 @@ def adjust_review_boundary(report, source, first, last, index, frame, edge):
     separate UI action. No source or project file is written here.
     """
     import copy
-    proposed_session(report,source,first,last,confirmed=True)
     geometric=report.get('review_origin') in ('graphic_hypotheses','format_hypotheses')
+    partial=geometric and report.get('status')=='unresolved_raccords'
+    if partial:
+        from .graphic_review import check_graphic_source, graphic_preview_rows
+        check_graphic_source(report,source,first,last)
+        graphic_preview_rows(report,first,last)
+    else:
+        proposed_session(report,source,first,last,confirmed=True)
     rows=report['raccords'] if geometric else report['source_motif_limits']
     if (type(index) is not int or not 0<=index<len(rows) or type(frame) is not int
             or type(edge) is not int or edge not in (0,1) or not first<=frame<=last):
         raise ValueError('Image ou raccord à ajuster invalide.')
+    if partial and rows[index].get('status')!='candidate_raccord':
+        raise ValueError('Ce raccord non résolu ne possède pas de limite à ajuster.')
     departure=index%2==0
     kept=frame-edge if departure else frame+1-edge
     edited=copy.deepcopy(report)
@@ -88,7 +96,13 @@ def adjust_review_boundary(report, source, first, last, index, frame, edge):
         previous=row['motif_start_decoded_frame']-1 if departure else row['motif_end_decoded_frame_exclusive']
         row['motif_start_decoded_frame' if departure else 'motif_end_decoded_frame_exclusive']=kept+1 if departure else kept
     # Validate the complete sequence, including neighbours, before returning it.
-    proposed_session(edited,source,first,last,confirmed=True)
+    if partial:
+        available=graphic_preview_rows(edited,first,last)
+        positions=[row['kept_frame'] for row in available]
+        if any(a+1>=b for a,b in zip(positions,positions[1:])):
+            raise ValueError('Les raccords disponibles se chevauchent.')
+    else:
+        proposed_session(edited,source,first,last,confirmed=True)
     if kept!=previous:
         edited.setdefault('manual_adjustments',[]).append({'index':index,
             'role':'departure' if departure else 'resume','previous_kept_frame':previous,

@@ -373,6 +373,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.update_actions()
 
     def clear_refinement(self):
+        self.partial_refined = None
         self.refined = None
         self.graphic_state = None
         self.confirm.setChecked(False)
@@ -396,7 +397,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
 
     def populate_hits(self):
         self.hits.clear()
-        adjusted={row['index'] for row in (self.refined or {}).get('manual_adjustments',[])}
+        adjusted={row['index'] for row in (self.refined or getattr(self,'partial_refined',None) or {}).get('manual_adjustments',[])}
         for index, row in enumerate(self.preview_rows):
             hours, remainder = divmod(row['start'] // 25, 3600)
             minutes, seconds = divmod(remainder, 60)
@@ -404,7 +405,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             number = row.get('group_index', index // 2 + 1)
             role = f'Départ proposé {number}' if departure else f'Reprise proposée {number}'
             text = f'{index + 1} — {hours:02d}:{minutes:02d}:{seconds:02d}' if row.get('approximate') else role
-            text += ' (ajusté)' if index in adjusted else ' (approximatif)' if row.get('approximate') else ' (affiné)'
+            text += ' (ajusté)' if row.get('report_index',index) in adjusted else ' (approximatif)' if row.get('approximate') else ' (affiné)'
             item = QtWidgets.QListWidgetItem(text)
             item.setToolTip(f"Image conservée : {row['kept_frame']} ; image écartée : {row['excluded_frame']}"
                            if 'kept_frame' in row else f"Images : {row['start']}–{row['end']} (fin exclusive)")
@@ -449,31 +450,38 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
     def update_adjust_action(self):
         if hasattr(self,'adjust_button'):
             reason=('Attends la fin de la préparation.' if self.busy else
-                    'Prépare des raccords complets avant d’ajuster une limite.' if self.refined is None else
+                    'Prépare des raccords avant d’ajuster une limite.' if self.refined is None and getattr(self,'partial_refined',None) is None else
                     'Sélectionne un départ ou une reprise à ajuster.' if not 0<=self.hits.currentRow()<len(self.preview_rows) else
                     'Affiche une image valide avant de retenir cette limite.' if self.displayed_frame!=self.frame.value() else None)
             self.adjust_button.setEnabled(reason is None)
             self.adjust_button.setToolTip(reason or 'Retenir l’image affichée comme limite du raccord. Confirme ensuite les raccords et remplace le montage pour les utiliser dans l’éditeur.')
 
     def adjust_boundary(self):
-        if self.busy or self.refined is None or self.displayed_frame!=self.frame.value():
+        report=self.refined or getattr(self,'partial_refined',None)
+        if self.busy or report is None or self.displayed_frame!=self.frame.value():
             return
-        index=self.hits.currentRow();edge=self.edge.currentIndex()
+        visible_index=self.hits.currentRow();edge=self.edge.currentIndex()
+        if not 0<=visible_index<len(self.preview_rows):return
+        index=self.preview_rows[visible_index].get('report_index',visible_index)
         try:
-            edited=adjust_review_boundary(self.refined,self.source,*self.bounds,index,self.frame.value(),edge)
+            edited=adjust_review_boundary(report,self.source,*self.bounds,index,self.frame.value(),edge)
         except (OSError,ValueError,KeyError,TypeError) as error:
             self.notice.setText(str(error))
             QtWidgets.QMessageBox.warning(self,'Ajustement du raccord',str(error))
             return
-        self.refined=edited;self.session=None
+        if self.refined is None:self.partial_refined=edited
+        else:self.refined=edited
+        self.session=None
         self.confirm.setChecked(False)
         if edited.get('review_origin') in ('graphic_hypotheses','format_hypotheses'):
             self.preview_rows=graphic_preview_rows(edited,*self.bounds)
         else:
             self.preview_rows=[{'start':row['motif_start_decoded_frame'],'end':row['motif_end_decoded_frame_exclusive']}
                                for row in edited['source_motif_limits']]
-        self.populate_hits();self.hits.setCurrentRow(index);self.edge.setCurrentIndex(edge)
-        self.notice.setText('Raccord ajusté. Contrôle les images, confirme les raccords puis clique sur « Remplacer le montage ».')
+        self.populate_hits();self.hits.setCurrentRow(visible_index);self.edge.setCurrentIndex(edge)
+        self.notice.setText('Raccord ajusté. Des cas restent non résolus ; le montage ne peut pas encore être remplacé.'
+                            if self.refined is None else
+                            'Raccord ajusté. Contrôle les images, confirme les raccords puis clique sur « Remplacer le montage ».')
         self.update_actions()
 
     def show_frame(self, position):
@@ -646,6 +654,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.output = path.parent
         self.graphic_state = pipeline['status']
         self.refined = report if pipeline['status'] == 'ready_for_review' else None
+        self.partial_refined = report if pipeline['status'] == 'needs_review' else None
         self.preview_rows = graphic_preview_rows(report, *self.bounds) if report is not None else []
         self.populate_hits()
         self.copy_diagnostic.setVisible(True)

@@ -249,6 +249,31 @@ class GraphicDialogTest(GraphicFixture,unittest.TestCase):
         self.assertFalse(self.dialog.confirm.isEnabled());self.assertFalse(self.dialog.apply_button.isEnabled())
         self.assertIsNone(self.dialog.session);self.assertIn('non résolus',self.dialog.stage.text())
 
+    def test_partial_review_can_adjust_visible_resume_without_editing_missing_departure(self):
+        self.pipeline['status']='needs_review';self.report['status']='unresolved_raccords'
+        self.report['raccords'][0]={'candidate_role':'departure','group_index':1,'status':'unresolved_no_transition'}
+        self.save();self.dialog.display_graphic_review(self.output/'pipeline.json')
+        self.assertTrue(self.dialog.adjust_button.isEnabled())
+        self.dialog.edge.setCurrentIndex(1)
+        self.dialog.frame.setValue(503);self.dialog.adjust_button.click()
+        edited=self.dialog.partial_refined
+        self.assertEqual(edited['raccords'][0],self.report['raccords'][0])
+        self.assertEqual(edited['raccords'][1]['candidate_kept_decoded_frame'],503)
+        self.assertEqual(edited['manual_adjustments'][-1]['index'],1)
+        self.assertIn('(ajusté)',self.dialog.hits.item(0).text())
+        self.assertIsNone(self.dialog.refined)
+        self.assertFalse(self.dialog.confirm.isEnabled())
+        self.assertFalse(self.dialog.apply_button.isEnabled())
+        with self.assertRaises(ValueError):
+            proposed_session(edited,self.source,*self.bounds,confirmed=True)
+        before=copy.deepcopy(edited)
+        self.dialog.frame.setValue(1100)
+        with patch.object(QtWidgets.QMessageBox,'warning'):
+            self.dialog.adjust_button.click()
+        self.assertEqual(self.dialog.partial_refined,before)
+        self.dialog.clear_refinement();self.dialog.update_actions()
+        self.assertFalse(self.dialog.adjust_button.isEnabled())
+
     def test_empty_grouping_retains_diagnostics_and_does_not_claim_no_advertisements(self):
         self.pipeline.update(status='needs_review',reason='Aucun groupe exploitable.')
         self.save();(self.output/'raccords.json').unlink()

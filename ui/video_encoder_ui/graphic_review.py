@@ -65,7 +65,7 @@ def graphic_preview_rows(report,first,last):
                 or kept!=(transition-1 if role=='departure' else transition) or row.get('kept_frame_meaning')!=meaning):
             raise ValueError('Convention ou indice de raccord graphique invalide.')
         preview.append({'start':transition,'end':transition+1,'candidate_role':role,'group_index':index//2+1,
-                        'kept_frame':kept,'excluded_frame':transition if role=='departure' else transition-1})
+                        'report_index':index,'kept_frame':kept,'excluded_frame':transition if role=='departure' else transition-1})
     return preview
 
 
