@@ -1,4 +1,5 @@
 import json
+import hashlib
 from pathlib import Path
 import tarfile
 import tempfile
@@ -7,6 +8,51 @@ from collect_graphic_diagnostics import collect
 
 
 class CollectGraphicDiagnosticsTest(unittest.TestCase):
+    def clip_fixture(self, root):
+        run = root / 'run'; run.mkdir()
+        pipeline = {'source': '/source.m2t', 'source_identity': {'bytes': 1000}}
+        for field, name in [('observation_manifest', 'old-observations'), ('review_manifest', 'native')]:
+            directory = root / name; directory.mkdir()
+            windows = []
+            for number in range(2):
+                clip = directory / f'clip-{number}.mp4'; clip.write_bytes(b'known clip')
+                windows.append({'name': clip.name, 'sha256': hashlib.sha256(clip.read_bytes()).hexdigest()})
+            manifest = directory / 'frame-map.json'
+            manifest.write_text(json.dumps({'source': pipeline['source'],
+                'source_identity': pipeline['source_identity'], 'windows': windows}))
+            pipeline[field] = str(manifest)
+            pipeline[field + '_sha256'] = hashlib.sha256(manifest.read_bytes()).hexdigest()
+        (run / 'pipeline.json').write_text(json.dumps(pipeline))
+        return pipeline
+
+    def test_explicit_clip_collection_uses_verified_manifests_including_previous_run(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); self.clip_fixture(root)
+            (root / 'old-observations/unrelated.mkv').write_bytes(b'never include')
+            output = collect(root, '/source.m2t', root / 'out.tar.gz', True)
+            with tarfile.open(output) as archive:
+                names = archive.getnames()
+                self.assertEqual(sum(name.endswith('.mp4') for name in names), 4)
+                self.assertFalse(any(name.endswith('.mkv') for name in names))
+                index = json.load(archive.extractfile('graphic-diagnostics/collection.json'))
+                self.assertTrue(index['existing_review_clips_included'])
+                self.assertFalse(index['recording_opened'])
+
+    def test_changed_clip_or_manifest_rejects_archive_before_creation(self):
+        for changed in ['clip', 'manifest', 'outside']:
+            with self.subTest(changed=changed), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary); pipeline = self.clip_fixture(root)
+                if changed == 'clip':
+                    (root / 'native/clip-0.mp4').write_bytes(b'changed')
+                elif changed == 'manifest':
+                    (root / 'native/frame-map.json').write_text('{}')
+                else:
+                    pipeline['review_manifest'] = '/outside/frame-map.json'
+                    (root / 'run/pipeline.json').write_text(json.dumps(pipeline))
+                with self.assertRaises((ValueError, FileNotFoundError)):
+                    collect(root, '/source.m2t', root / 'out.tar.gz', True)
+                self.assertFalse((root / 'out.tar.gz').exists())
+
     def test_collects_nested_reports_without_source_or_videos(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

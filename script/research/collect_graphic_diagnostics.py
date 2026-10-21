@@ -7,7 +7,7 @@ from pathlib import Path
 import tarfile
 
 
-def collect(root, source, output):
+def collect(root, source, output, include_review_clips=False):
     root = Path(root).resolve(strict=True)
     matches = []
     for path in root.rglob('pipeline.json'):
@@ -23,7 +23,10 @@ def collect(root, source, output):
             continue
     if not matches:
         raise ValueError('Aucun pipeline graphique trouvé pour cette source ; aucun calcul relancé.')
-    directory = max(matches)[1].parent
+    pipeline_path = max(matches)[1]
+    pipeline_bytes = pipeline_path.read_bytes()
+    pipeline = json.loads(pipeline_bytes)
+    directory = pipeline_path.parent
     snapshots = []
     total = 0
     for path in sorted(directory.rglob('*')):
@@ -42,11 +45,55 @@ def collect(root, source, output):
         if total > 20 * 1024 * 1024 or len(snapshots) >= 500:
             raise ValueError('Diagnostic collection exceeds its bounded size')
         snapshots.append((str(path.relative_to(directory)), encoded))
+    if include_review_clips:
+        for field, folder in [('observation_manifest', 'observations'), ('review_manifest', 'native-review')]:
+            manifest_path = Path(pipeline[field])
+            if not manifest_path.is_absolute():
+                raise ValueError('Expected an absolute extraction manifest path')
+            if manifest_path.is_symlink() or not manifest_path.resolve(strict=True).is_relative_to(root):
+                raise ValueError('Extraction manifest escapes the diagnostic root')
+            if manifest_path.stat().st_size > 2 * 1024 * 1024:
+                raise ValueError('Oversized extraction manifest')
+            encoded = manifest_path.read_bytes()
+            expected = pipeline.get(field + '_sha256')
+            if expected and hashlib.sha256(encoded).hexdigest() != expected:
+                raise ValueError('Extraction manifest differs from the completed calculation')
+            manifest = json.loads(encoded)
+            if (manifest.get('source') != str(source)
+                    or manifest.get('source_identity') != pipeline.get('source_identity')
+                    or not isinstance(manifest.get('windows'), list)
+                    or not 2 <= len(manifest['windows']) <= 12):
+                raise ValueError('Extraction manifest does not match this recording')
+            snapshots.append((folder + '/frame-map.json', encoded))
+            seen = set()
+            for row in manifest['windows']:
+                name = row['name']
+                if (not isinstance(name, str) or Path(name).name != name
+                        or Path(name).suffix.lower() != '.mp4' or name in seen):
+                    raise ValueError('Invalid or repeated review clip name')
+                seen.add(name)
+                path = manifest_path.parent / name
+                if path.is_symlink() or path.resolve(strict=True).parent != manifest_path.parent.resolve():
+                    raise ValueError('Review clip escapes its extraction directory')
+                if path.stat().st_size > 64 * 1024 * 1024:
+                    raise ValueError('Review clip exceeds 64 MiB')
+                data = path.read_bytes()
+                if hashlib.sha256(data).hexdigest() != row.get('sha256'):
+                    raise ValueError('Review clip differs from its verified extraction')
+                total += len(data)
+                if total > 256 * 1024 * 1024:
+                    raise ValueError('Review clip collection exceeds 256 MiB')
+                snapshots.append((folder + '/' + name, data))
+            if manifest_path.read_bytes() != encoded:
+                raise ValueError('Extraction manifest changed during collection')
+    if pipeline_path.read_bytes() != pipeline_bytes:
+        raise ValueError('Calculation changed during collection; retry after completion')
     index = {'source': str(source), 'run_directory': str(directory),
+             'existing_review_clips_included': include_review_clips,
              'recording_opened': False, 'calculation_started': False,
              'files': [{'name': name, 'sha256': hashlib.sha256(data).hexdigest()}
                        for name, data in snapshots]}
-    # Build from captured bytes: no source, clip, workspace or live file handles.
+    # Build from captured bytes: never include the recording or encoding workspace.
     snapshots.append(('collection.json', (json.dumps(index, indent=2) + '\n').encode()))
     output = Path(output)
     with output.open('xb') as stream:
@@ -63,5 +110,7 @@ if __name__ == '__main__':
     parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[2] / 'tmp')
     parser.add_argument('--source', required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--include-review-clips', action='store_true',
+                        help='Include only existing, hashed observation and native-review MP4 clips')
     args = parser.parse_args()
-    print(collect(args.root, args.source, args.output).resolve())
+    print(collect(args.root, args.source, args.output, args.include_review_clips).resolve())
