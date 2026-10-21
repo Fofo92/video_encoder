@@ -171,13 +171,37 @@ class GraphicDialogTest(GraphicFixture,unittest.TestCase):
         self.assertEqual(self.dialog.refined,before)
         self.assertEqual(self.dialog.hits.count(),4)
 
-    def test_inexact_or_unavailable_preview_cannot_be_recorded_as_an_adjustment(self):
+    def test_seek_offset_is_corrected_and_the_requested_frame_can_be_retained(self):
         self.dialog.display_graphic_review(self.output/'pipeline.json')
-        before=copy.deepcopy(self.dialog.refined)
         original=self.frame_source.frame_at
         self.frame_source.frame_at=lambda position:(original(position)[0],position+1,1)
         self.dialog.frame.setValue(121)
+        self.assertEqual(self.dialog.frame.value(),121)
+        self.assertEqual(self.dialog.displayed_frame,121)
+        self.assertTrue(self.dialog.adjust_button.isEnabled())
+        self.assertEqual(self.dialog.refined['raccords'][0]['candidate_kept_decoded_frame'],124)
+        self.dialog.adjust_button.click()
+        self.assertEqual(self.dialog.refined['raccords'][0]['candidate_kept_decoded_frame'],121)
+        self.assertEqual(self.dialog.frame.value(),121)
+
+    def test_neighbouring_known_image_is_shown_and_retained_at_its_actual_coordinate(self):
+        self.dialog.display_graphic_review(self.output/'pipeline.json')
+        original=self.frame_source.frame_at
+        self.frame_source.frame_at=lambda position:(original(position)[0],123,1)
+        self.dialog.frame.setValue(121)
+        self.assertEqual(self.dialog.frame.value(),123)
+        self.assertEqual(self.dialog.displayed_frame,123)
+        self.assertTrue(self.dialog.adjust_button.isEnabled())
+        self.dialog.adjust_button.click()
+        self.assertEqual(self.dialog.refined['raccords'][0]['candidate_kept_decoded_frame'],123)
+
+    def test_unavailable_or_unknown_preview_cannot_replace_the_previous_proposal(self):
+        self.dialog.display_graphic_review(self.output/'pipeline.json')
+        before=copy.deepcopy(self.dialog.refined);original=self.frame_source.frame_at
+        self.frame_source.frame_at=lambda position:(original(position)[0],-1,1)
+        self.dialog.frame.setValue(121)
         self.assertFalse(self.dialog.adjust_button.isEnabled())
+        self.assertIn('valide',self.dialog.adjust_button.toolTip())
         self.dialog.adjust_boundary()
         self.assertEqual(self.dialog.refined,before)
 

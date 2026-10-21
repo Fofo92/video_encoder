@@ -440,15 +440,20 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
                     self.edge.addItems(['Début du motif', 'Fin exclusive du motif'])
                     self.edge.blockSignals(False)
                 position = row['end'] if self.edge.currentIndex() else row['start']
+            blocker=QtCore.QSignalBlocker(self.frame)
             self.frame.setValue(min(self.frame.maximum(), max(0, position)))
+            del blocker
             self.show_frame(self.frame.value())
         self.update_adjust_action()
 
     def update_adjust_action(self):
         if hasattr(self,'adjust_button'):
-            self.adjust_button.setEnabled(not self.busy and self.refined is not None
-                                          and 0<=self.hits.currentRow()<len(self.preview_rows)
-                                          and self.displayed_frame==self.frame.value())
+            reason=('Attends la fin de la préparation.' if self.busy else
+                    'Prépare des raccords complets avant d’ajuster une limite.' if self.refined is None else
+                    'Sélectionne un départ ou une reprise à ajuster.' if not 0<=self.hits.currentRow()<len(self.preview_rows) else
+                    'Affiche une image valide avant de retenir cette limite.' if self.displayed_frame!=self.frame.value() else None)
+            self.adjust_button.setEnabled(reason is None)
+            self.adjust_button.setToolTip(reason or 'Retenir l’image affichée comme limite du raccord. Confirme ensuite les raccords et remplace le montage pour les utiliser dans l’éditeur.')
 
     def adjust_boundary(self):
         if self.busy or self.refined is None or self.displayed_frame!=self.frame.value():
@@ -476,10 +481,30 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             return
         self.displayed_frame=None
         try:
-            image, actual, _ = self.frame_source.frame_at(position)
+            def read(target):
+                image,actual,_=self.frame_source.frame_at(target)
+                if type(actual) is not int or not 0<=actual<self.frame_source.length or image.isNull():
+                    raise ValueError('Le lecteur n’a pas fourni d’image avec une position valide.')
+                return image,actual
+            image,actual=read(position)
+            if actual!=position:
+                # One bounded correction handles a consistent seek offset.
+                # If exact seeking is unavailable, retain the known displayed
+                # coordinate, as the main editor does, rather than a stale frame.
+                corrected=2*position-actual
+                if 0<=corrected<self.frame_source.length:
+                    try:
+                        other_image,other_actual=read(corrected)
+                        if abs(other_actual-position)<abs(actual-position):
+                            image,actual=other_image,other_actual
+                    except Exception:
+                        pass  # The first image still has a valid known position.
             self.preview.setPixmap(QtGui.QPixmap.fromImage(image).scaled(440, 248, QtCore.Qt.AspectRatioMode.KeepAspectRatio))
-            self.preview.setToolTip(f'Image affichée : {actual}. Les positions avant affinement sont approximatives.')
-            if actual==position:self.displayed_frame=actual
+            self.preview.setToolTip(f'Image affichée : {actual} ; demandée : {position}. Les positions avant affinement sont approximatives.')
+            blocker=QtCore.QSignalBlocker(self.frame)
+            self.frame.setValue(actual)
+            del blocker
+            self.displayed_frame=actual
         except Exception as error:
             self.preview.setText(f'Aperçu indisponible : {error}')
         self.update_adjust_action()

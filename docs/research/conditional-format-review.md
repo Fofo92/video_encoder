@@ -79,7 +79,13 @@ clear the confirmation checkbox. The user reviews, confirms again and chooses
 **Remplacer le montage**; the revised segments then enter the main editor and are
 saved through its normal project workflow. Closing the dialog without replacing
 the montage discards these in-dialog edits. Preview movement itself never changes
-a cut, and unavailable or inexact previews cannot be retained as adjustments.
+a cut. The dialog attempts one bounded seek correction when the reader returns
+a neighbouring frame. It then synchronizes the frame field, preview and retained
+coordinate to the actual known position, as the main editor does; signals are
+blocked during this synchronization to prevent recursive seeking. A valid nearby
+image is no longer rejected merely because it differs from the requested index.
+Unavailable images or unknown positions still disable adjustment. The button
+tooltip explains calculation, selection, incomplete-proposal or preview blockers.
 
 This works for format, graphic and legacy motif proposals. Invalid moves retain
 the previous valid proposal. The common apply dispatcher handles both geometric
@@ -87,3 +93,9 @@ origins, including format results. Tests exercise the complete dialog-to-montage
 path and the Expendables regression: proposed OUT 113349 manually changed to
 113346 becomes the inclusive OUT of segment 2. Reference corrections do not
 change detector timing or introduce a fixed global offset.
+
+Reader-offset tests cover a consistent one-frame seek offset, a nearby known
+position that cannot be corrected exactly, and an unknown position. They verify
+that navigation leaves the proposal unchanged and explicit adjustment retains
+the displayed coordinate. Selecting an occurrence decodes only once before any
+bounded offset correction, avoiding the former duplicate preview request.
