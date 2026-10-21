@@ -79,6 +79,17 @@ class PrepareGraphicReviewTest(unittest.TestCase):
             self.assertIn('contrast',presence['occurrences_by_hypothesis'])
             self.assertTrue((root/'review/raccords.tar.gz').is_file())
             self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest(),before)
+            with mock.patch('prepare_graphic_review.scan',side_effect=AssertionError('Full scan repeated')), \
+                 mock.patch('prepare_graphic_review.export',side_effect=AssertionError('Native source extraction repeated')):
+                resumed=run(source,[],0,2499,root/'retry',
+                            observation_manifest=root/'review/observations/frame-map.json',cache_root=root)
+            retry=json.loads(resumed.read_text())
+            self.assertEqual(retry['status'],'ready_for_review')
+            self.assertEqual(retry['reused_scan_from'],str(root/'review/scan/report.json'))
+            self.assertEqual(retry['reused_review_from'],str(root/'review/raccords'))
+            self.assertTrue((root/'retry/raccords.tar.gz').is_file())
+            repeated=json.loads((root/'retry/raccords.json').read_text())
+            self.assertEqual([r['candidate_kept_decoded_frame'] for r in repeated['raccords']],[499,2125])
 
 
 if __name__=='__main__':unittest.main()

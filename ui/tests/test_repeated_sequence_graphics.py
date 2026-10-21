@@ -110,7 +110,12 @@ class GraphicDialogTest(GraphicFixture,unittest.TestCase):
         self.assertFalse(self.dialog.confirm.isChecked())
 
     def test_kept_and_excluded_previews_and_explicit_apply(self):
+        self.pipeline['reused_scan_from']='previous/report.json'
+        self.pipeline['reused_review_from']='previous/raccords'
+        self.save()
         self.dialog.display_graphic_review(self.output/'pipeline.json')
+        self.assertIn('Scan réutilisé',self.dialog.notice.text())
+        self.assertIn('Extraits natifs réutilisés',self.dialog.notice.text())
         self.assertFalse(self.dialog.apply_button.isEnabled());self.assertFalse(self.dialog.confirm.isChecked())
         self.assertEqual(self.dialog.frame.value(),124)
         self.dialog.edge.setCurrentIndex(1);self.assertEqual(self.dialog.frame.value(),125)

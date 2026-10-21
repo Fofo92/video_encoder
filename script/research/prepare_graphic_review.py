@@ -15,6 +15,7 @@ from refine_overlay_review import refine
 from export_indexed_windows import source_identity
 from graphic_observation_manifest import observations_from_manifest
 from bootstrap_graphic_observations import export_observations,plan_observations
+from graphic_review_cache import completed_scan,completed_review,copy_scan,copy_review
 
 
 def write_json(path,value):
@@ -23,7 +24,7 @@ def write_json(path,value):
     pending.replace(path)
 
 
-def run(source,observations,in_frame,out_frame,output,observation_manifest=None,discovery_report=None):
+def run(source,observations,in_frame,out_frame,output,observation_manifest=None,discovery_report=None,cache_root=None):
     if type(in_frame) is not int or type(out_frame) is not int or not 0<=in_frame<out_frame:
         raise ValueError('Expected ordered exterior frame indices; OUT is inclusive')
     start,end=in_frame/25,(out_frame+1)/25
@@ -31,6 +32,7 @@ def run(source,observations,in_frame,out_frame,output,observation_manifest=None,
     if sum([bool(observations),observation_manifest is not None,discovery_report is not None])>1:
         raise ValueError('Use one observation input route')
     output=output.resolve()
+    cache_root=Path(cache_root) if cache_root is not None else Path(__file__).resolve().parents[2]/'tmp'
     verify_native_rate(source)
     output.mkdir(parents=True,exist_ok=False)
     report_path=output/'pipeline.json';started=time.monotonic()
@@ -80,7 +82,13 @@ def run(source,observations,in_frame,out_frame,output,observation_manifest=None,
             observations,digest=observations_from_manifest(observation_manifest,source,(in_frame,out_frame))
             report.update(observation_manifest=str(observation_manifest),observation_manifest_sha256=digest)
             save()
-        scan_path=scan(source,observations,output/'scan',edge_mode='both')
+        previous=completed_scan(cache_root,source,observations) if observations else None
+        if previous is not None:
+            scan_path=copy_scan(previous,output/'scan')
+            report['reused_scan_from']=str(previous)
+            print('Réutilisation du scan terminé : aucune nouvelle lecture complète pour cette étape.',flush=True)
+        else:
+            scan_path=scan(source,observations,output/'scan',edge_mode='both')
         if (observation_manifest is not None and hashlib.sha256(observation_manifest.read_bytes()).hexdigest()
                 !=report['observation_manifest_sha256']):
             raise ValueError('Observation extraction manifest changed during the scan')
@@ -102,7 +110,13 @@ def run(source,observations,in_frame,out_frame,output,observation_manifest=None,
             return report_path
         report['review_directory']=str(output/'raccords')
         stage('extracting')
-        export(scan_path,start,end,output/'raccords')
+        previous=completed_review(cache_root,source,scan_path,in_frame,out_frame)
+        if previous is not None:
+            copy_review(previous,output/'raccords')
+            report['reused_review_from']=str(previous)
+            print('Réutilisation des extraits natifs vérifiés.',flush=True)
+        else:
+            export(scan_path,start,end,output/'raccords')
         report['review_manifest']=str(output/'raccords/frame-map.json')
         stage('refining')
         result=refine(output/'raccords')

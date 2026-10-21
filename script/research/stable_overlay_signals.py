@@ -6,6 +6,9 @@ Clips themselves may be reference-selected: this is not full-source discovery.
 from collections import deque
 import numpy as np
 
+# Bump when learning or presence-scoring semantics change; old results must not be reused.
+GRAPHIC_ALGORITHM_REVISION = 'shared-graphic-v1'
+
 
 def validate_frames(frames):
     if (frames.ndim != 4 or frames.shape[-1] != 3 or frames.dtype != np.uint8

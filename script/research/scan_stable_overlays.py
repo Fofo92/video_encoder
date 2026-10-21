@@ -12,7 +12,7 @@ import time
 import numpy as np
 from export_indexed_windows import source_identity
 from stable_overlay_signals import (shared_persistent_edges, overlay_candidates,
-                                    refine_shared_candidate, presence_scores)
+                                    refine_shared_candidate, presence_scores, GRAPHIC_ALGORITHM_REVISION)
 
 
 def sha256(path):
@@ -243,7 +243,8 @@ def run(source,clip_paths,output,edge_mode='white'):
     output.mkdir(parents=True,exist_ok=False)
     report_path=output/'report.json';started=time.monotonic()
     report={'status':'running','source':str(source),'needs_manual_review':True,
-            'sample_fps':5,'source_identity':source_identity(source),'edge_mode':edge_mode}
+            'sample_fps':5,'source_identity':source_identity(source),'edge_mode':edge_mode,
+            'algorithm_revision':GRAPHIC_ALGORITHM_REVISION}
     def save():
         pending=output/'report.pending'
         pending.write_text(json.dumps(report,indent=2)+'\n')

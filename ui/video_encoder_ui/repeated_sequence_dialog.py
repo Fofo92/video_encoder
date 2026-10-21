@@ -591,6 +591,10 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
                             if self.refined is not None else
                             'Recherche graphique terminée avec des cas non résolus. ' +
                             pipeline.get('reason', 'Les raccords incomplets restent à examiner.'))
+        reused = ('Scan réutilisé. ' if pipeline.get('reused_scan_from') else '')
+        reused += ('Extraits natifs réutilisés. ' if pipeline.get('reused_review_from') else '')
+        if reused:
+            self.notice.setText(reused + self.notice.text())
         self.update_actions()
 
     def display_refinement(self, refined):
