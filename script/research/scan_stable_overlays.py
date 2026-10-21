@@ -12,7 +12,12 @@ import time
 import numpy as np
 from export_indexed_windows import source_identity
 from stable_overlay_signals import (shared_persistent_edges, overlay_candidates,
-                                    refine_shared_candidate, presence_scores, GRAPHIC_ALGORITHM_REVISION)
+                                    refine_shared_candidate, presence_scores, GRAPHIC_ALGORITHM_REVISION,
+                                    peak_shape_agreement)
+
+
+class GraphicLearningAbstention(ValueError):
+    """Observation evidence is insufficient; do not decode the recording."""
 
 
 def sha256(path):
@@ -83,6 +88,11 @@ def learn_model(clips, edge_mode='white'):
         raise ValueError('No shared persistent graphic in the observations')
     selected=candidates[0]
     refined,peaks=refine_shared_candidate(clips,shared,selected['bbox_xywh'],edge_mode=edge_mode)
+    agreement=peak_shape_agreement(clips,peaks[-1],selected['bbox_xywh'],edge_mode)
+    if agreement['minimum_pairwise_iou'] < .2:
+        raise GraphicLearningAbstention('Training graphic shapes disagree across observations; '
+                         'shared edges alone do not identify the same graphic '
+                         f"(minimum peak IoU {agreement['minimum_pairwise_iou']:.3f} < 0.200)")
     peak_scores=[]
     for clip in clips:
         scores=presence_scores(clip,refined,selected['bbox_xywh'],edge_mode)
@@ -94,6 +104,7 @@ def learn_model(clips, edge_mode='white'):
     return {'mask':refined[y:y+h,x:x+w].copy(),'bbox':local_bbox,'crop':crop,
             'source_shape':list(shared.shape),'candidate_count':len(candidates),
             'training_peak_samples':peaks,'training_peak_scores':peak_scores,
+            'training_shape_agreement':agreement,
             'edge_mode':edge_mode,'selection':'largest_shared_edge_region; unclassified graphic'}
 
 
@@ -151,7 +162,7 @@ def learn_hypotheses(clips):
         try:models.append(learn_model(clips,edge_mode=mode))
         except ValueError as error:abstentions[mode]=str(error)
     if not models:
-        raise ValueError('Neither graphic hypothesis could be learned: '+str(abstentions))
+        raise GraphicLearningAbstention('Neither graphic hypothesis could be learned: '+str(abstentions))
     return models,abstentions
 
 
@@ -244,7 +255,7 @@ def run(source,clip_paths,output,edge_mode='white'):
     report_path=output/'report.json';started=time.monotonic()
     report={'status':'running','source':str(source),'needs_manual_review':True,
             'sample_fps':5,'source_identity':source_identity(source),'edge_mode':edge_mode,
-            'algorithm_revision':GRAPHIC_ALGORITHM_REVISION}
+            'algorithm_revision':GRAPHIC_ALGORITHM_REVISION,'recording_scan_started':False}
     def save():
         pending=output/'report.pending'
         pending.write_text(json.dumps(report,indent=2)+'\n')
@@ -262,15 +273,30 @@ def run(source,clip_paths,output,edge_mode='white'):
             clips.append(np.concatenate(blocks))
             identities.append({'path':str(path),'identity':before,'sha256':digest})
         print('Learning the shared graphic from observations...',flush=True)
-        if edge_mode=='both':
-            models,abstentions=learn_hypotheses(clips)
-        else:
-            models,abstentions=[learn_model(clips,edge_mode)],{}
+        try:
+            if edge_mode=='both':
+                models,abstentions=learn_hypotheses(clips)
+            else:
+                models,abstentions=[learn_model(clips,edge_mode)],{}
+        except GraphicLearningAbstention as error:
+            if source_identity(source)!=report['source_identity']:
+                raise ValueError('Recording changed during observation checks')
+            for observation in identities:
+                path=Path(observation['path'])
+                if source_identity(path)!=observation['identity'] or sha256(path)!=observation['sha256']:
+                    raise ValueError('Observation changed during learning')
+            report.update(status='needs_review',stage='learning',sampled_frames=0,observations=identities,
+                          reason='Les extraits ne permettent pas d’identifier un graphisme commun fiable. '
+                                 'Le scan complet n’a pas été lancé.',
+                          learning_abstention=str(error),elapsed_seconds=round(time.monotonic()-started))
+            save()
+            return report_path
         del clips
         for model in models:
             name=f"learned-overlay-{model['edge_mode']}.npz" if edge_mode=='both' else 'learned-overlay.npz'
             np.savez_compressed(output/name,mask=model['mask'],bbox=model['bbox'],crop=model['crop'],edge_mode=model['edge_mode'])
-        report.update(stage='scanning',learned_graphics=[{k:v for k,v in m.items() if k!='mask'} for m in models],
+        report.update(stage='scanning',recording_scan_started=True,
+                      learned_graphics=[{k:v for k,v in m.items() if k!='mask'} for m in models],
                       hypothesis_abstentions=abstentions,observations=identities)
         if edge_mode!='both':report['learned_graphic']=report['learned_graphics'][0]
         save();last_progress=-1

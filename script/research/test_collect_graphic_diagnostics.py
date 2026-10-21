@@ -8,6 +8,40 @@ from collect_graphic_diagnostics import collect
 
 
 class CollectGraphicDiagnosticsTest(unittest.TestCase):
+    def test_sealed_discovery_cache_is_collected_without_original_recording(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);pipeline=self.clip_fixture(root)
+            directory=root/'discovery';directory.mkdir()
+            cache=directory/'sampled-rgb.bin';cache.write_bytes(b'x'*(20*1728))
+            manifest={'status':'completed','source':pipeline['source'],
+                      'source_identity':pipeline['source_identity'],'sampled_frames':20,
+                      'cache_path':str(cache),'cache_sha256':hashlib.sha256(cache.read_bytes()).hexdigest()}
+            (directory/'manifest.json').write_text(json.dumps(manifest))
+            output=collect(root,'/source.m2t',root/'out.tar.gz',include_discovery_cache=True)
+            with tarfile.open(output) as archive:
+                self.assertEqual(archive.extractfile('graphic-diagnostics/discovery-cache/sampled-rgb.bin').read(),cache.read_bytes())
+                index=json.load(archive.extractfile('graphic-diagnostics/collection.json'))
+                self.assertTrue(index['existing_discovery_cache_included'])
+                self.assertFalse(index['recording_opened'])
+            cache.write_bytes(b'y'*(20*1728))
+            with self.assertRaisesRegex(ValueError,'Aucun cache'):
+                collect(root,'/source.m2t',root/'tampered.tar.gz',include_discovery_cache=True)
+            self.assertFalse((root/'tampered.tar.gz').exists())
+
+    def test_foreign_cache_identity_and_escaped_cache_path_are_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);pipeline=self.clip_fixture(root)
+            cache=root/'sampled-rgb.bin';cache.write_bytes(b'x'*1728)
+            manifest={'status':'completed','source':pipeline['source'],'source_identity':{'bytes':999},
+                      'sampled_frames':1,'cache_path':str(cache),'cache_sha256':hashlib.sha256(cache.read_bytes()).hexdigest()}
+            path=root/'manifest.json';path.write_text(json.dumps(manifest))
+            with self.assertRaises(ValueError):
+                collect(root,'/source.m2t',root/'foreign.tar.gz',include_discovery_cache=True)
+            manifest.update(source_identity=pipeline['source_identity'],cache_path='/outside/cache.bin')
+            path.write_text(json.dumps(manifest))
+            with self.assertRaises(ValueError):
+                collect(root,'/source.m2t',root/'outside.tar.gz',include_discovery_cache=True)
+
     def clip_fixture(self, root):
         run = root / 'run'; run.mkdir()
         pipeline = {'source': '/source.m2t', 'source_identity': {'bytes': 1000}}

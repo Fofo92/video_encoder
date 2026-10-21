@@ -97,6 +97,12 @@ def run(source,observations,in_frame,out_frame,output,observation_manifest=None,
         presence=json.loads(scan_path.read_text())
         if presence.get('source_identity')!=report['source_identity']:
             raise ValueError('Recording changed between preparation and scanning')
+        if presence.get('status')=='needs_review':
+            report.update(status='needs_review',stage='completed',candidate_raccord_count=0,
+                          reason=presence['reason'],recording_scan_started=False,
+                          learning_abstention=presence.get('learning_abstention'))
+            save()
+            return report_path
         grouping=group_occurrences(presence,start,end)
         write_json(output/'groups.json',grouping)
         report['grouping_report']=str(output/'groups.json')

@@ -6,11 +6,32 @@ import tempfile
 from pathlib import Path
 import unittest
 import numpy as np
-from scan_stable_overlays import learn_model, scan_blocks, padded_crop, rgb_blocks, run
+from scan_stable_overlays import learn_model, scan_blocks, padded_crop, rgb_blocks, run, GraphicLearningAbstention
 from stable_overlay_signals import presence_scores
 
 
 class ScanStableOverlaysTest(unittest.TestCase):
+    def test_learning_abstention_never_starts_recording_decoder(self):
+        with tempfile.TemporaryDirectory() as name:
+            root=Path(name);source=root/'source.mkv';source.write_bytes(b'original')
+            clips=[root/'one.mp4',root/'two.mp4']
+            for clip in clips:clip.write_bytes(b'observation')
+            frames=np.zeros((5,16,16,3),dtype=np.uint8)
+            def decode(path,*args,**kwargs):
+                self.assertNotEqual(path,source,'The full recording must not be decoded')
+                return iter([frames])
+            with mock.patch('scan_stable_overlays.verify_aspect'), \
+                 mock.patch('scan_stable_overlays.rgb_blocks',side_effect=decode) as decoder, \
+                 mock.patch('scan_stable_overlays.learn_hypotheses',side_effect=GraphicLearningAbstention('inconsistent shapes')):
+                path=run(source,clips,root/'output',edge_mode='both')
+            report=json.loads(path.read_text())
+            self.assertEqual(report['status'],'needs_review')
+            self.assertFalse(report['recording_scan_started'])
+            self.assertEqual(report['sampled_frames'],0)
+            self.assertEqual(decoder.call_count,2)
+            self.assertNotIn('occurrences',report)
+            self.assertEqual(source.read_bytes(),b'original')
+
     def model(self):
         clips=[]
         for seed in range(3):

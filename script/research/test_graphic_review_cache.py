@@ -5,6 +5,7 @@ import unittest
 from export_indexed_windows import source_identity
 from graphic_review_cache import completed_scan,completed_review,digest,copy_review
 from prepare_overlay_review import plan
+from stable_overlay_signals import GRAPHIC_ALGORITHM_REVISION
 
 
 class GraphicReviewCacheTest(unittest.TestCase):
@@ -16,7 +17,7 @@ class GraphicReviewCacheTest(unittest.TestCase):
         self.scan=self.root/'previous/scan/report.json';self.scan.parent.mkdir(parents=True)
         self.report={'status':'completed','source':str(self.source),'source_identity':source_identity(self.source),
                      'edge_mode':'both','sample_fps':5,'threshold':.8,'minimum_samples':3,'sampled_frames':1000,
-                     'algorithm_revision':'shared-graphic-v1',
+                     'algorithm_revision':GRAPHIC_ALGORITHM_REVISION,
                      'observations':[{'path':str(p),'identity':source_identity(p),'sha256':digest(p)} for p in self.observations],
                      'learned_graphics':[{'source_shape':[360,640],'edge_mode':'white',
                                           'selection':'largest_shared_edge_region; unclassified graphic'}],
@@ -41,7 +42,10 @@ class GraphicReviewCacheTest(unittest.TestCase):
     def test_completed_scan_reuses_only_same_source_observations_and_settings(self):
         self.assertEqual(completed_scan(self.root,self.source,self.observations),self.scan)
         self.report.pop('algorithm_revision');self.save()
-        self.assertEqual(completed_scan(self.root,self.source,self.observations),self.scan)
+        self.assertIsNone(completed_scan(self.root,self.source,self.observations))
+        self.report['algorithm_revision']='shared-graphic-v1';self.save()
+        self.assertIsNone(completed_scan(self.root,self.source,self.observations))
+        self.report['algorithm_revision']=GRAPHIC_ALGORITHM_REVISION;self.save()
         self.observations[0].write_bytes(b'manual change')
         self.assertIsNone(completed_scan(self.root,self.source,self.observations))
 

@@ -11,6 +11,25 @@ from export_indexed_windows import source_identity
 
 
 class PrepareGraphicReviewTest(unittest.TestCase):
+    def test_learning_abstention_is_a_review_case_without_extraction_or_refinement(self):
+        with tempfile.TemporaryDirectory() as name:
+            root=Path(name);source=root/'source.mkv';source.write_bytes(b'original')
+            presence=root/'presence.json'
+            presence.write_text(json.dumps({'status':'needs_review','sampled_frames':0,
+                'source_identity':source_identity(source),'reason':'Observations incohérentes ; scan non lancé.',
+                'learning_abstention':'shapes disagree'}))
+            with mock.patch('prepare_graphic_review.verify_native_rate'), \
+                 mock.patch('prepare_graphic_review.scan',return_value=presence), \
+                 mock.patch('prepare_graphic_review.export') as extract, \
+                 mock.patch('prepare_graphic_review.refine') as refinement:
+                path=run(source,[],0,2499,root/'output')
+            report=json.loads(path.read_text())
+            self.assertEqual(report['status'],'needs_review')
+            self.assertEqual(report['candidate_raccord_count'],0)
+            self.assertFalse(report['recording_scan_started'])
+            self.assertEqual(report['learning_abstention'],'shapes disagree')
+            extract.assert_not_called();refinement.assert_not_called()
+
     def test_scan_failure_stops_later_stages_and_retains_failure_report(self):
         with tempfile.TemporaryDirectory() as name:
             root=Path(name);source=root/'source.mkv';source.write_bytes(b'original')

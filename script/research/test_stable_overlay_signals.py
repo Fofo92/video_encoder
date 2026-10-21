@@ -1,9 +1,36 @@
 import unittest
+from unittest import mock
 import numpy as np
-from stable_overlay_signals import persistent_edges, shared_persistent_edges, overlay_candidates, presence_scores, refine_shared_candidate, contrast_edges, graphic_edges
+from stable_overlay_signals import persistent_edges, shared_persistent_edges, overlay_candidates, presence_scores, refine_shared_candidate, contrast_edges, graphic_edges, peak_shape_agreement
 
 
 class StableOverlaySignalsTest(unittest.TestCase):
+    def test_sparse_shared_intersection_cannot_validate_unrelated_full_graphics(self):
+        from scan_stable_overlays import learn_model, GraphicLearningAbstention
+        clips=[]
+        # Three repeated graphics and one different graphic share a sparse
+        # scaffold. All four score highly against their learned intersection.
+        for seed in [1,1,2,1]:
+            frames=np.zeros((20,80,128,3),dtype=np.uint8)
+            for index in range(20):frames[6:13,10+3*index,10+3*index]=255
+            rng=np.random.default_rng(seed)
+            for y,x in zip(rng.integers(10,68,80),rng.integers(10,68,80)):
+                frames[6:13,y,x]=255
+            clips.append(frames)
+        with mock.patch('scan_stable_overlays.peak_shape_agreement',return_value={'minimum_pairwise_iou':1.}):
+            previous=learn_model(clips)
+        self.assertGreater(min(previous['training_peak_scores']),.8)
+        with self.assertRaisesRegex(GraphicLearningAbstention,'shapes disagree'):
+            learn_model(clips)
+
+    def test_peak_shape_check_preserves_inversion_and_validates_sample_indices(self):
+        clips=self.clips()
+        original=clips[0]
+        agreement=peak_shape_agreement([original,255-original],[8,8],[40,20,14,12],'contrast')
+        self.assertEqual(agreement['minimum_pairwise_iou'],1.)
+        for peaks,bbox in [([True,8],[40,20,14,12]),([8,99],[40,20,14,12]),([8,8],[0,0,999,999])]:
+            with self.assertRaises(ValueError):peak_shape_agreement(clips[:2],peaks,bbox)
+
     def clips(self):
         clips=[]
         for seed in range(4):

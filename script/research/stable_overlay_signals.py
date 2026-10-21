@@ -7,7 +7,7 @@ from collections import deque
 import numpy as np
 
 # Bump when learning or presence-scoring semantics change; old results must not be reused.
-GRAPHIC_ALGORITHM_REVISION = 'shared-graphic-v1'
+GRAPHIC_ALGORITHM_REVISION = 'shared-graphic-v2-peak-shapes'
 
 
 def validate_frames(frames):
@@ -135,6 +135,36 @@ def edge_presence_scores(edges, shared, bbox):
 
 def presence_scores(frames, shared, bbox, edge_mode='white'):
     return edge_presence_scores(graphic_edges(frames,edge_mode),shared,bbox)
+
+
+def peak_shape_agreement(clips, peaks, bbox, edge_mode='white'):
+    """Compare complete peak edge shapes, not only their learned intersection.
+
+    A few coincident edges in unrelated words/products can score highly against
+    their own sparse intersection. Agreement is a training consistency check,
+    never a separator classification or an independent validation sample.
+    """
+    if not 2 <= len(clips) <= 12 or len(peaks) != len(clips):
+        raise ValueError('Expected a peak for each training observation')
+    x,y,w,h = bbox
+    masks=[]
+    shape=clips[0].shape[1:]
+    for clip,peak in zip(clips,peaks):
+        validate_frames(clip)
+        if (clip.shape[1:] != shape or type(peak) is not int or not 0<=peak<len(clip)
+                or min(x,y)<0 or min(w,h)<=0 or x+w>shape[1] or y+h>shape[0]):
+            raise ValueError('Invalid peak-shape comparison geometry')
+        # Five-frame slice bounds memory; keep the exact selected sample.
+        first=min(max(peak-2,0),len(clip)-5)
+        mask=graphic_edges(clip[first:first+5],edge_mode)[peak-first]
+        masks.append(mask[y:y+h,x:x+w])
+    scores=[]
+    for index,left in enumerate(masks):
+        for right in masks[index+1:]:
+            union=int((left|right).sum())
+            scores.append(float((left&right).sum()/union) if union else 0.)
+    return {'minimum_pairwise_iou':min(scores),'pairwise_iou':scores,
+            'comparison':'full_peak_edges_in_learned_bbox; training_only'}
 
 
 def refine_shared_candidate(clips, shared, bbox, rounds=2, edge_mode='white'):
