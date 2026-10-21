@@ -10,6 +10,7 @@ import uuid
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from .repeated_sequence_review import check_source, inside_occurrences, proposed_session, latest_discovery, refinement_problem, support_family_problem, pair_problem, automatic_hypothesis, latest_extraction
+from .graphic_review import observation_manifest, load_graphic_review, graphic_preview_rows
 
 
 class RepeatedSequenceDialog(QtWidgets.QDialog):
@@ -18,6 +19,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.source, self.bounds, self.frame_source = Path(source), bounds, frame_source
         self.repository = Path(__file__).resolve().parents[2]
         self.report = self.report_path = self.refined = self.session = None
+        self.observation_manifest = self.graphic_state = None
         self.busy = False
         self.task = self.output = None
         self.last_progress = ''
@@ -29,6 +31,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.clock.timeout.connect(self.update_task_status)
         self.progress_buffer = ''
         self.phase_label = ''
+        self.source_progress = ''
         self.setWindowTitle('Séparateurs répétés — expérimental')
         self.resize(880, 720)
         layout = QtWidgets.QVBoxLayout(self)
@@ -121,7 +124,8 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         layout.addWidget(self.confirm)
         bottom = QtWidgets.QHBoxLayout()
         self.refine_button = QtWidgets.QPushButton('Affiner le groupe sélectionné')
-        self.apply_button = QtWidgets.QPushButton('Remplacer le montage par ces segments à contrôler')
+        self.apply_button = QtWidgets.QPushButton('Remplacer le montage')
+        self.apply_button.setToolTip('Utiliser les segments contrôlés dans l’éditeur ; l’encodage reste une étape distincte.')
         self.cancel_button = QtWidgets.QPushButton('Fermer')
         bottom.addWidget(self.refine_button)
         bottom.addWidget(self.apply_button)
@@ -149,6 +153,11 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         if existing:
             self.load_report(existing)
         self.restore_completed_refinement()
+        self.refresh_observations()
+        self.update_actions()
+
+    def refresh_observations(self):
+        self.observation_manifest = observation_manifest(self.repository, self.source, self.bounds)
 
     def refresh_selection_mode(self):
         expert = self.expert.isChecked()
@@ -160,7 +169,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             self.update_discovery_notice()
 
     def update_discovery_notice(self):
-        if self.busy or self.report is None or self.refined is not None:
+        if self.busy or self.report is None or self.refined is not None or self.graphic_state is not None:
             return
         prefix = 'Recherche partielle : plafonds atteints. ' if self.report.get('index_limits_reached') else ''
         if self.expert.isChecked():
@@ -189,14 +198,24 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         if not self.expert.isChecked():
             hypothesis, problem = automatic_hypothesis(self.report, *self.bounds)
             ready = hypothesis is not None
+            if self.observation_manifest is not None:
+                ready, problem = True, None
             self.refine_button.setText('Préparer les raccords à contrôler')
             if not self.busy and self.refined is None:
-                self.stage.setText(problem or (
+                self.stage.setText('Des extraits sont disponibles : la recherche graphique et la préparation des raccords seront enchaînées.'
+                                   if self.observation_manifest is not None else problem or (
                     f"Hypothèse prioritaire : {hypothesis['breaks']} plage(s) possible(s), à vérifier. "
                     f"{hypothesis['alternatives']} autre(s) hypothèse(s). "
                     'Les limites seront calculées avant validation.'))
+        if not self.busy and self.graphic_state is not None:
+            self.stage.setText('Raccords graphiques préparés — contrôle les images conservées et écartées avant confirmation.'
+                               if self.graphic_state == 'ready_for_review' else
+                               'Préparation terminée avec des cas non résolus : le montage reste inchangé.')
         self.refine_button.setEnabled(not self.busy and ready and problem is None)
-        self.refine_button.setToolTip(problem or 'Extraire les fenêtres et affiner les limites du motif.')
+        self.refine_button.setToolTip(problem or (
+            'Réutiliser les extraits pour analyser l’enregistrement et préparer les raccords.'
+            if self.observation_manifest is not None and not self.expert.isChecked() else
+            'Extraire les fenêtres et affiner les limites du motif.'))
         self.apply_button.setEnabled(not self.busy and self.refined is not None and self.confirm.isChecked())
         self.cancel_button.setText('Interrompre et fermer' if self.busy else 'Fermer')
         if not self.busy and not self.preview_rows:
@@ -208,6 +227,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             seconds = max(0, self.elapsed.elapsed() // 1000) if self.elapsed.isValid() else 0
             minutes, seconds = divmod(seconds, 60)
             self.stage.setText(f'Calcul en cours — {self.phase_label} — écoulé {minutes:02d}:{seconds:02d}. '
+                               + (self.source_progress + '. ' if self.source_progress else '') +
                                'Contrôle des raccords disponible à la fin.')
 
     def selected_candidate_index(self):
@@ -235,7 +255,9 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.hits.clear()
         self.last_progress = ''
         self.progress_buffer = ''
-        self.phase_label = 'Lecture et extraction de la source' if task == 'refinement' else 'Découverte des répétitions'
+        self.source_progress = ''
+        self.phase_label = ('Analyse graphique et préparation des raccords' if task == 'graphic' else
+                            'Lecture et extraction de la source' if task == 'refinement' else 'Découverte des répétitions')
         self.elapsed.start()
         self.clock.start()
         self.activity.setRange(0, 3 if task == 'refinement' else 0)
@@ -273,8 +295,12 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             self.load_report(Path(path))
 
     def load_report(self, path):
+        self.output = path.parent
         try:
             report = json.loads(path.read_text())
+            if path.name == 'pipeline.json' or report.get('review_origin') == 'graphic_hypotheses':
+                self.display_graphic_review(path if path.name == 'pipeline.json' else path.parent / 'pipeline.json')
+                return
             if 'source_motif_limits' in report:
                 self.display_refinement(report)
                 return
@@ -288,6 +314,8 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             return
         self.report, self.report_path = report, path
         self.render_groups()
+        self.refresh_observations()
+        self.update_actions()
 
     def render_groups(self):
         self.groups.setRowCount(0)
@@ -334,6 +362,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
 
     def clear_refinement(self):
         self.refined = None
+        self.graphic_state = None
         self.confirm.setChecked(False)
         self.confirm.setEnabled(False)
 
@@ -358,11 +387,14 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         for index, row in enumerate(self.preview_rows):
             hours, remainder = divmod(row['start'] // 25, 3600)
             minutes, seconds = divmod(remainder, 60)
-            role = f'Départ proposé {index // 2 + 1}' if index % 2 == 0 else f'Reprise proposée {index // 2 + 1}'
+            departure = row.get('candidate_role', 'departure' if index % 2 == 0 else 'resume') == 'departure'
+            number = row.get('group_index', index // 2 + 1)
+            role = f'Départ proposé {number}' if departure else f'Reprise proposée {number}'
             text = f'{index + 1} — {hours:02d}:{minutes:02d}:{seconds:02d}' if row.get('approximate') else role
             text += ' (approximatif)' if row.get('approximate') else ' (affiné)'
             item = QtWidgets.QListWidgetItem(text)
-            item.setToolTip(f"Images : {row['start']}–{row['end']} (fin exclusive)")
+            item.setToolTip(f"Image conservée : {row['kept_frame']} ; image écartée : {row['excluded_frame']}"
+                           if 'kept_frame' in row else f"Images : {row['start']}–{row['end']} (fin exclusive)")
             self.hits.addItem(item)
         if self.preview_rows:
             self.hits.setCurrentRow(0)
@@ -372,8 +404,8 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             return
         if 0 <= index < len(self.preview_rows):
             row = self.preview_rows[index]
-            if self.refined is not None:
-                departure = index % 2 == 0
+            if self.refined is not None or 'kept_frame' in row:
+                departure = row.get('candidate_role', 'departure' if index % 2 == 0 else 'resume') == 'departure'
                 labels = (['Dernière image conservée (OUT)', 'Première image écartée'] if departure else
                           ['Dernière image écartée', 'Première image conservée (IN)'])
                 if self.edge.itemText(0) != labels[0]:
@@ -382,7 +414,11 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
                     self.edge.addItems(labels)
                     self.edge.setCurrentIndex(0 if departure else 1)
                     self.edge.blockSignals(False)
-                positions = [row['start'] - 1, row['start']] if departure else [row['end'] - 1, row['end']]
+                if 'kept_frame' in row:
+                    positions = ([row['kept_frame'], row['excluded_frame']] if departure else
+                                 [row['excluded_frame'], row['kept_frame']])
+                else:
+                    positions = [row['start'] - 1, row['start']] if departure else [row['end'] - 1, row['end']]
                 position = positions[self.edge.currentIndex()]
             else:
                 if self.edge.itemText(0) != 'Début du motif':
@@ -407,6 +443,10 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
     def refine_group(self):
         if self.busy:
             return
+        self.refresh_observations()
+        if not self.expert.isChecked() and self.observation_manifest is not None:
+            self.start_graphic_review()
+            return
         if not self.expert.isChecked():
             hypothesis, problem = automatic_hypothesis(self.report, *self.bounds)
             if problem:
@@ -429,6 +469,14 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
                    [*reuse, '--scan-report', str(self.report_path), *choice,
                     '--start-frame', str(self.bounds[0]), '--end-frame', str(self.bounds[1]), '--output', str(output)], output)
 
+    def start_graphic_review(self):
+        if self.busy or self.observation_manifest is None:
+            return
+        output = self.new_workspace()
+        self.start('graphic', 'prepare_graphic_review.py',
+                   ['--source', str(self.source), '--observation-manifest', str(self.observation_manifest),
+                    '--in-frame', str(self.bounds[0]), '--out-frame', str(self.bounds[1]), '--output', str(output)], output)
+
     def progress(self):
         message = bytes(self.process.readAllStandardOutput()).decode(errors='replace')
         if message:
@@ -440,15 +488,33 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
                 if line.startswith('REVIEW_STAGE '):
                     try:
                         value = json.loads(line[len('REVIEW_STAGE '):])
-                        if value['step'] in (1, 2, 3):
-                            self.activity.setRange(0, 3)
+                        total = value.get('total', 3)
+                        if type(total) is int and 1 <= value['step'] <= total <= 4:
+                            self.activity.setRange(0, total)
                             self.activity.setValue(value['step'] - 1)
-                            self.activity.setFormat(f"Étape {value['step']}/3 — {value['label']}")
+                            self.activity.setFormat(f"Étape {value['step']}/{total} — {value['label']}")
                             self.phase_label = value['label']
+                            self.source_progress = ''
                             self.update_task_status()
                     except (ValueError, KeyError, TypeError):
                         pass
-            self.notice.setText(message.splitlines()[-1][-200:] if not message.startswith('REVIEW_STAGE ') else self.phase_label)
+                elif line.startswith('REVIEW_PROGRESS ') and self.task == 'graphic':
+                    try:
+                        value = json.loads(line[len('REVIEW_PROGRESS '):])
+                        if 'sampled_seconds' in value:
+                            seconds = value['sampled_seconds']
+                            if type(seconds) not in (int, float) or not 0 <= seconds <= 21600:
+                                continue
+                            hours, rest = divmod(int(seconds), 3600)
+                            minutes, seconds = divmod(rest, 60)
+                            self.source_progress = f'Vidéo analysée : {hours:02d}:{minutes:02d}:{seconds:02d}'
+                        elif type(value.get('decoded_frame')) is int and value['decoded_frame'] >= 0:
+                            self.source_progress = f"Lecture jusqu’à l’image {value['decoded_frame']}"
+                        self.update_task_status()
+                    except (ValueError, KeyError, TypeError, OverflowError):
+                        pass
+            self.notice.setText(self.phase_label if self.task == 'graphic' or message.startswith('REVIEW_STAGE ') else
+                                message.splitlines()[-1][-200:])
 
     def process_finished(self, code, status):
         if not self.busy:
@@ -458,25 +524,40 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.clock.stop()
         self.update_actions()
         if code != 0 or status != QtCore.QProcess.ExitStatus.NormalExit:
+            if self.task == 'refinement' and not self.expert.isChecked() and status == QtCore.QProcess.ExitStatus.NormalExit:
+                self.refresh_observations()
+                if self.observation_manifest is not None:
+                    self.start_graphic_review()
+                    return
             self.error(f'Opération interrompue ou échouée. Dossier de travail : {self.output}\n{self.last_progress}')
             return
         if self.task == 'discovery':
             self.load_report(self.output / 'resultat.json')
             return
         try:
+            if self.task == 'graphic':
+                self.display_graphic_review(self.output / 'pipeline.json')
+                return
             refined = json.loads((self.output / 'manifest.json').read_text())
             self.display_refinement(refined)
+            self.refresh_observations()
         except (OSError, ValueError, KeyError, TypeError) as error:
             self.error(str(error))
 
     def restore_completed_refinement(self):
-        paths = sorted((self.repository / 'tmp' / 'repeated-sequence-reviews').glob('*/manifest.json'),
+        root = self.repository / 'tmp' / 'repeated-sequence-reviews'
+        paths = sorted([*root.glob('*/manifest.json'), *root.glob('*/pipeline.json')],
                        key=lambda path: path.stat().st_mtime_ns, reverse=True)
         for path in paths:
             try:
+                if path.name == 'pipeline.json':
+                    self.display_graphic_review(path)
+                    self.notice.setText('Préparation graphique retrouvée sur disque. Aucun nouveau calcul lancé ; contrôle les raccords disponibles.')
+                    return
                 refined = json.loads(path.read_text())
                 proposed_session(refined, self.source, *self.bounds, confirmed=True)
                 self.display_refinement(refined)
+                self.output = path.parent
                 self.notice.setText(('Repères graphiques expérimentaux retrouvés. ' if
                                      refined.get('refinement', {}).get('graphic_fallback_used') else
                                      'Affinement terminé retrouvé sur disque. ') +
@@ -484,6 +565,22 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
                 return
             except (OSError, ValueError, KeyError, TypeError):
                 continue
+
+    def display_graphic_review(self, path):
+        pipeline, report = load_graphic_review(path, self.source, self.bounds)
+        self.clear_refinement()
+        self.output = path.parent
+        self.graphic_state = pipeline['status']
+        self.refined = report if pipeline['status'] == 'ready_for_review' else None
+        self.preview_rows = graphic_preview_rows(report, *self.bounds) if report is not None else []
+        self.populate_hits()
+        self.copy_diagnostic.setVisible(True)
+        self.copy_diagnostic.setToolTip(str(self.output.resolve()))
+        self.notice.setText('Recherche graphique terminée. Contrôle chaque départ et chaque reprise avant confirmation.'
+                            if self.refined is not None else
+                            'Recherche graphique terminée avec des cas non résolus. ' +
+                            pipeline.get('reason', 'Les raccords incomplets restent à examiner.'))
+        self.update_actions()
 
     def display_refinement(self, refined):
         # Geometric validation does not replace the unchecked semantic confirmation.
@@ -529,6 +626,8 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
 
     def error(self, message):
         self.clear_refinement()
+        self.preview_rows = []
+        self.hits.clear()
         self.update_actions()
         summary = str(message).strip().splitlines()[-1] if str(message).strip() else 'Opération impossible.'
         summary = summary[:240]

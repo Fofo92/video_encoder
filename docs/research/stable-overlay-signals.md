@@ -10,7 +10,7 @@ The module retains near-white edges, excluding the image border and the interior
 
 A useful evaluation holds out one observation clip, learns regions on the others, and measures presence in the held-out clip. This tests transfer between selected observations, **not independent full-recording accuracy**. Even without explicit cut coordinates, observations extracted around known junctions introduce selection bias. Shared title cards, subtitles, programme graphics and recurring advertisement elements may also qualify. Dark, coloured, moving or relocated logos can be missed. The module must not be used as an automatic montage rule.
 
-The existing UI, source sampling, detector thresholds and encoding queue are unchanged. No captured images, learned channel-specific template or private recording metadata are part of the repository.
+The encoding queue remains separate. The [integrated review path](integrated-graphic-review.md) can reuse compatible observation clips from the existing UI without a detector choice. No captured images, learned channel-specific template or private recording metadata are part of the repository.
 
 ## Polarity-invariant contrast hypothesis
 
@@ -18,7 +18,7 @@ The research scanner also accepts `--edge-mode contrast`; the default remains `w
 
 In a four-observation leave-one-out check, the contrast hypothesis recovered a late-jingle fragment in all four colour-inverted observations, where the white hypothesis had three training abstentions and one held-out miss. It also recovered a fragment in all four observations of the translucent moving style. On the original changing-background style, however, two contrast trainings abstained and two transferred; the white hypothesis had transferred in all four. Neither mode is a universal replacement for the other. Contrast also admitted much larger regions in the moving-style observations, which warrants full-recording false-positive checks before any promotion.
 
-These checks concern selected observation clips from existing recordings. They do not establish independent accuracy, full-source specificity, complete jingle bounds or exact cut coordinates. A late graphic fragment may be several seconds after the start of the jingle; do not assume the current native boundary search necessarily reaches that start. No UI choice, automatic fallback, montage or queue operation is introduced by this research option.
+These checks concern selected observation clips from existing recordings. They do not establish independent accuracy, full-source specificity, complete jingle bounds or exact cut coordinates. A late graphic fragment may be several seconds after the start of the jingle; do not assume the current native boundary search necessarily reaches that start. The integrated path tries both modes without adding a detector choice to the UI; candidates require review before a montage can be loaded.
 
 ## Cross-habillage check
 

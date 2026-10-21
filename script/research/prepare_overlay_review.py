@@ -118,6 +118,7 @@ def export(report_path,start,end,output,radius=200):
                         if match:
                             index=int(match.group(1))*2500
                             print(f'Decoded through source frame {index}; elapsed {time.monotonic()-started:.0f} s',flush=True)
+                            print('REVIEW_PROGRESS '+json.dumps({'decoded_frame':index}),flush=True)
                 if process.wait()!=0:raise RuntimeError(f'Review extraction failed; see {output / "export.log"}')
             finally:
                 process.stderr.close()

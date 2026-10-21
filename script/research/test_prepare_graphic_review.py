@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from unittest import mock
 from prepare_graphic_review import run
+from export_indexed_windows import source_identity
 
 
 class PrepareGraphicReviewTest(unittest.TestCase):
@@ -28,7 +29,8 @@ class PrepareGraphicReviewTest(unittest.TestCase):
     def test_no_graphic_group_is_a_review_case_without_extraction(self):
         with tempfile.TemporaryDirectory() as name:
             root=Path(name);source=root/'source.mkv';source.write_bytes(b'original')
-            presence=root/'presence.json';presence.write_text(json.dumps({'status':'completed','sample_fps':5,'occurrences':[]}))
+            presence=root/'presence.json';presence.write_text(json.dumps({'status':'completed','sample_fps':5,
+                                                                         'source_identity':source_identity(source),'occurrences':[]}))
             with mock.patch('prepare_graphic_review.verify_native_rate'), \
                  mock.patch('prepare_graphic_review.scan',return_value=presence) as scan, \
                  mock.patch('prepare_graphic_review.export') as extract:
@@ -59,14 +61,23 @@ class PrepareGraphicReviewTest(unittest.TestCase):
                 subprocess.run(['ffmpeg','-v','error','-ss',str(start),'-i',str(source),'-t','6',
                                 '-an','-c:v','ffv1',str(clip)],check=True)
                 observations.append(clip)
-            report_path=run(source,observations,0,2499,root/'review')
+            teacher=root/'observations.json'
+            teacher.write_text(json.dumps({'source':str(source),'source_identity':source_identity(source),
+                                           'outer_bounds':[0,2499],
+                                           'windows':[{'name':clip.name,'first_decoded_frame':start*25,
+                                                       'end_decoded_frame_exclusive':(start+6)*25}
+                                                      for clip,start in zip(observations,[18,81])]}))
+            report_path=run(source,[],0,2499,root/'review',observation_manifest=teacher)
             report=json.loads(report_path.read_text())
             self.assertEqual(report['status'],'ready_for_review', (root/'review/raccords.json').read_text())
             self.assertTrue(report['needs_manual_review'])
+            self.assertEqual(report['observation_manifest_sha256'],hashlib.sha256(teacher.read_bytes()).hexdigest())
             self.assertFalse(report['source_editor_mapping_verified'])
             self.assertEqual(report['candidate_group_count'],1)
             self.assertEqual(report['candidate_raccord_count'],2)
             raccords=json.loads((root/'review/raccords.json').read_text())
+            self.assertEqual(raccords['review_origin'],'graphic_hypotheses')
+            self.assertEqual(raccords['outer_bounds'],[0,2499])
             self.assertEqual([r['candidate_kept_decoded_frame'] for r in raccords['raccords']],[499,2125])
             presence=json.loads((root/'review/scan/report.json').read_text())
             self.assertEqual(presence['edge_mode'],'both')

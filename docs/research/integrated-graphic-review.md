@@ -1,6 +1,18 @@
 # Integrated observation-assisted raccord preparation
 
-`script/research/prepare_graphic_review.py` runs the research stages in one invocation: learn graphic hypotheses, scan the source once, group occurrences within the exterior programme bounds, extract native review clips, and propose raccord candidates. It requires a 25 fps source and two to six existing observation clips. It does not discover a separator directly from the source alone and is not yet integrated into the main UI.
+`script/research/prepare_graphic_review.py` runs the research stages in one invocation: learn graphic hypotheses, scan the source once, group occurrences within the exterior programme bounds, extract native review clips, and propose raccord candidates. It requires a 25 fps source and two to six existing observation clips. It does not discover a separator directly from the source alone.
+
+## UI entry
+
+Open **Séparateurs répétés (expérimental)…** after setting the exterior IN and OUT. In simplified mode, **Préparer les raccords à contrôler** uses existing compatible extraction clips automatically when available; it does not ask for a detector, family or directory. A normal failed legacy refinement can also continue once through this graphic path when complete observation clips exist. A graphic failure does not restart itself.
+
+The UI locates extraction manifests for the unchanged source. Only complete windows lying inside the current exterior bounds are eligible. Adjusting exterior bounds does not invalidate observation pixels that still fit; results and accepted segment geometry remain tied to the exact current bounds. The child worker checks local file paths, frame counts, 25 fps timing, available hashes and source identity before learning. Truncated legacy containers are rejected rather than silently assigned valid frame maps.
+
+Four stage labels, elapsed wall time and actual sampled-video/source-frame progress are displayed while the process runs. Completed candidates show the last kept/first discarded frame at departures and last discarded/first kept frame at resumes. Reopening a result does not rerun the calculation or restore semantic confirmation. A partial result can show individual candidate previews but cannot replace the montage. Source identity and exterior bounds are checked again before a confirmed result is loaded. Encoding is still a separate action.
+
+For a new source without compatible observations, the existing discovery/refinement path remains in use. This integration does not establish a universal source-only advertising detector.
+
+## Research command
 
 ```sh
 python3 script/research/prepare_graphic_review.py \
@@ -11,6 +23,8 @@ python3 script/research/prepare_graphic_review.py \
 ```
 
 IN and OUT are exterior frame indices at 25 fps; OUT is inclusive. No reviewed interior cut is an input. Observation clips must have a compatible picture geometry; their extraction still introduces selection bias. Sampled timestamps and decoded source indices do not establish editor alignment.
+
+Instead of `--clips`, `--observation-manifest /path/to/manifest.json` uses the same validated extraction-selection path as the UI. Its identity is retained in the pipeline report. Window metadata selects observation pixels; reviewed motif limits and interior cut coordinates are not learner inputs.
 
 The caller does not choose white versus contrast evidence. Both hypotheses are attempted. An expected training abstention is retained in `scan/report.json`; another valid hypothesis can continue. If both fail, the run fails explicitly. The recording is decoded once into the bounding crop covering the learned regions, with bounded blocks. Each hypothesis keeps separate streaming state across block boundaries.
 
@@ -31,6 +45,6 @@ The scanner rechecks the source and observation identities. Extraction requires 
 
 ## Validation
 
-A real FFmpeg integration test generates a recording with two opposite-polarity graphics separated in time, extracts observations, and runs the complete pipeline. It verifies temporal grouping, native extraction, the last-kept/first-kept conventions, retained manual-review status and an unchanged source digest. Synthetic reference positions are compared only after inference. Additional tests cover dual streaming with different crops and block boundaries, overlapping provenance without duplicate occurrences, single-hypothesis fallback, both-hypothesis failure, empty grouping and interruption/error stop conditions.
+A real FFmpeg integration test generates a recording with two opposite-polarity graphics separated in time, extracts observations, and runs the complete pipeline through the extraction-manifest option used by the UI. It verifies temporal grouping, native extraction, the last-kept/first-kept conventions, retained manual-review status and an unchanged source digest. Synthetic reference positions are compared only after inference. Additional tests cover dual streaming with different crops and block boundaries, overlapping provenance without duplicate occurrences, single-hypothesis fallback, both-hypothesis failure, empty grouping and interruption/error stop conditions. Qt tests cover automatic launch without group selection, real child-process completion, partial and empty results, exact adjacent preview frames, confirmation, four-stage progress and reopening. Clip-count, hash and escaping-path checks run against real FFmpeg-produced observations.
 
 The opening-transition search includes the anchor's first graphic frame: a jingle can begin exactly there. It does not search after that frame. This fixes a case exposed by the integration test; it is not a claim that all graphic starts are valid cuts.

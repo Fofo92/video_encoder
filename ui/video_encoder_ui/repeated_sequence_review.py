@@ -29,6 +29,9 @@ def inside_occurrences(candidate, first, last):
 
 
 def proposed_session(report, source, first, last, confirmed=False):
+    if report.get('review_origin') == 'graphic_hypotheses':
+        from .graphic_review import proposed_graphic_session
+        return proposed_graphic_session(report, source, first, last, confirmed=confirmed)
     check_source(report, source)
     if not confirmed:
         raise ValueError('Confirme le sens des séparateurs avant de charger les segments.')

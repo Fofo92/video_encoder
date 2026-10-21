@@ -4,6 +4,7 @@ Both graphic hypotheses are tried without a channel or detector choice. This is
 observation-assisted research, not blind discovery and never an accepted montage.
 """
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import time
@@ -11,6 +12,8 @@ from scan_stable_overlays import run as scan
 from group_overlay_occurrences import group_occurrences
 from prepare_overlay_review import export, plan, verify_native_rate
 from refine_overlay_review import refine
+from export_indexed_windows import source_identity
+from graphic_observation_manifest import observations_from_manifest
 
 
 def write_json(path,value):
@@ -19,16 +22,19 @@ def write_json(path,value):
     pending.replace(path)
 
 
-def run(source,observations,in_frame,out_frame,output):
+def run(source,observations,in_frame,out_frame,output,observation_manifest=None):
     if type(in_frame) is not int or type(out_frame) is not int or not 0<=in_frame<out_frame:
         raise ValueError('Expected ordered exterior frame indices; OUT is inclusive')
     start,end=in_frame/25,(out_frame+1)/25
     source=source.resolve(strict=True)
+    if observation_manifest is not None and observations:
+        raise ValueError('Use observation clips or an extraction manifest, not both')
     output=output.resolve()
     verify_native_rate(source)
     output.mkdir(parents=True,exist_ok=False)
     report_path=output/'pipeline.json';started=time.monotonic()
     report={'status':'running','stage':'scanning','source':str(source),'needs_manual_review':True,
+            'source_identity':source_identity(source),
             'exterior_bounds_frames_inclusive':[in_frame,out_frame],
             'programme_bounds_seconds':[start,end],'edge_modes_requested':['white','contrast'],
             'source_editor_mapping_verified':False,'reviewed_interior_cuts_used':False,
@@ -41,12 +47,29 @@ def run(source,observations,in_frame,out_frame,output):
     def stage(name):
         report['stage']=name;save()
         print(f'Review preparation: {name}; elapsed {report["elapsed_seconds"]} s',flush=True)
+        steps={'scanning':(1,'Analyse graphique de l’enregistrement'),
+               'grouping':(2,'Regroupement des repères graphiques'),
+               'extracting':(3,'Extraction des raccords à contrôler'),
+               'refining':(4,'Préparation des images de raccord')}
+        step,label=steps[name]
+        print('REVIEW_STAGE '+json.dumps({'step':step,'total':4,'label':label}),flush=True)
     save()
     try:
+        stage('scanning')
+        if observation_manifest is not None:
+            observation_manifest=observation_manifest.resolve(strict=True)
+            observations,digest=observations_from_manifest(observation_manifest,source,(in_frame,out_frame))
+            report.update(observation_manifest=str(observation_manifest),observation_manifest_sha256=digest)
+            save()
         scan_path=scan(source,observations,output/'scan',edge_mode='both')
+        if (observation_manifest is not None and hashlib.sha256(observation_manifest.read_bytes()).hexdigest()
+                !=report['observation_manifest_sha256']):
+            raise ValueError('Observation extraction manifest changed during the scan')
         report['scan_report']=str(scan_path)
         stage('grouping')
         presence=json.loads(scan_path.read_text())
+        if presence.get('source_identity')!=report['source_identity']:
+            raise ValueError('Recording changed between preparation and scanning')
         grouping=group_occurrences(presence,start,end)
         write_json(output/'groups.json',grouping)
         report['grouping_report']=str(output/'groups.json')
@@ -64,6 +87,9 @@ def run(source,observations,in_frame,out_frame,output):
         report['review_manifest']=str(output/'raccords/frame-map.json')
         stage('refining')
         result=refine(output/'raccords')
+        if source_identity(source)!=report['source_identity']:
+            raise ValueError('Recording changed during raccord preparation')
+        result.update(outer_bounds=[in_frame,out_frame],review_origin='graphic_hypotheses')
         write_json(output/'raccords.json',result)
         report['raccord_report']=str(output/'raccords.json')
         resolved=(result['status']=='candidate_raccords' and report['unresolved_group_count']==0
@@ -81,9 +107,11 @@ def run(source,observations,in_frame,out_frame,output):
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source',type=Path,required=True)
-    parser.add_argument('--clips',type=Path,nargs='+',required=True)
+    observations=parser.add_mutually_exclusive_group(required=True)
+    observations.add_argument('--clips',type=Path,nargs='+')
+    observations.add_argument('--observation-manifest',type=Path)
     parser.add_argument('--in-frame',type=int,required=True)
     parser.add_argument('--out-frame',type=int,required=True,help='Inclusive exterior OUT at 25 fps')
     parser.add_argument('--output',type=Path,required=True)
     args=parser.parse_args()
-    print(run(args.source,args.clips,args.in_frame,args.out_frame,args.output))
+    print(run(args.source,args.clips or [],args.in_frame,args.out_frame,args.output,args.observation_manifest))

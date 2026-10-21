@@ -279,6 +279,7 @@ def run(source,clip_paths,output,edge_mode='white'):
                 last_progress=count//300
                 elapsed=round(time.monotonic()-started)
                 print(f'Analysed {count/5:.0f} s of recording; elapsed {elapsed} s',flush=True)
+                print('REVIEW_PROGRESS '+json.dumps({'sampled_seconds':count/5}),flush=True)
                 report.update(sampled_frames=count,elapsed_seconds=elapsed);save()
         blocks=rgb_blocks(source,output/'recording.log',crop=combined_crop(models))
         try:
