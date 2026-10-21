@@ -8,6 +8,18 @@ from collect_graphic_diagnostics import collect
 
 
 class CollectGraphicDiagnosticsTest(unittest.TestCase):
+    def test_format_route_collects_native_clips_without_unused_observations(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);pipeline=self.clip_fixture(root)
+            pipeline.pop('observation_manifest');pipeline.pop('observation_manifest_sha256')
+            pipeline['preparation_method']='format_hypotheses'
+            (root/'run/pipeline.json').write_text(json.dumps(pipeline))
+            output=collect(root,'/source.m2t',root/'out.tar.gz',include_review_clips=True)
+            with tarfile.open(output) as archive:
+                names=archive.getnames()
+                self.assertEqual(sum(name.endswith('.mp4') for name in names),2)
+                self.assertFalse(any('/observations/' in name for name in names))
+
     def test_sealed_discovery_cache_is_collected_without_original_recording(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);pipeline=self.clip_fixture(root)

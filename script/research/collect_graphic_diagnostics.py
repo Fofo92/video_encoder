@@ -76,7 +76,12 @@ def collect(root, source, output, include_review_clips=False, include_discovery_
             raise ValueError('Diagnostic collection exceeds its bounded size')
         snapshots.append((str(path.relative_to(directory)), encoded))
     if include_review_clips:
-        for field, folder in [('observation_manifest', 'observations'), ('review_manifest', 'native-review')]:
+        manifests=[(field,folder) for field,folder in
+                   [('observation_manifest','observations'),('review_manifest','native-review')]
+                   if field in pipeline]
+        if not manifests:
+            raise ValueError('Aucun manifeste d’extraits disponible pour ce calcul')
+        for field, folder in manifests:
             manifest_path = Path(pipeline[field])
             if not manifest_path.is_absolute():
                 raise ValueError('Expected an absolute extraction manifest path')
