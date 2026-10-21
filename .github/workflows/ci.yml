@@ -55,4 +55,4 @@ jobs:
         env:
           PYTHONPATH: script/research
         run: |
-          "$RUNNER_TEMP/cut-review-tests/bin/python" -m unittest test_letterbox_signals test_capture_signal_audit test_source_discovery test_direct_motif_groups test_local_sequences test_stable_overlay_signals test_jingle_boundary_signals test_scan_stable_overlays test_group_overlay_occurrences test_prepare_overlay_review test_refine_overlay_review
+          "$RUNNER_TEMP/cut-review-tests/bin/python" -m unittest test_letterbox_signals test_capture_signal_audit test_source_discovery test_direct_motif_groups test_local_sequences test_stable_overlay_signals test_jingle_boundary_signals test_scan_stable_overlays test_group_overlay_occurrences test_prepare_overlay_review test_refine_overlay_review test_graphic_hypotheses test_prepare_graphic_review

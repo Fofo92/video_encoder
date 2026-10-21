@@ -38,7 +38,8 @@ def boundary_evidence(frames, anchor, fps=10., lookback_seconds=4., end_radius_s
                 break
         return selected
 
-    opening = candidates(first-round(lookback_seconds*fps),first)
+    # The first graphic frame can itself be the first jingle frame.
+    opening = candidates(first-round(lookback_seconds*fps),first+1)
     radius = max(1,round(end_radius_seconds*fps))
     closing = candidates(last-radius,last+radius+1)
     dominance = (opening[0]['pixel_change']/opening[1]['pixel_change'] if len(opening)>1

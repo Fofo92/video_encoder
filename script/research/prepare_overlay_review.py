@@ -76,6 +76,14 @@ def decode_command(source,windows,output):
     return command
 
 
+def verify_native_rate(source):
+    metadata=subprocess.run(['ffprobe','-v','error','-select_streams','v:0','-show_entries',
+                             'stream=avg_frame_rate','-of','json',str(source)],
+                            capture_output=True,text=True,check=True)
+    if json.loads(metadata.stdout)['streams'][0]['avg_frame_rate']!='25/1':
+        raise ValueError('This decoded-index review pilot requires 25 average fps')
+
+
 def export(report_path,start,end,output,radius=200):
     encoded=report_path.read_bytes();report=json.loads(encoded)
     grouping,windows=plan(report,start,end,radius)
@@ -83,11 +91,7 @@ def export(report_path,start,end,output,radius=200):
     if not source.is_file() or source_identity(source)!=report.get('source_identity'):
         raise ValueError('Recording identity differs from the completed presence report; extraction was not started')
     identity=source_identity(source)
-    metadata=subprocess.run(['ffprobe','-v','error','-select_streams','v:0','-show_entries',
-                             'stream=avg_frame_rate','-of','json',str(source)],
-                            capture_output=True,text=True,check=True)
-    if json.loads(metadata.stdout)['streams'][0]['avg_frame_rate']!='25/1':
-        raise ValueError('This decoded-index review pilot requires 25 average fps')
+    verify_native_rate(source)
     archive=Path(str(output)+'.tar.gz')
     if archive.exists():raise ValueError('Review archive already exists')
     output.mkdir(parents=True,exist_ok=False)

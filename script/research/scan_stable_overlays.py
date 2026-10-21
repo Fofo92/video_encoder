@@ -97,16 +97,21 @@ def learn_model(clips, edge_mode='white'):
             'edge_mode':edge_mode,'selection':'largest_shared_edge_region; unclassified graphic'}
 
 
-def scan_blocks(blocks, model, progress=None, threshold=.8, minimum_samples=3):
-    if not 0 < threshold <= 1 or type(minimum_samples) is not int or minimum_samples < 1:
-        raise ValueError('Invalid graphic presence settings')
-    count=0;active=None;intervals=[]
-    def finish():
-        nonlocal active
-        if active is not None and active['end_sample_exclusive']-active['first_sample']>=minimum_samples:
-            intervals.append(active)
-        active=None
-    for block in blocks:
+class PresenceAccumulator:
+    """One graphic's streaming state; sample indices survive decoder blocks."""
+    def __init__(self,model,threshold=.8,minimum_samples=3):
+        if not 0 < threshold <= 1 or type(minimum_samples) is not int or minimum_samples < 1:
+            raise ValueError('Invalid graphic presence settings')
+        self.model=model;self.threshold=threshold;self.minimum_samples=minimum_samples
+        self.count=0;self.active=None;self.intervals=[]
+
+    def close_interval(self):
+        if self.active is not None and self.active['end_sample_exclusive']-self.active['first_sample']>=self.minimum_samples:
+            self.intervals.append(self.active)
+        self.active=None
+
+    def feed(self,block):
+        model=self.model
         if block.ndim!=4 or block.dtype!=np.uint8 or block.shape[1:3]!=model['mask'].shape or not len(block):
             raise ValueError('Decoded block does not match the learned crop')
         original_count=len(block)
@@ -114,21 +119,103 @@ def scan_blocks(blocks, model, progress=None, threshold=.8, minimum_samples=3):
             block=np.concatenate([block,np.repeat(block[-1:],5-original_count,axis=0)])
         scores=presence_scores(block,model['mask'],model['bbox'],model.get('edge_mode','white'))[:original_count]
         for offset,score in enumerate(scores):
-            index=count+offset
-            if score>=threshold:
-                if active is None:
-                    active={'first_sample':index,'end_sample_exclusive':index+1,
-                            'peak_sample':index,'peak_score':float(score)}
+            index=self.count+offset
+            if score>=self.threshold:
+                if self.active is None:
+                    self.active={'first_sample':index,'end_sample_exclusive':index+1,
+                                 'peak_sample':index,'peak_score':float(score)}
                 else:
-                    active['end_sample_exclusive']=index+1
-                    if score>active['peak_score']:
-                        active.update(peak_sample=index,peak_score=float(score))
-            else:finish()
-        count+=original_count
+                    self.active['end_sample_exclusive']=index+1
+                    if score>self.active['peak_score']:
+                        self.active.update(peak_sample=index,peak_score=float(score))
+            else:self.close_interval()
+        self.count+=original_count
+
+    def finish(self):
+        self.close_interval()
+        return self.count,[{**row,'start_seconds':row['first_sample']/5,
+                            'end_seconds_exclusive':row['end_sample_exclusive']/5} for row in self.intervals]
+
+
+def scan_blocks(blocks, model, progress=None, threshold=.8, minimum_samples=3):
+    accumulator=PresenceAccumulator(model,threshold,minimum_samples)
+    for block in blocks:
+        accumulator.feed(block)
+        if progress:progress(accumulator.count)
+    return accumulator.finish()
+
+
+def learn_hypotheses(clips):
+    models=[];abstentions={}
+    for mode in ['white','contrast']:
+        try:models.append(learn_model(clips,edge_mode=mode))
+        except ValueError as error:abstentions[mode]=str(error)
+    if not models:
+        raise ValueError('Neither graphic hypothesis could be learned: '+str(abstentions))
+    return models,abstentions
+
+
+def combined_crop(models):
+    if not 1<=len(models)<=2 or len({m['edge_mode'] for m in models})!=len(models):
+        raise ValueError('Expected one or two distinct graphic hypotheses')
+    if any(m['source_shape']!=models[0]['source_shape'] for m in models):
+        raise ValueError('Graphic hypotheses have incompatible source geometry')
+    left=min(m['crop'][0] for m in models);top=min(m['crop'][1] for m in models)
+    right=max(m['crop'][0]+m['crop'][2] for m in models)
+    bottom=max(m['crop'][1]+m['crop'][3] for m in models)
+    return [left,top,right-left,bottom-top]
+
+
+def merge_occurrences(per_mode):
+    """Union overlapping sampled signals, retaining every original observation.
+
+    Agreement between these related image tests is not independent evidence.
+    No gap between disjoint detections is filled.
+    """
+    ordered=[]
+    for mode,rows in per_mode.items():
+        previous=-1
+        for row in rows:
+            first,last=row.get('first_sample'),row.get('end_sample_exclusive')
+            if (type(first) is not int or type(last) is not int or not 0<=first<last
+                    or first<previous):
+                raise ValueError('Expected ordered disjoint sampled occurrences')
+            previous=last
+            ordered.append((first,last,mode,row))
+    ordered.sort(key=lambda row:(row[0],row[1],row[2]))
+    merged=[]
+    for first,last,mode,row in ordered:
+        evidence={**row,'edge_mode':mode}
+        if merged and first<merged[-1]['end_sample_exclusive']:
+            current=merged[-1]
+            current['end_sample_exclusive']=max(last,current['end_sample_exclusive'])
+            current['evidence'].append(evidence)
+            current['signal_modes']=sorted(set(current['signal_modes']+[mode]))
+        else:
+            merged.append({'first_sample':first,'end_sample_exclusive':last,
+                           'signal_modes':[mode],'evidence':[evidence],'needs_manual_review':True})
+    return [{**row,'start_seconds':row['first_sample']/5,
+             'end_seconds_exclusive':row['end_sample_exclusive']/5} for row in merged]
+
+
+def scan_hypotheses(blocks,models,progress=None):
+    crop=combined_crop(models);x,y,width,height=crop
+    accumulators=[PresenceAccumulator(model) for model in models]
+    count=0
+    for block in blocks:
+        if block.ndim!=4 or block.shape[1:]!=(height,width,3) or block.dtype!=np.uint8 or not len(block):
+            raise ValueError('Decoded block does not match the combined graphic crop')
+        for model,accumulator in zip(models,accumulators):
+            left,top,w,h=model['crop']
+            accumulator.feed(block[:,top-y:top-y+h,left-x:left-x+w])
+        count+=len(block)
         if progress:progress(count)
-    finish()
-    return count,[{**row,'start_seconds':row['first_sample']/5,
-                   'end_seconds_exclusive':row['end_sample_exclusive']/5} for row in intervals]
+    per_mode={}
+    for model,accumulator in zip(models,accumulators):
+        model_count,rows=accumulator.finish()
+        if model_count!=count:raise ValueError('Graphic hypotheses scanned different sample counts')
+        per_mode[model['edge_mode']]=rows
+    return count,merge_occurrences(per_mode),per_mode
 
 
 def verify_aspect(path):
@@ -145,7 +232,7 @@ def verify_aspect(path):
 
 
 def run(source,clip_paths,output,edge_mode='white'):
-    if edge_mode not in ('white','contrast'):
+    if edge_mode not in ('white','contrast','both'):
         raise ValueError('Unknown graphic edge mode')
     source=source.resolve(strict=True)
     paths=[path.resolve(strict=True) for path in clip_paths]
@@ -174,10 +261,17 @@ def run(source,clip_paths,output,edge_mode='white'):
             clips.append(np.concatenate(blocks))
             identities.append({'path':str(path),'identity':before,'sha256':digest})
         print('Learning the shared graphic from observations...',flush=True)
-        model=learn_model(clips,edge_mode)
+        if edge_mode=='both':
+            models,abstentions=learn_hypotheses(clips)
+        else:
+            models,abstentions=[learn_model(clips,edge_mode)],{}
         del clips
-        np.savez_compressed(output/'learned-overlay.npz',mask=model['mask'],bbox=model['bbox'],crop=model['crop'],edge_mode=edge_mode)
-        report.update(stage='scanning',learned_graphic={k:v for k,v in model.items() if k!='mask'},observations=identities)
+        for model in models:
+            name=f"learned-overlay-{model['edge_mode']}.npz" if edge_mode=='both' else 'learned-overlay.npz'
+            np.savez_compressed(output/name,mask=model['mask'],bbox=model['bbox'],crop=model['crop'],edge_mode=model['edge_mode'])
+        report.update(stage='scanning',learned_graphics=[{k:v for k,v in m.items() if k!='mask'} for m in models],
+                      hypothesis_abstentions=abstentions,observations=identities)
+        if edge_mode!='both':report['learned_graphic']=report['learned_graphics'][0]
         save();last_progress=-1
         def progress(count):
             nonlocal last_progress
@@ -186,9 +280,11 @@ def run(source,clip_paths,output,edge_mode='white'):
                 elapsed=round(time.monotonic()-started)
                 print(f'Analysed {count/5:.0f} s of recording; elapsed {elapsed} s',flush=True)
                 report.update(sampled_frames=count,elapsed_seconds=elapsed);save()
-        blocks=rgb_blocks(source,output/'recording.log',crop=model['crop'])
-        try:count,intervals=scan_blocks(blocks,model,progress)
+        blocks=rgb_blocks(source,output/'recording.log',crop=combined_crop(models))
+        try:
+            count,intervals,per_mode=scan_hypotheses(blocks,models,progress)
         finally:blocks.close()
+        if edge_mode!='both':intervals=per_mode[edge_mode]
         if not count:raise ValueError('Empty recording scan')
         if source_identity(source)!=report['source_identity']:
             raise ValueError('Recording changed during scan')
@@ -197,12 +293,14 @@ def run(source,clip_paths,output,edge_mode='white'):
             if source_identity(path)!=observation['identity'] or sha256(path)!=observation['sha256']:
                 raise ValueError('Observation changed during analysis')
         report.update(status='completed',stage='completed',sampled_frames=count,occurrences=intervals,
+                      occurrences_by_hypothesis=per_mode,
                       elapsed_seconds=round(time.monotonic()-started),threshold=.8,minimum_samples=3,
                       coordinate_basis='FFmpeg fps=5:start_time=0 timeline; source/editor frame mapping unverified',
                       observation_source_identity_verified=False,
                       limitations=['Learned from selected observations of the same recording, not blind discovery',
                                    'Only the largest shared graphic in the selected edge mode is searched; other separators may be missed',
                                    'Graphic occurrences are not complete jingles or ad intervals',
+                                   'Overlapping signals are merged with provenance, not counted as independent confirmations',
                                    'No cut decisions, source-frame conversion, project or queue changes'])
         save()
         return report_path
@@ -217,7 +315,7 @@ if __name__=='__main__':
     parser.add_argument('--source',type=Path,required=True)
     parser.add_argument('--clips',type=Path,nargs='+',required=True)
     parser.add_argument('--output',type=Path,required=True)
-    parser.add_argument('--edge-mode',choices=['white','contrast'],default='white',
+    parser.add_argument('--edge-mode',choices=['white','contrast','both'],default='white',
                         help='Research hypothesis; contrast is polarity invariant, not channel or jingle classification')
     args=parser.parse_args()
     print(run(args.source,args.clips,args.output,args.edge_mode))

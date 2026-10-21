@@ -22,6 +22,8 @@ These checks concern selected observation clips from existing recordings. They d
 
 ## Cross-habillage check
 
+The [integrated research runner](integrated-graphic-review.md) now tries both hypotheses automatically. `scan_stable_overlays.py --edge-mode both` exposes the same combined scan for research use. Source pixels are decoded once, overlapping detections retain both origins, and a failed training hypothesis does not suppress another valid hypothesis. No detector choice is added to the main UI.
+
 Before treating this signal as a general jingle detector, repeat the observation-level evaluation with unchanged thresholds on other graphic styles. For four observations, learn on three and score the fourth, rotating the held-out clip. Report training abstentions, missing held-out detections and misplaced detections separately. A training peak alone is not a successful transfer.
 
 Colour-inverted departure/resume animations and translucent moving lettering are important negative cases for a near-white, fixed-position edge model. A programme's persistent corner logo can also be the shared graphic. Do not compensate by selecting a channel-specific region or by using the reviewed cut coordinates. Keep animation/motif evidence available; this white-graphic signal is one hypothesis, not a replacement for the other research paths.

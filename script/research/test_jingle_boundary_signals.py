@@ -32,6 +32,15 @@ class JingleBoundarySignalsTest(unittest.TestCase):
         self.assertEqual(result['opening_candidates'],[])
         self.assertEqual(result['closing_candidates'],[])
 
+    def test_graphic_start_transition_is_included_without_looking_past_the_anchor(self):
+        frames=np.full((100,12,16,3),30,dtype=np.uint8)
+        frames[50:70]=160
+        frames[51:70]=230
+        result=boundary_evidence(frames,(50,70))
+        indices={r['observation_frame'] for r in result['opening_candidates']}
+        self.assertIn(50,indices)
+        self.assertNotIn(51,indices)
+
     def test_invalid_anchors_and_rates_are_rejected(self):
         frames=np.full((100,12,16,3),70,dtype=np.uint8)
         for anchor in [(-1,70),(70,50),(50,101)]:
