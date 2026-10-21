@@ -198,12 +198,18 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         if not self.expert.isChecked():
             hypothesis, problem = automatic_hypothesis(self.report, *self.bounds)
             ready = hypothesis is not None
+            bootstrap = (problem is not None and self.report_path is not None and self.report is not None
+                         and 0 < len(self.report.get('candidates', [])) <= 100)
             if self.observation_manifest is not None:
+                ready, problem = True, None
+            elif bootstrap:
                 ready, problem = True, None
             self.refine_button.setText('Préparer les raccords à contrôler')
             if not self.busy and self.refined is None:
                 self.stage.setText('Des extraits sont disponibles : la recherche graphique et la préparation des raccords seront enchaînées.'
-                                   if self.observation_manifest is not None else problem or (
+                                   if self.observation_manifest is not None else
+                                   'Des propositions restent ambiguës : prépare les extraits d’observation, puis la recherche graphique, sans choisir de groupe.'
+                                   if bootstrap else problem or (
                     f"Hypothèse prioritaire : {hypothesis['breaks']} plage(s) possible(s), à vérifier. "
                     f"{hypothesis['alternatives']} autre(s) hypothèse(s). "
                     'Les limites seront calculées avant validation.'))
@@ -450,6 +456,9 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         if not self.expert.isChecked():
             hypothesis, problem = automatic_hypothesis(self.report, *self.bounds)
             if problem:
+                if self.report_path is not None and self.report is not None and 0 < len(self.report.get('candidates', [])) <= 100:
+                    self.start_graphic_review(discovery_report=self.report_path)
+                    return
                 self.notice.setText(problem)
                 return
             choice = (['--candidate', str(hypothesis['candidate'])] if 'candidate' in hypothesis else
@@ -469,12 +478,14 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
                    [*reuse, '--scan-report', str(self.report_path), *choice,
                     '--start-frame', str(self.bounds[0]), '--end-frame', str(self.bounds[1]), '--output', str(output)], output)
 
-    def start_graphic_review(self):
-        if self.busy or self.observation_manifest is None:
+    def start_graphic_review(self, discovery_report=None):
+        if self.busy or (self.observation_manifest is None and discovery_report is None):
             return
         output = self.new_workspace()
+        observation_input = (['--discovery-report', str(discovery_report)] if discovery_report is not None else
+                             ['--observation-manifest', str(self.observation_manifest)])
         self.start('graphic', 'prepare_graphic_review.py',
-                   ['--source', str(self.source), '--observation-manifest', str(self.observation_manifest),
+                   ['--source', str(self.source), *observation_input,
                     '--in-frame', str(self.bounds[0]), '--out-frame', str(self.bounds[1]), '--output', str(output)], output)
 
     def progress(self):
@@ -489,7 +500,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
                     try:
                         value = json.loads(line[len('REVIEW_STAGE '):])
                         total = value.get('total', 3)
-                        if type(total) is int and 1 <= value['step'] <= total <= 4:
+                        if type(total) is int and 1 <= value['step'] <= total <= 5:
                             self.activity.setRange(0, total)
                             self.activity.setValue(value['step'] - 1)
                             self.activity.setFormat(f"Étape {value['step']}/{total} — {value['label']}")

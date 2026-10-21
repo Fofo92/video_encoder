@@ -55,23 +55,18 @@ class PrepareGraphicReviewTest(unittest.TestCase):
             subprocess.run(['ffmpeg','-v','error','-f','lavfi','-i','color=c=0x303030:s=320x180:r=25:d=100',
                             '-vf',','.join(filters),'-c:v','ffv1',str(source)],check=True)
             before=hashlib.sha256(source.read_bytes()).hexdigest()
-            observations=[]
-            for index,start in enumerate([18,81]):
-                clip=root/f'observation-{index}.mkv'
-                subprocess.run(['ffmpeg','-v','error','-ss',str(start),'-i',str(source),'-t','6',
-                                '-an','-c:v','ffv1',str(clip)],check=True)
-                observations.append(clip)
-            teacher=root/'observations.json'
-            teacher.write_text(json.dumps({'source':str(source),'source_identity':source_identity(source),
-                                           'outer_bounds':[0,2499],
-                                           'windows':[{'name':clip.name,'first_decoded_frame':start*25,
-                                                       'end_decoded_frame_exclusive':(start+6)*25}
-                                                      for clip,start in zip(observations,[18,81])]}))
-            report_path=run(source,[],0,2499,root/'review',observation_manifest=teacher)
+            discovery=root/'resultat.json'
+            discovery.write_text(json.dumps({'status':'experimental','sample_fps':5,
+                                              'source':str(source),'source_identity':source_identity(source),
+                                              'index_limits_reached':True,
+                                              'candidates':[{'occurrences':[{'core_start_seconds':t,'core_end_seconds':t+2}
+                                                                            for t in [20,83]]}]}))
+            report_path=run(source,[],0,2499,root/'review',discovery_report=discovery)
             report=json.loads(report_path.read_text())
             self.assertEqual(report['status'],'ready_for_review', (root/'review/raccords.json').read_text())
             self.assertTrue(report['needs_manual_review'])
-            self.assertEqual(report['observation_manifest_sha256'],hashlib.sha256(teacher.read_bytes()).hexdigest())
+            self.assertEqual(report['observation_manifest_sha256'],hashlib.sha256((root/'review/observations/frame-map.json').read_bytes()).hexdigest())
+            self.assertTrue(report['discovery_search_partial'])
             self.assertFalse(report['source_editor_mapping_verified'])
             self.assertEqual(report['candidate_group_count'],1)
             self.assertEqual(report['candidate_raccord_count'],2)

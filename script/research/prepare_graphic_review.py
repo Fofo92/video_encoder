@@ -1,7 +1,7 @@
-"""One research run from source, observations and exterior bounds to raccord review.
+"""One research run from source, exterior bounds and discovery or observations.
 
 Both graphic hypotheses are tried without a channel or detector choice. This is
-observation-assisted research, not blind discovery and never an accepted montage.
+experimental evidence preparation; proposals never become an accepted montage automatically.
 """
 import argparse
 import hashlib
@@ -14,6 +14,7 @@ from prepare_overlay_review import export, plan, verify_native_rate
 from refine_overlay_review import refine
 from export_indexed_windows import source_identity
 from graphic_observation_manifest import observations_from_manifest
+from bootstrap_graphic_observations import export_observations,plan_observations
 
 
 def write_json(path,value):
@@ -22,13 +23,13 @@ def write_json(path,value):
     pending.replace(path)
 
 
-def run(source,observations,in_frame,out_frame,output,observation_manifest=None):
+def run(source,observations,in_frame,out_frame,output,observation_manifest=None,discovery_report=None):
     if type(in_frame) is not int or type(out_frame) is not int or not 0<=in_frame<out_frame:
         raise ValueError('Expected ordered exterior frame indices; OUT is inclusive')
     start,end=in_frame/25,(out_frame+1)/25
     source=source.resolve(strict=True)
-    if observation_manifest is not None and observations:
-        raise ValueError('Use observation clips or an extraction manifest, not both')
+    if sum([bool(observations),observation_manifest is not None,discovery_report is not None])>1:
+        raise ValueError('Use one observation input route')
     output=output.resolve()
     verify_native_rate(source)
     output.mkdir(parents=True,exist_ok=False)
@@ -38,7 +39,8 @@ def run(source,observations,in_frame,out_frame,output,observation_manifest=None)
             'exterior_bounds_frames_inclusive':[in_frame,out_frame],
             'programme_bounds_seconds':[start,end],'edge_modes_requested':['white','contrast'],
             'source_editor_mapping_verified':False,'reviewed_interior_cuts_used':False,
-            'limitations':['Selected observations are required; this is not blind source-only discovery',
+            'observation_selection':'automatic_discovery_context' if discovery_report is not None else 'provided_observations',
+            'limitations':['Observation windows contain proposals, not verified advertising separators',
                            'Merged graphic signals do not establish advertisement semantics',
                            'No montage, project, source modification or encoding queue changes']}
     def save():
@@ -51,10 +53,27 @@ def run(source,observations,in_frame,out_frame,output,observation_manifest=None)
                'grouping':(2,'Regroupement des repères graphiques'),
                'extracting':(3,'Extraction des raccords à contrôler'),
                'refining':(4,'Préparation des images de raccord')}
-        step,label=steps[name]
-        print('REVIEW_STAGE '+json.dumps({'step':step,'total':4,'label':label}),flush=True)
+        if name=='observing':step,label=1,'Préparation des extraits d’observation'
+        else:
+            step,label=steps[name]
+            if discovery_report is not None:step+=1
+        print('REVIEW_STAGE '+json.dumps({'step':step,'total':5 if discovery_report is not None else 4,'label':label}),flush=True)
     save()
     try:
+        if discovery_report is not None:
+            discovery_report=discovery_report.resolve(strict=True)
+            stage('observing')
+            discovery=json.loads(discovery_report.read_text())
+            if (Path(discovery['source']).resolve()!=source
+                    or discovery.get('source_identity')!=report['source_identity']):
+                raise ValueError('Discovery report does not match the unchanged recording')
+            report.update(discovery_report=str(discovery_report),
+                          discovery_search_partial=bool(discovery.get('index_limits_reached')))
+            try:plan_observations(discovery,in_frame,out_frame)
+            except ValueError as error:
+                report.update(status='needs_review',reason=str(error));save()
+                return report_path
+            observation_manifest=export_observations(discovery_report,source,(in_frame,out_frame),output/'observations')
         stage('scanning')
         if observation_manifest is not None:
             observation_manifest=observation_manifest.resolve(strict=True)
@@ -110,8 +129,9 @@ if __name__=='__main__':
     observations=parser.add_mutually_exclusive_group(required=True)
     observations.add_argument('--clips',type=Path,nargs='+')
     observations.add_argument('--observation-manifest',type=Path)
+    observations.add_argument('--discovery-report',type=Path)
     parser.add_argument('--in-frame',type=int,required=True)
     parser.add_argument('--out-frame',type=int,required=True,help='Inclusive exterior OUT at 25 fps')
     parser.add_argument('--output',type=Path,required=True)
     args=parser.parse_args()
-    print(run(args.source,args.clips or [],args.in_frame,args.out_frame,args.output,args.observation_manifest))
+    print(run(args.source,args.clips or [],args.in_frame,args.out_frame,args.output,args.observation_manifest,args.discovery_report))

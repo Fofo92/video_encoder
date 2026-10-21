@@ -336,7 +336,7 @@ class RepeatedSequenceDialogTest(unittest.TestCase):
         self.assertNotIn('groupes affichés', self.dialog.notice.text())
         self.assertIn('Recherche terminée', self.dialog.notice.text())
 
-    def test_ambiguous_hypothesis_is_visible_in_idle_preview_not_only_tooltip(self):
+    def test_ambiguous_hypothesis_can_prepare_observations_without_choosing_a_group(self):
         self.dialog.expert.setChecked(False)
         self.dialog.bounds = (0, 20000)
         self.report['candidates'] = [
@@ -346,9 +346,14 @@ class RepeatedSequenceDialogTest(unittest.TestCase):
         self.path.write_text(json.dumps(self.report))
         self.dialog.preview.setText('Calcul en cours…')
         self.dialog.load_report(self.path)
-        self.assertFalse(self.dialog.refine_button.isEnabled())
-        self.assertIn('même soutien', self.dialog.stage.text())
-        self.assertIn('même soutien', self.dialog.preview.text())
+        self.assertTrue(self.dialog.refine_button.isEnabled())
+        self.assertIn('ambiguës', self.dialog.stage.text())
+        self.assertIn('observation', self.dialog.preview.text())
+        with patch.object(self.dialog,'start') as start:
+            self.dialog.refine_group()
+        self.assertEqual(start.call_args.args[0],'graphic')
+        self.assertIn('--discovery-report',start.call_args.args[2])
+        self.assertNotIn('--candidate',start.call_args.args[2])
         self.assertNotIn('Calcul en cours', self.dialog.preview.text())
         self.assertIn('Recherche terminée', self.dialog.notice.text())
 

@@ -15,7 +15,8 @@ def observation_manifest(repository,source,bounds):
     source=Path(source).resolve()
     try:current=identity(source)
     except OSError:return None
-    paths=sorted((Path(repository)/'tmp/repeated-sequence-reviews').glob('*/manifest.json'),
+    root=Path(repository)/'tmp/repeated-sequence-reviews'
+    paths=sorted([*root.glob('*/manifest.json'),*root.glob('*/observations/frame-map.json')],
                  key=lambda path:path.stat().st_mtime_ns,reverse=True)
     for path in paths:
         try:

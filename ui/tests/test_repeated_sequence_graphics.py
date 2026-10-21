@@ -163,6 +163,10 @@ class GraphicDialogTest(GraphicFixture,unittest.TestCase):
         with patch.object(self.dialog.process,'readAllStandardOutput',return_value=message):self.dialog.progress()
         self.assertEqual(self.dialog.activity.maximum(),4);self.assertEqual(self.dialog.activity.value(),3)
         self.assertIn('écoulé',self.dialog.stage.text())
+        final_stage=b'REVIEW_STAGE {"step":5,"total":5,"label":"Raccords"}\n'
+        with patch.object(self.dialog.process,'readAllStandardOutput',return_value=final_stage):self.dialog.progress()
+        self.assertEqual(self.dialog.activity.maximum(),5)
+        self.assertEqual(self.dialog.activity.value(),4)
         progress=b'REVIEW_PROGRESS {"sampled_seconds":123.4}\n'
         with patch.object(self.dialog.process,'readAllStandardOutput',return_value=progress):self.dialog.progress()
         self.assertIn('00:02:03',self.dialog.stage.text())

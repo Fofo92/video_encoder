@@ -87,9 +87,16 @@ def verify_native_rate(source):
 def export(report_path,start,end,output,radius=200):
     encoded=report_path.read_bytes();report=json.loads(encoded)
     grouping,windows=plan(report,start,end,radius)
+    return export_windows(report_path,encoded,grouping,windows,output)
+
+
+def export_windows(report_path,encoded,grouping,windows,output,observation_bounds=None):
+    if report_path.read_bytes()!=encoded:
+        raise ValueError('Input report changed after window planning')
+    report=json.loads(encoded)
     source=Path(report['source']).resolve(strict=True)
     if not source.is_file() or source_identity(source)!=report.get('source_identity'):
-        raise ValueError('Recording identity differs from the completed presence report; extraction was not started')
+        raise ValueError('Recording identity differs from the input report; extraction was not started')
     identity=source_identity(source)
     verify_native_rate(source)
     archive=Path(str(output)+'.tar.gz')
@@ -102,6 +109,9 @@ def export(report_path,start,end,output,radius=200):
               'limitations':['Approximate sampled times select review windows, never cut indices',
                              'Roles are candidate group endpoints, not established ad boundaries',
                              'No montage, encoding job or source modification']}
+    if observation_bounds is not None:
+        manifest['discovery_report_sha256']=manifest.pop('presence_report_sha256')
+        manifest.update(outer_bounds=list(observation_bounds),observation_origin='unclassified_discovery_pool')
     manifest_path=output/'frame-map.json'
     def save():
         pending=output/'frame-map.pending';pending.write_text(json.dumps(manifest,indent=2)+'\n');pending.replace(manifest_path)

@@ -10,14 +10,18 @@ from pathlib import Path
 
 
 def group_occurrences(report, programme_start, programme_end, max_gap=300., max_span=600., min_span=60.):
+    if report.get('status')!='completed' or report.get('sample_fps')!=5:
+        raise ValueError('Expected a completed five-sample-per-second presence scan')
+    return group_sampled_occurrences(report.get('occurrences'),programme_start,programme_end,
+                                     max_gap,max_span,min_span,report.get('coordinate_basis'))
+
+
+def group_sampled_occurrences(rows,programme_start,programme_end,max_gap=300.,max_span=600.,min_span=60.,coordinate_basis=None):
     settings=[programme_start,programme_end,max_gap,max_span,min_span]
     if (any(type(value) not in [int,float] or not math.isfinite(value) for value in settings)
             or not 0 <= programme_start < programme_end or not 0 < max_gap <= max_span <= 1200
             or not 0 < min_span < max_span):
         raise ValueError('Invalid programme times or grouping bounds')
-    if report.get('status')!='completed' or report.get('sample_fps')!=5:
-        raise ValueError('Expected a completed five-sample-per-second presence scan')
-    rows=report.get('occurrences')
     if not isinstance(rows,list) or len(rows)>10000:
         raise ValueError('Expected at most 10000 graphic occurrences')
     previous=-1;inside=[];outside=[];boundary=[]
@@ -54,7 +58,7 @@ def group_occurrences(report, programme_start, programme_end, max_gap=300., max_
             'settings':{'max_gap_seconds':max_gap,'max_span_seconds':max_span,'min_span_seconds':min_span},
             'inside_occurrence_count':len(inside),'outside_occurrence_count':len(outside),
             'straddling_occurrences':boundary,'groups':groups,
-            'coordinate_basis':report.get('coordinate_basis'),
+            'coordinate_basis':coordinate_basis,
             'limitations':['Exterior programme times must use a compatible timeline',
                            'Temporal grouping does not prove that all intervening content is advertising',
                            'Isolated or ambiguous graphics do not prove absence of an advertisement break',
