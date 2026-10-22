@@ -1,5 +1,7 @@
 # Video Encoder
 
+Le montage manuel est le parcours principal. La détection publicitaire expérimentale a été retirée de l’interface. Voir [le parcours de montage](docs/manual-editing.md).
+
 Application Ruby de montage et d’encodage vidéo, conçue principalement pour
 des enregistrements TNT.
 

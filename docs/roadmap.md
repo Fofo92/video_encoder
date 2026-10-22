@@ -8,11 +8,10 @@ Ordre convenu pour les prochaines évolutions :
    MKV ; modification possible après annulation du récapitulatif et avant le
    lancement de la tâche. Le fonctionnement est détaillé dans
    [Bornes, tâches et destinations](editor-and-queue-actions.md).
-2. Finaliser le parcours d'analyse publicitaire : nettoyage des intermédiaires
-   associés dès l'enregistrement du projet, emplacement automatique des
-   intermédiaires, analyse et proposition clairement distinguées du chargement
-   d'un rapport existant, raccords faciles à vérifier et résultats utiles
-   conservés avec le projet sous le même nom de base.
+2. Simplifier et fiabiliser le montage manuel : navigation, ajustement des bornes,
+   sauvegarde et mise en file. Le développement de la détection publicitaire est
+   suspendu ; ses travaux restent dans la branche
+   `archive/advertising-detection-experiments`. Voir [le parcours courant](manual-editing.md).
 3. Déplacer ou renommer les fichiers d'un projet terminé et mettre à jour leurs
    références sans réencoder.
 4. Consulter vidb pour identifier l'œuvre à partir de candidats documentés et

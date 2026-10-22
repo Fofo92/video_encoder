@@ -31,9 +31,6 @@ from .project_destination import select_project_output
 from .trim_project_file_reader import (
     TrimProjectFileReader,
 )
-from .ad_trim_proposal_runner import AdTrimProposalRunner
-from .ad_analysis_runner import AdAnalysisRunner
-from .ad_analysis_bounds import ad_analysis_bounds
 from .trim_export_queue_client import (
     TrimExportQueueClient,
     TrimExportQueueError,
@@ -165,13 +162,6 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.media_inspection_client = (
             MediaInspectionClient()
         )
-        self.ad_analysis_runner = AdAnalysisRunner(self)
-        self.ad_analysis_runner.succeeded.connect(self.ad_analysis_succeeded)
-        self.ad_analysis_runner.failed.connect(self.ad_trim_proposal_failed)
-        self.ad_analysis_runner.progress.connect(self.ad_analysis_progress)
-        self.ad_trim_proposal_runner = AdTrimProposalRunner(self)
-        self.ad_trim_proposal_runner.succeeded.connect(self.ad_trim_proposal_succeeded)
-        self.ad_trim_proposal_runner.failed.connect(self.ad_trim_proposal_failed)
 
         self.close_after_preflight = False
         self.audio_preflight_cancel_prompt_active = False
@@ -401,13 +391,6 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
         self.add_segment_button.setFixedSize(32, 30)
 
-        self.propose_ad_trim_button = QtWidgets.QPushButton("Créer avec coupures…")
-        self.propose_ad_trim_button.setToolTip(
-            "Créer un montage dans la plage IN/OUT à partir d’un rapport de coupures"
-        )
-        self.propose_ad_trim_button.clicked.connect(self.propose_ad_trim)
-        self.analyze_ads_button = QtWidgets.QPushButton("Analyser les publicités…")
-        self.analyze_ads_button.clicked.connect(self.analyze_ads)
 
         self.nudge_marker_selector = QtWidgets.QComboBox()
         self.nudge_marker_selector.addItems(["Navigation", "Modifier IN", "Modifier OUT"])
@@ -666,8 +649,6 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         markers_layout.addWidget(self.nudge_marker_selector)
         markers_layout.addWidget(self.nudge_backward_button)
         markers_layout.addWidget(self.nudge_forward_button)
-        markers_layout.addWidget(self.propose_ad_trim_button)
-        markers_layout.addWidget(self.analyze_ads_button)
 
         markers_widget.setSizePolicy(
             QtWidgets.QSizePolicy.Policy.Fixed,
@@ -1600,19 +1581,19 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         return segment
 
     def go_to_context_start(self):
-        if self.export_status in {"running", "preflight", "confirming", "proposing"}:
+        if self.export_status in {"running", "preflight", "confirming"}:
             return
         segment = MltFrameMonitor.selected_segment(self)
         self.show_frame(segment.start_frame if segment is not None else 0)
 
     def go_to_context_end(self):
-        if self.export_status in {"running", "preflight", "confirming", "proposing"}:
+        if self.export_status in {"running", "preflight", "confirming"}:
             return
         segment = MltFrameMonitor.selected_segment(self)
         self.show_frame(segment.end_frame if segment is not None else self.frame_source.length - 1)
 
     def update_segment_navigation_actions(self):
-        busy = self.export_status in {"running", "preflight", "confirming", "proposing"}
+        busy = self.export_status in {"running", "preflight", "confirming"}
         selected = MltFrameMonitor.selected_segment(self) is not None
         for button, start in ((self.boundary_start_button, True), (self.boundary_end_button, False)):
             if selected:
@@ -1636,7 +1617,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.update_marker_edit_controls()
 
     def update_marker_edit_controls(self):
-        busy = self.export_status in {"running", "preflight", "confirming", "proposing"}
+        busy = self.export_status in {"running", "preflight", "confirming"}
         selected = MltFrameMonitor.selected_segment(self)
         self.nudge_marker_selector.setEnabled(not busy and selected is not None)
         editing = not busy and getattr(self, "editing_segment_index", None) is not None
@@ -1649,9 +1630,6 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             shortcut.setEnabled(editing)
         self.in_button.setEnabled(not busy and not editing)
         self.out_button.setEnabled(not busy and not editing)
-        self.propose_ad_trim_button.setEnabled(not busy and not editing)
-        if hasattr(self, "analyze_ads_button"):
-            self.analyze_ads_button.setEnabled(not busy and not editing)
         self.save_project_action.setEnabled(not busy and not editing)
         if hasattr(self, "save_project_as_action"):
             self.save_project_as_action.setEnabled(not busy and not editing)
@@ -1659,7 +1637,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.queue_export_action.setEnabled(not busy and not editing)
 
     def change_marker_edit_mode(self, index):
-        if self.export_status in {"running", "preflight", "confirming", "proposing"}:
+        if self.export_status in {"running", "preflight", "confirming"}:
             return
         if index == 0:
             if getattr(self, "editing_segment_index", None) is not None:
@@ -1676,7 +1654,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.preview_nudge_marker()
 
     def edit_selected_segment(self):
-        if self.export_status in {"running", "preflight", "confirming", "proposing"}:
+        if self.export_status in {"running", "preflight", "confirming"}:
             return
         segment = MltFrameMonitor.selected_segment(self)
         if segment is None:
@@ -1722,7 +1700,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
     def select_segment(self, index):
-        if self.export_status in {"running", "preflight", "confirming", "proposing"}:
+        if self.export_status in {"running", "preflight", "confirming"}:
             return
 
         segments = self.trim_session.segments
@@ -1743,7 +1721,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
     def delete_segment(self, index):
-        if self.export_status in {"running", "preflight", "confirming", "proposing"}:
+        if self.export_status in {"running", "preflight", "confirming"}:
             return
 
         segments = self.trim_session.segments
@@ -1788,8 +1766,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         if self.export_status in {
             "running",
             "preflight",
-            "confirming",
-            "proposing"
+            "confirming"
         }:
             return
 
@@ -1868,8 +1845,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         busy = self.export_status in {
             "running",
             "preflight",
-            "confirming",
-            "proposing"
+            "confirming"
         }
         self.clear_all_segments_action.setEnabled(
             bool(segments) and not busy
@@ -1933,7 +1909,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.update_marker_edit_controls()
 
     def add_current_segment(self):
-        if self.export_status in {"running", "preflight", "confirming", "proposing"}:
+        if self.export_status in {"running", "preflight", "confirming"}:
             return
 
         if (
@@ -1979,7 +1955,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.clear_active_markers()
 
     def set_in_marker(self):
-        if self.export_status in {"running", "preflight", "confirming", "proposing"}:
+        if self.export_status in {"running", "preflight", "confirming"}:
             return
         if getattr(self, "editing_segment_index", None) is not None:
             return
@@ -2011,7 +1987,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
     def preview_nudge_marker(self, _index=None):
-        if self.export_status in {"running", "preflight", "confirming", "proposing"}:
+        if self.export_status in {"running", "preflight", "confirming"}:
             return
         index = self.nudge_marker_selector.currentIndex()
         if index == 0 or getattr(self, "editing_segment_index", None) is None:
@@ -2021,7 +1997,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.show_frame(position)
 
     def nudge_marker(self, delta):
-        if self.export_status in {"running", "preflight", "confirming", "proposing"}:
+        if self.export_status in {"running", "preflight", "confirming"}:
             return
         index = self.nudge_marker_selector.currentIndex()
         if index == 0 or getattr(self, "editing_segment_index", None) is None:
@@ -2055,7 +2031,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.statusBar().showMessage(message, 5000)
 
     def set_out_marker(self):
-        if self.export_status in {"running", "preflight", "confirming", "proposing"}:
+        if self.export_status in {"running", "preflight", "confirming"}:
             return
         if getattr(self, "editing_segment_index", None) is not None:
             return
@@ -2090,133 +2066,6 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
     def show_trim_export_queue(self):
         self.trim_export_queue_controller.show()
 
-    def propose_ad_trim(self):
-        if self.export_status in {"running", "preflight", "confirming", "proposing"}:
-            return
-        bounds = ad_analysis_bounds(
-            self.trim_session, self.source_id, self.in_position, self.out_position, self.frame_source.length,
-        )
-        if bounds is None:
-            QtWidgets.QMessageBox.information(
-                self, "Bornes de l’épisode requises",
-                "Pose IN et OUT, ou ajoute un seul segment couvrant l’œuvre entière.",
-            )
-            return
-        if (
-            self.frame_source.frame_rate_numerator
-            != 25 * self.frame_source.frame_rate_denominator
-        ):
-            QtWidgets.QMessageBox.warning(
-                self, "Cadence incompatible", "Ce pilote nécessite une source à 25 images/s.",
-            )
-            return
-        report_directory = Path.home() / "code/Fofo92/vidb-clean/tmp/video-encoder-pilot"
-        report, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Charger le rapport de coupures", str(report_directory if report_directory.is_dir() else Path("/tmp")),
-            "Rapports de coupures (*.json)",
-        )
-        if not report:
-            return
-        self.export_status_changed("proposing")
-        try:
-            self.ad_trim_proposal_runner.start(
-                report, self.source_path, *bounds,
-            )
-        except (OSError, RuntimeError) as error:
-            self.ad_trim_proposal_failed(str(error))
-
-    def analyze_ads(self):
-        if self.export_status != "idle":
-            return
-        bounds = ad_analysis_bounds(
-            self.trim_session, self.source_id, self.in_position, self.out_position, self.frame_source.length,
-        )
-        if bounds is None:
-            QtWidgets.QMessageBox.information(
-                self, "Bornes requises", "Pose IN et OUT, ou ajoute un seul segment couvrant l’œuvre entière.",
-            )
-            return
-        if self.frame_source.frame_rate_numerator != 25 * self.frame_source.frame_rate_denominator:
-            QtWidgets.QMessageBox.warning(self, "Cadence incompatible", "Le pilote nécessite 25 images/s.")
-            return
-        workspace = QtWidgets.QFileDialog.getExistingDirectory(
-            self, "Choisir le dossier parent des analyses", str(Path.home()),
-        )
-        if not workspace:
-            return
-        import hashlib
-        fingerprint = hashlib.sha256(str(self.source_path.resolve()).encode()).hexdigest()[:12]
-        destination = Path(workspace) / f"ad-analysis-{fingerprint}"
-        if destination.exists():
-            report = destination / "boundaries" / "boundary-hypotheses.json"
-            if report.is_file():
-                self.propose_ad_trim_from_report(report)
-            else:
-                QtWidgets.QMessageBox.warning(
-                    self, "Analyse incomplète", f"Diagnostics conservés dans {destination}."
-                )
-            return
-        self.export_status_changed("proposing")
-        try:
-            self.ad_analysis_runner.start(
-                self.source_path, destination, *bounds,
-            )
-        except (OSError, RuntimeError, ValueError) as error:
-            self.ad_trim_proposal_failed(str(error))
-
-    def ad_analysis_progress(self, message):
-        self.statusBar().showMessage(message[-200:])
-
-    def ad_analysis_succeeded(self, result):
-        self.export_status_changed("idle")
-        self.propose_ad_trim_from_report(result["report"])
-
-    def propose_ad_trim_from_report(self, report):
-        bounds = ad_analysis_bounds(
-            self.trim_session, self.source_id, self.in_position, self.out_position, self.frame_source.length,
-        )
-        if bounds is None:
-            self.ad_trim_proposal_failed("Bornes de l’œuvre indisponibles : pose IN et OUT avant de reprendre.")
-            return
-        self.export_status_changed("proposing")
-        try:
-            self.ad_trim_proposal_runner.start(
-                report, self.source_path, *bounds,
-            )
-        except (OSError, RuntimeError) as error:
-            self.ad_trim_proposal_failed(str(error))
-
-    def ad_trim_proposal_failed(self, message):
-        self.export_status_changed("idle")
-        QtWidgets.QMessageBox.warning(self, "Proposition impossible", message)
-
-    def ad_trim_proposal_succeeded(self, result):
-        try:
-            session = result["session"]
-            if len(session.sources) != 1 or session.sources[0].path.resolve() != self.source_path.resolve():
-                raise ValueError("La proposition concerne une autre source.")
-            segments = tuple(
-                SegmentSelection(self.source_id, item.start_frame, item.end_frame)
-                for item in session.segments
-            )
-            if not segments or any(item.end_frame >= self.frame_source.length for item in segments):
-                raise ValueError("Les segments proposés dépassent la source ouverte.")
-        except (ValueError, KeyError, TypeError) as error:
-            self.ad_trim_proposal_failed(str(error))
-            return
-        self.trim_session.clear_segments()
-        for segment in segments:
-            self.trim_session.add_segment(segment)
-        self.trim_session.analysis_workspaces.extend(session.analysis_workspaces)
-        self.project_path = None
-        self.clear_active_markers()
-        self.set_project_modified()
-        self.refresh_segment_list()
-        self.export_status_changed("idle")
-        self.statusBar().showMessage(
-            f"Proposition créée : {len(segments)} segments. Vérifie les raccords avant export.",
-            15000,
-        )
 
     def show_source_information(self):
         try:
@@ -2241,7 +2090,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         dialog.exec()
 
     def save_project(self):
-        if self.export_status in {"running", "preflight", "confirming", "proposing"}:
+        if self.export_status in {"running", "preflight", "confirming"}:
             return None
 
         if self.project_path is None:
@@ -2265,7 +2114,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         return self.write_project(self.project_path)
 
     def save_project_as(self):
-        if self.export_status in {"running", "preflight", "confirming", "proposing"}:
+        if self.export_status in {"running", "preflight", "confirming"}:
             return None
 
         if self.project_path is None or self.project_path.name == "proposal.json":
@@ -2594,7 +2443,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
 
     def export_status_changed(self, status):
         self.export_status = status
-        running = status in {"running", "preflight", "confirming", "proposing"}
+        running = status in {"running", "preflight", "confirming"}
 
         self.export_project_action.setEnabled(
             not running
@@ -2626,21 +2475,12 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.add_segment_button.setEnabled(
             not running
         )
-        self.propose_ad_trim_button.setEnabled(not running)
-        self.analyze_ads_button.setEnabled(not running)
         self.segment_list.setEnabled(
             not running
         )
 
         self.update_segment_navigation_actions()
 
-        if status == "proposing":
-            self.export_elapsed_timer.stop()
-            self.export_progress_bar.setRange(0, 0)
-            self.export_progress_bar.setFormat("Création de la proposition…")
-            self.export_progress_bar.setVisible(True)
-            self.statusBar().showMessage("Création de la proposition dans la plage IN/OUT…")
-            return
 
         if status in {"preflight", "confirming"}:
             message = (
@@ -3220,10 +3060,6 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
     def closeEvent(self, event):
-        if getattr(self, "export_status", None) == "proposing":
-            self.ad_trim_proposal_runner.cancel()
-            self.ad_analysis_runner.cancel()
-            self.export_status_changed("idle")
         queue_runner = getattr(
             self,
             "trim_export_queue_runner",
