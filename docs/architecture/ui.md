@@ -1,5 +1,7 @@
 # Architecture de l’interface graphique
 
+État actuel : [montage manuel et file d’encodage](../manual-editing.md). Les anciens parcours de détection ne sont plus intégrés à l’éditeur.
+
 L’interface graphique de `video_encoder` est une application Python utilisant
 PySide6 et les bindings MLT. Elle pilote le montage sans reprendre les règles
 métier du moteur Ruby.
