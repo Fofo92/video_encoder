@@ -109,7 +109,7 @@ class MarkerModeTest(unittest.TestCase):
             export_status="idle", editing_segment_index=None, editing_segment=None,
             nudge_marker_selector=Mock(), nudge_backward_button=Mock(), nudge_forward_button=Mock(),
             nudge_shortcuts=[Mock(), Mock()], in_button=Mock(), out_button=Mock(),
-            propose_ad_trim_button=Mock(), save_project_action=Mock(), export_project_action=Mock(), queue_export_action=Mock(),
+            save_project_action=Mock(), export_project_action=Mock(), queue_export_action=Mock(),
             clear_active_markers=Mock(),
         )
         return monitor, segment
@@ -128,7 +128,6 @@ class MarkerModeTest(unittest.TestCase):
         MltFrameMonitor.update_marker_edit_controls(monitor)
         monitor.nudge_forward_button.setEnabled.assert_called_once_with(True)
         monitor.in_button.setEnabled.assert_called_once_with(False)
-        monitor.propose_ad_trim_button.setEnabled.assert_called_once_with(False)
         monitor.queue_export_action.setEnabled.assert_called_once_with(False)
 
     def test_leaves_edit_mode_when_another_segment_is_selected(self):

@@ -73,7 +73,7 @@ class ContextBoundaryNavigationTest(unittest.TestCase):
                 self.assertEqual([call.args[0] for call in self.namespace["QtGui"].QIcon.fromTheme.call_args_list], list(icons))
 
     def test_busy_buttons_are_disabled_and_clicks_do_nothing(self):
-        for status in ("running", "preflight", "confirming", "proposing"):
+        for status in ("running", "preflight", "confirming"):
             monitor = self.monitor(status=status)
             self.monitor_class.update_segment_navigation_actions(monitor)
             monitor.boundary_start_button.setEnabled.assert_called_once_with(False)

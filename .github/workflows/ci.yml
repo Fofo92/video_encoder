@@ -27,8 +27,8 @@ jobs:
       - name: Run the quality checks
         run: bin/check
 
-  repeated_sequence_ui:
-    name: Experimental cut review and signals
+  manual_workflow_ui:
+    name: Manual editing and encoding queue
     runs-on: ubuntu-latest
     env:
       QT_QPA_PLATFORM: offscreen
@@ -37,22 +37,17 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v6
 
-      - name: Install headless Qt runtime libraries
+      - name: Install headless editor dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y libegl1 libopengl0 ffmpeg
+          sudo apt-get install --no-install-recommends -y libegl1 libopengl0 ffmpeg python3-mlt python3-evdev python3-venv
 
       - name: Install isolated Qt test dependencies
         run: |
-          python3 -m venv "$RUNNER_TEMP/cut-review-tests"
-          "$RUNNER_TEMP/cut-review-tests/bin/python" -m pip install PySide6-Essentials==6.8.3 numpy==2.3.5
+          /usr/bin/python3 -m venv --system-site-packages "$RUNNER_TEMP/manual-editor-tests"
+          "$RUNNER_TEMP/manual-editor-tests/bin/python" -m pip install PySide6-Essentials==6.8.3
 
-      - name: Run the repeated-sequence review tests
+      - name: Run editor, project and queue unit tests
         run: |
-          "$RUNNER_TEMP/cut-review-tests/bin/python" -m unittest discover -s ui/tests -p 'test_repeated_sequence*.py'
-
-      - name: Test cached capture signal diagnostics
-        env:
-          PYTHONPATH: script/research
-        run: |
-          "$RUNNER_TEMP/cut-review-tests/bin/python" -m unittest test_letterbox_signals test_capture_signal_audit test_source_discovery test_direct_motif_groups test_local_sequences test_stable_overlay_signals test_jingle_boundary_signals test_scan_stable_overlays test_group_overlay_occurrences test_prepare_overlay_review test_refine_overlay_review test_graphic_hypotheses test_prepare_graphic_review test_graphic_observation_manifest test_bootstrap_graphic_observations test_graphic_review_cache test_collect_graphic_diagnostics test_format_break_hypotheses
+          "$RUNNER_TEMP/manual-editor-tests/bin/python" -c "import mlt7, evdev; from PySide6 import QtWidgets"
+          "$RUNNER_TEMP/manual-editor-tests/bin/python" -m unittest discover -s ui/tests -p 'test_*.py'

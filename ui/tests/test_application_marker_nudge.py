@@ -49,7 +49,7 @@ class MarkerNudgeTest(unittest.TestCase):
             self.assertEqual((monitor.in_position, monitor.out_position), (0, 99))
 
     def test_does_not_adjust_during_background_work(self):
-        for status in ["running", "preflight", "confirming", "proposing"]:
+        for status in ["running", "preflight", "confirming"]:
             monitor = self.monitor(status=status)
             MltFrameMonitor.nudge_marker(monitor, 1)
             self.assertEqual(monitor.in_position, 10)
