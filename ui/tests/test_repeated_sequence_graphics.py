@@ -244,7 +244,8 @@ class GraphicDialogTest(GraphicFixture,unittest.TestCase):
         self.pipeline['status']='needs_review';self.report['status']='unresolved_raccords'
         self.report['raccords'][0]={'candidate_role':'departure','group_index':1,'status':'unresolved_no_transition'}
         self.save();self.dialog.display_graphic_review(self.output/'pipeline.json')
-        self.assertIn('Reprise proposée 1',self.dialog.hits.item(0).text())
+        self.assertIn('Départ proposé 1 (à renseigner)',self.dialog.hits.item(0).text())
+        self.dialog.hits.setCurrentRow(1)
         self.assertEqual(self.dialog.frame.value(),500)
         self.assertFalse(self.dialog.confirm.isEnabled());self.assertFalse(self.dialog.apply_button.isEnabled())
         self.assertIsNone(self.dialog.session);self.assertIn('non résolus',self.dialog.stage.text())
@@ -253,6 +254,7 @@ class GraphicDialogTest(GraphicFixture,unittest.TestCase):
         self.pipeline['status']='needs_review';self.report['status']='unresolved_raccords'
         self.report['raccords'][0]={'candidate_role':'departure','group_index':1,'status':'unresolved_no_transition'}
         self.save();self.dialog.display_graphic_review(self.output/'pipeline.json')
+        self.dialog.hits.setCurrentRow(1)
         self.assertTrue(self.dialog.adjust_button.isEnabled())
         self.dialog.edge.setCurrentIndex(1)
         self.dialog.frame.setValue(503);self.dialog.adjust_button.click()
@@ -260,7 +262,7 @@ class GraphicDialogTest(GraphicFixture,unittest.TestCase):
         self.assertEqual(edited['raccords'][0],self.report['raccords'][0])
         self.assertEqual(edited['raccords'][1]['candidate_kept_decoded_frame'],503)
         self.assertEqual(edited['manual_adjustments'][-1]['index'],1)
-        self.assertIn('(ajusté)',self.dialog.hits.item(0).text())
+        self.assertIn('(ajusté)',self.dialog.hits.item(1).text())
         self.assertIsNone(self.dialog.refined)
         self.assertFalse(self.dialog.confirm.isEnabled())
         self.assertFalse(self.dialog.apply_button.isEnabled())
@@ -273,6 +275,42 @@ class GraphicDialogTest(GraphicFixture,unittest.TestCase):
         self.assertEqual(self.dialog.partial_refined,before)
         self.dialog.clear_refinement();self.dialog.update_actions()
         self.assertFalse(self.dialog.adjust_button.isEnabled())
+
+    def test_manually_complete_missing_boundaries_then_confirm_and_replace(self):
+        for index in (0,3):
+            self.report['raccords'][index]={'candidate_role':'departure' if index==0 else 'resume',
+                                          'group_index':index//2+1,'status':'unresolved_no_transition'}
+        self.pipeline['status']='needs_review';self.report['status']='unresolved_raccords'
+        self.save();self.dialog.display_graphic_review(self.output/'pipeline.json')
+        self.assertEqual(self.dialog.hits.count(),4)
+        self.assertIn('à renseigner',self.dialog.hits.item(0).text())
+        self.dialog.frame.setValue(121);self.dialog.adjust_button.click()
+        self.assertIsNone(self.dialog.refined)
+        self.assertFalse(self.dialog.confirm.isEnabled())
+        self.dialog.hits.setCurrentRow(3)
+        self.assertIn('Première image conservée',self.dialog.edge.currentText())
+        self.dialog.frame.setValue(1503);self.dialog.adjust_button.click()
+        self.assertIsNone(self.dialog.partial_refined)
+        self.assertEqual(self.dialog.refined['manual_adjustments'][0]['previous_kept_frame'],None)
+        self.assertTrue(self.dialog.confirm.isEnabled())
+        self.assertFalse(self.dialog.apply_button.isEnabled())
+        self.dialog.confirm.setChecked(True);self.dialog.apply_segments()
+        self.assertEqual([(s.start_frame,s.end_frame) for s in self.dialog.session.segments],
+                         [(10,121),(500,999),(1503,1900)])
+        disk=json.loads((self.output/'raccords.json').read_text())
+        self.assertEqual(disk['status'],'unresolved_raccords')
+
+    def test_invalid_missing_boundary_keeps_review_partial(self):
+        self.pipeline['status']='needs_review';self.report['status']='unresolved_raccords'
+        self.report['raccords'][0]={'candidate_role':'departure','group_index':1,'status':'unresolved_no_transition'}
+        self.save();self.dialog.display_graphic_review(self.output/'pipeline.json')
+        before=copy.deepcopy(self.dialog.partial_refined)
+        self.dialog.frame.setValue(600)
+        with patch.object(QtWidgets.QMessageBox,'warning'):
+            self.dialog.adjust_button.click()
+        self.assertEqual(self.dialog.partial_refined,before)
+        self.assertIsNone(self.dialog.refined)
+        self.assertFalse(self.dialog.apply_button.isEnabled())
 
     def test_empty_grouping_retains_diagnostics_and_does_not_claim_no_advertisements(self):
         self.pipeline.update(status='needs_review',reason='Aucun groupe exploitable.')

@@ -405,9 +405,10 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             number = row.get('group_index', index // 2 + 1)
             role = f'Départ proposé {number}' if departure else f'Reprise proposée {number}'
             text = f'{index + 1} — {hours:02d}:{minutes:02d}:{seconds:02d}' if row.get('approximate') else role
-            text += ' (ajusté)' if row.get('report_index',index) in adjusted else ' (approximatif)' if row.get('approximate') else ' (affiné)'
+            text += ' (à renseigner)' if row.get('unresolved') else ' (ajusté)' if row.get('report_index',index) in adjusted else ' (approximatif)' if row.get('approximate') else ' (affiné)'
             item = QtWidgets.QListWidgetItem(text)
-            item.setToolTip(f"Image conservée : {row['kept_frame']} ; image écartée : {row['excluded_frame']}"
+            item.setToolTip('Limite non résolue : place-toi sur la bonne image, puis clique sur « Retenir cette image pour le raccord ».'
+                           if row.get('unresolved') else f"Image conservée : {row['kept_frame']} ; image écartée : {row['excluded_frame']}"
                            if 'kept_frame' in row else f"Images : {row['start']}–{row['end']} (fin exclusive)")
             self.hits.addItem(item)
         if self.preview_rows:
@@ -418,7 +419,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             return
         if 0 <= index < len(self.preview_rows):
             row = self.preview_rows[index]
-            if self.refined is not None or 'kept_frame' in row:
+            if self.refined is not None or 'candidate_role' in row:
                 departure = row.get('candidate_role', 'departure' if index % 2 == 0 else 'resume') == 'departure'
                 labels = (['Dernière image conservée (OUT)', 'Première image écartée'] if departure else
                           ['Dernière image écartée', 'Première image conservée (IN)'])
@@ -428,7 +429,10 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
                     self.edge.addItems(labels)
                     self.edge.setCurrentIndex(0 if departure else 1)
                     self.edge.blockSignals(False)
-                if 'kept_frame' in row:
+                if row.get('unresolved'):
+                    # Keep the navigation cursor; no missing limit is invented.
+                    positions=[max(self.bounds[0],min(self.bounds[1],self.frame.value()))]*2
+                elif 'kept_frame' in row:
                     positions = ([row['kept_frame'], row['excluded_frame']] if departure else
                                  [row['excluded_frame'], row['kept_frame']])
                 else:
@@ -469,12 +473,16 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
             self.notice.setText(str(error))
             QtWidgets.QMessageBox.warning(self,'Ajustement du raccord',str(error))
             return
-        if self.refined is None:self.partial_refined=edited
+        if edited.get('status')=='candidate_raccords' and self.graphic_state is not None:
+            self.refined=edited
+            self.partial_refined=None
+            self.graphic_state='ready_for_review'
+        elif self.refined is None:self.partial_refined=edited
         else:self.refined=edited
         self.session=None
         self.confirm.setChecked(False)
         if edited.get('review_origin') in ('graphic_hypotheses','format_hypotheses'):
-            self.preview_rows=graphic_preview_rows(edited,*self.bounds)
+            self.preview_rows=graphic_preview_rows(edited,*self.bounds,include_unresolved=True)
         else:
             self.preview_rows=[{'start':row['motif_start_decoded_frame'],'end':row['motif_end_decoded_frame_exclusive']}
                                for row in edited['source_motif_limits']]
@@ -655,7 +663,7 @@ class RepeatedSequenceDialog(QtWidgets.QDialog):
         self.graphic_state = pipeline['status']
         self.refined = report if pipeline['status'] == 'ready_for_review' else None
         self.partial_refined = report if pipeline['status'] == 'needs_review' else None
-        self.preview_rows = graphic_preview_rows(report, *self.bounds) if report is not None else []
+        self.preview_rows = graphic_preview_rows(report, *self.bounds, include_unresolved=True) if report is not None else []
         self.populate_hits()
         self.copy_diagnostic.setVisible(True)
         self.copy_diagnostic.setToolTip(str(self.output.resolve()))

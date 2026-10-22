@@ -82,15 +82,15 @@ def adjust_review_boundary(report, source, first, last, index, frame, edge):
     if (type(index) is not int or not 0<=index<len(rows) or type(frame) is not int
             or type(edge) is not int or edge not in (0,1) or not first<=frame<=last):
         raise ValueError('Image ou raccord à ajuster invalide.')
-    if partial and rows[index].get('status')!='candidate_raccord':
-        raise ValueError('Ce raccord non résolu ne possède pas de limite à ajuster.')
     departure=index%2==0
     kept=frame-edge if departure else frame+1-edge
     edited=copy.deepcopy(report)
     row=(edited['raccords'] if geometric else edited['source_motif_limits'])[index]
     if geometric:
-        previous=row['candidate_kept_decoded_frame']
-        row.update(candidate_kept_decoded_frame=kept,
+        previous=row.get('candidate_kept_decoded_frame') if row.get('status')=='candidate_raccord' else None
+        row.update(status='candidate_raccord',
+                   kept_frame_meaning='last_kept' if departure else 'first_kept',
+                   candidate_kept_decoded_frame=kept,
                    candidate_transition_decoded_frame=kept+1 if departure else kept)
     else:
         previous=row['motif_start_decoded_frame']-1 if departure else row['motif_end_decoded_frame_exclusive']
@@ -101,6 +101,9 @@ def adjust_review_boundary(report, source, first, last, index, frame, edge):
         positions=[row['kept_frame'] for row in available]
         if any(a+1>=b for a,b in zip(positions,positions[1:])):
             raise ValueError('Les raccords disponibles se chevauchent.')
+        if len(available)==len(rows):
+            edited['status']='candidate_raccords'
+            proposed_session(edited,source,first,last,confirmed=True)
     else:
         proposed_session(edited,source,first,last,confirmed=True)
     if kept!=previous:

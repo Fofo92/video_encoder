@@ -99,3 +99,17 @@ position that cannot be corrected exactly, and an unknown position. They verify
 that navigation leaves the proposal unchanged and explicit adjustment retains
 the displayed coordinate. Selecting an occurrence decodes only once before any
 bounded offset correction, avoiding the former duplicate preview request.
+
+## Completing unresolved boundaries manually
+
+A partial review lists every expected departure and return, including missing
+limits marked **à renseigner**. Selecting one preserves the navigation cursor;
+it does not invent a cut coordinate. Navigate to the desired image, select the
+last-kept OUT or first-kept IN convention, and explicitly retain that image.
+
+Available limits remain ordered and inside the exterior bounds. Each retained
+limit records its original report index and previous coordinate (null for a
+missing limit). When the final missing limit is supplied, the complete montage
+is validated before confirmation becomes available. Explicit confirmation and
+**Remplacer le montage** are still required. Save the project in the main editor
+to preserve these edits; no analysis is rerun and diagnostic files stay unchanged.

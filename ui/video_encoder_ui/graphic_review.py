@@ -49,7 +49,7 @@ def check_graphic_source(report,source,first,last):
         raise ValueError('La revue graphique ne correspond pas à la source inchangée et à ses bornes extérieures.')
 
 
-def graphic_preview_rows(report,first,last):
+def graphic_preview_rows(report,first,last,include_unresolved=False):
     rows=report.get('raccords')
     if not isinstance(rows,list) or len(rows)>12 or len(rows)%2:
         raise ValueError('Paires de raccords graphiques invalides.')
@@ -58,7 +58,11 @@ def graphic_preview_rows(report,first,last):
         role='departure' if index%2==0 else 'resume'
         if row.get('candidate_role')!=role or row.get('group_index')!=index//2+1:
             raise ValueError('Les raccords ne forment pas une alternance départ/reprise.')
-        if row.get('status')!='candidate_raccord':continue
+        if row.get('status')!='candidate_raccord':
+            if include_unresolved:
+                preview.append({'start':first,'end':first+1,'candidate_role':role,
+                                'group_index':index//2+1,'report_index':index,'unresolved':True})
+            continue
         kept,transition=row.get('candidate_kept_decoded_frame'),row.get('candidate_transition_decoded_frame')
         meaning='last_kept' if role=='departure' else 'first_kept'
         if (type(kept) is not int or type(transition) is not int or not first<kept<last
