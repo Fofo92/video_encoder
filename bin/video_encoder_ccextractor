@@ -51,11 +51,15 @@ if [ ! -d "$workspace" ]; then
   exit 2
 fi
 
+# --volume splits on colons. --mount uses CSV, so quote each path field.
+escaped_workspace=$(printf '%s' "$workspace" | sed 's/"/""/g')
+mount_spec="type=bind,\"source=$escaped_workspace\",\"target=$escaped_workspace\""
+
 exec docker run \
   --rm \
   --pull never \
   --network none \
   --user "$(id -u):$(id -g)" \
-  --volume "$workspace:$workspace" \
+  --mount "$mount_spec" \
   "$image" \
   "$@"

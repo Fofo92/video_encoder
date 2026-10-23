@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'open3'
+require 'json'
 require 'tmpdir'
 require 'spec_helper'
 
@@ -64,8 +65,8 @@ RSpec.describe 'bin/video_encoder_ccextractor' do
           'none',
           '--user',
           "#{Process.uid}:#{Process.gid}",
-          '--volume',
-          "#{workspace}:#{workspace}",
+          '--mount',
+          %(type=bind,"source=#{workspace}","target=#{workspace}"),
           'video-encoder-ccextractor:0.96.6-ocr-fra',
           '--out',
           'srt',
@@ -74,6 +75,28 @@ RSpec.describe 'bin/video_encoder_ccextractor' do
           output_path
         ]
       )
+    end
+  end
+
+  JSON.parse(File.read(File.join(__dir__, 'fixtures/path_names.json'))).each do |name|
+    it "preserves the workspace and OCR arguments for #{name}" do
+      with_fake_docker do |environment, arguments_path|
+        workspace = File.join(environment.fetch('TEST_DIRECTORY'), name)
+        Dir.mkdir(workspace)
+        output = File.join(workspace, 'subtitle.srt')
+        input = File.join(workspace, 'subtitle.ts')
+
+        _stdout, stderr, status = Open3.capture3(environment, launcher, input, '-o', output)
+
+        expect(status).to be_success
+        expect(stderr).to eq('')
+        arguments = read_arguments(arguments_path)
+        escaped = workspace.gsub('"', '""')
+        expect(arguments[arguments.index('--mount') + 1]).to eq(
+          %(type=bind,"source=#{escaped}","target=#{escaped}")
+        )
+        expect(arguments.last(3)).to eq([input, '-o', output])
+      end
     end
   end
 
