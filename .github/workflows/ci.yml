@@ -24,6 +24,11 @@ jobs:
           ruby-version: '3.3'
           bundler-cache: true
 
+      - name: Install FFmpeg for path transport tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y ffmpeg
+
       - name: Run the quality checks
         run: bin/check
 

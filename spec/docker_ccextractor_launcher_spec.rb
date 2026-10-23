@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'open3'
+require 'json'
 require 'tmpdir'
 require 'spec_helper'
 
@@ -77,22 +78,25 @@ RSpec.describe 'bin/video_encoder_ccextractor' do
     end
   end
 
-  it 'preserves colons, commas and quotes in an explicitly configured workspace' do
-    with_fake_docker do |environment, arguments_path|
-      workspace = File.join(environment.fetch('TEST_DIRECTORY'), 'Vanina : Meurtres, "Sicile"')
-      Dir.mkdir(workspace)
-      environment['VIDEO_ENCODER_WORKSPACE'] = workspace
+  JSON.parse(File.read(File.join(__dir__, 'fixtures/path_names.json'))).each do |name|
+    it "preserves the workspace and OCR arguments for #{name}" do
+      with_fake_docker do |environment, arguments_path|
+        workspace = File.join(environment.fetch('TEST_DIRECTORY'), name)
+        Dir.mkdir(workspace)
+        output = File.join(workspace, 'subtitle.srt')
+        input = File.join(workspace, 'subtitle.ts')
 
-      _stdout, stderr, status = Open3.capture3(environment, launcher, '--version')
+        _stdout, stderr, status = Open3.capture3(environment, launcher, input, '-o', output)
 
-      expect(status).to be_success
-      expect(stderr).to eq('')
-      arguments = read_arguments(arguments_path)
-      expect(arguments).not_to include('--volume')
-      escaped = workspace.gsub('"', '""')
-      expect(arguments[arguments.index('--mount') + 1]).to eq(
-        %(type=bind,"source=#{escaped}","target=#{escaped}")
-      )
+        expect(status).to be_success
+        expect(stderr).to eq('')
+        arguments = read_arguments(arguments_path)
+        escaped = workspace.gsub('"', '""')
+        expect(arguments[arguments.index('--mount') + 1]).to eq(
+          %(type=bind,"source=#{escaped}","target=#{escaped}")
+        )
+        expect(arguments.last(3)).to eq([input, '-o', output])
+      end
     end
   end
 
