@@ -64,8 +64,8 @@ RSpec.describe 'bin/video_encoder_ccextractor' do
           'none',
           '--user',
           "#{Process.uid}:#{Process.gid}",
-          '--volume',
-          "#{workspace}:#{workspace}",
+          '--mount',
+          %(type=bind,"source=#{workspace}","target=#{workspace}"),
           'video-encoder-ccextractor:0.96.6-ocr-fra',
           '--out',
           'srt',
@@ -73,6 +73,25 @@ RSpec.describe 'bin/video_encoder_ccextractor' do
           '-o',
           output_path
         ]
+      )
+    end
+  end
+
+  it 'preserves colons, commas and quotes in an explicitly configured workspace' do
+    with_fake_docker do |environment, arguments_path|
+      workspace = File.join(environment.fetch('TEST_DIRECTORY'), 'Vanina : Meurtres, "Sicile"')
+      Dir.mkdir(workspace)
+      environment['VIDEO_ENCODER_WORKSPACE'] = workspace
+
+      _stdout, stderr, status = Open3.capture3(environment, launcher, '--version')
+
+      expect(status).to be_success
+      expect(stderr).to eq('')
+      arguments = read_arguments(arguments_path)
+      expect(arguments).not_to include('--volume')
+      escaped = workspace.gsub('"', '""')
+      expect(arguments[arguments.index('--mount') + 1]).to eq(
+        %(type=bind,"source=#{escaped}","target=#{escaped}")
       )
     end
   end
