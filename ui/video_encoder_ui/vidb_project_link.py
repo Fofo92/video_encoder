@@ -6,6 +6,8 @@ from urllib.error import URLError
 from urllib.parse import urlparse
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
+from .planned_language import planned_language
+
 
 class NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -36,6 +38,9 @@ class VidbProjectLink:
             project = {"project_id": document["project_id"], "project_path": str(Path(destination).absolute()),
                        "output_path": str(Path(destination).absolute().with_suffix(".mkv")),
                        "source_paths": self.source_paths(document)}
+            hint = planned_language(document)
+            if hint:
+                project["language_hint"] = hint
             response = self.transport(config, {"project": project})
             return self.checked_response(config, response, document["project_id"])
         except (OSError, URLError, ValueError, KeyError, TypeError, json.JSONDecodeError):
@@ -92,6 +97,11 @@ class VidbProjectLink:
             result.update(status="identified", record_title=response.get("record_title", ""))
             if isinstance(response.get("metadata"), dict):
                 result["metadata"] = response["metadata"]
+            review_url = response.get("review_url")
+            if review_url:
+                if urlparse(review_url).netloc != urlparse(config["url"]).netloc or urlparse(review_url).scheme != "https":
+                    raise ValueError("lien de complément hors de vidb")
+                result["review_url"] = review_url
             return result
         if status not in {"needs_review", "unmatched"}:
             raise ValueError("réponse vidb invalide")

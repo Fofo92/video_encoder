@@ -54,7 +54,8 @@ def prepare_catalogue_destination(parent, session, source, suggested, writer):
         provisional = Path("/videos") / Path(source).with_suffix(".json").name
     sources = getattr(session, "sources", ())
     document = {"version": 2, "project_id": session.project_id, "vidb": getattr(session, "vidb", {}),
-                "sources": [{"path": str(item.path)} for item in sources] or [{"path": str(source)}]}
+                "sources": [{"path": str(item.path), "inspection": getattr(item, "inspection", None)}
+                            for item in sources] or [{"path": str(source)}]}
     result = link.identify(document, provisional, refresh=True)
     writer.vidb_result = result
     if result.get("status") == "disabled":
@@ -64,7 +65,7 @@ def prepare_catalogue_destination(parent, session, source, suggested, writer):
     session.vidb = {key: value for key, value in result.items() if key != "metadata"}
     metadata = result.get("metadata", {})
     if metadata.get("record_kind") == "episode":
-        return confirm_episode_destination(parent, metadata, suggested)
+        return confirm_episode_destination(parent, metadata, suggested, result.get("review_url"))
     if metadata.get("record_kind") != "standalone_video":
         return Path(suggested)
     return confirm_destination(parent, metadata, suggested)
@@ -112,18 +113,30 @@ def confirm_destination(parent, metadata, suggested):
     return Path(suggested) if dialog.clickedButton() is manual else None
 
 
-def confirm_episode_destination(parent, metadata, suggested):
+def confirm_episode_destination(parent, metadata, suggested, review_url=None):
     proposed = suggested_episode_output(metadata, suggested)
     dialog = QtWidgets.QMessageBox(parent)
     dialog.setWindowTitle("Épisode identifié dans vidb")
     dialog.setText(f"Destination proposée :\n{proposed}")
-    dialog.setInformativeText("Vérifie le dossier de la série et de la saison dans la fenêtre suivante."
-                              " Aucun fichier existant n’est déplacé ou renommé.")
+    missing = [label for field, label in (("year", "année"), ("abstract", "résumé"),
+                                         ("genres", "genres"), ("countries", "pays")) if not metadata.get(field)]
+    if metadata.get("language_version") in (None, "", "IND"):
+        missing.append("version linguistique")
+    explanation = "Vérifie le dossier de la série et de la saison dans la fenêtre suivante."
+    if missing:
+        explanation += "\nÀ compléter dans vidb : " + ", ".join(missing) + "."
+    dialog.setInformativeText(explanation)
+    complete = None
+    if review_url:
+        complete = dialog.addButton("Compléter la fiche dans vidb", QtWidgets.QMessageBox.ButtonRole.ActionRole)
     use = dialog.addButton("Utiliser cette proposition", QtWidgets.QMessageBox.ButtonRole.AcceptRole)
     dialog.setDefaultButton(use)
     manual = dialog.addButton("Choisir moi-même", QtWidgets.QMessageBox.ButtonRole.ActionRole)
     dialog.addButton("Revenir au montage", QtWidgets.QMessageBox.ButtonRole.RejectRole)
     dialog.exec()
+    if complete is not None and dialog.clickedButton() is complete:
+        QtGui.QDesktopServices.openUrl(QtCore.QUrl(review_url))
+        return None
     if dialog.clickedButton() is use:
         return proposed
     return Path(suggested) if dialog.clickedButton() is manual else None
