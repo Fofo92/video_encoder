@@ -36,6 +36,7 @@ class ApplicationController:
         )
 
     def show(self):
+        self.queue_controller.refresh(self.start_window)
         self.start_controller.show()
 
     def new_project(self):

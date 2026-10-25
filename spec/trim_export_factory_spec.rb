@@ -29,6 +29,18 @@ RSpec.describe VideoEncoder::TrimExportFactory do
         )
     end
 
+    it 'allows a serial comparison through the environment without changing the project' do
+      allow(ENV).to receive(:fetch).and_call_original
+      allow(ENV).to receive(:fetch).with('VIDEO_ENCODER_AUDIO_CONCURRENCY', '2').and_return('1')
+      allow(VideoEncoder::TrimExporter).to receive(:new).and_call_original
+      described_class.new(
+        runner: instance_double(VideoEncoder::CommandRunner),
+        ccextractor_executable: 'ccextractor', synchronization_delay: 0
+      ).build(workspace_directory: '/tmp/video_encoder_workspace')
+
+      expect(VideoEncoder::TrimExporter).to have_received(:new).with(hash_including(audio_concurrency: 1))
+    end
+
     it 'configures subtitle timeline synchronization' do
       runner = instance_double(
         VideoEncoder::CommandRunner

@@ -9,7 +9,9 @@ module VideoEncoder
       remuxer:,
       workspace:,
       subtitle_exporter: nil,
-      progress_reporter: nil
+      progress_reporter: nil,
+      audio_concurrency: 2,
+      timings: nil
     )
       @builder = builder
       @renderer = renderer
@@ -17,6 +19,9 @@ module VideoEncoder
       @workspace = workspace
       @subtitle_exporter = subtitle_exporter
       @progress_reporter = progress_reporter
+      @audio_concurrency = audio_concurrency
+      @timings = timings
+      raise ArgumentError, 'audio concurrency must be 1 or 2' unless [1, 2].include?(audio_concurrency)
     end
 
     def call(
@@ -36,34 +41,31 @@ module VideoEncoder
         selected_audio_tracks
       )
 
-      render_video(
-        trim_project,
-        video_tracks_by_source,
-        total_steps
-      )
+      measure(:video) do
+        render_video(trim_project, video_tracks_by_source, total_steps)
+      end
 
-      subtitle_path, selected_audio_tracks = SubtitleExportPreparation.new(
-        exporter: subtitle_exporter,
-        progress_reporter: progress_reporter
-      ).call(
-        trim_project: trim_project,
-        video_tracks_by_source:
-          video_tracks_by_source,
-        subtitle_tracks_by_source:
-          subtitle_tracks_by_source,
-        audio_output_tracks:
-          selected_audio_tracks,
-        rendered_video_path:
-          workspace.video_path
-      )
+      subtitle_path, selected_audio_tracks = measure(:subtitles) do
+        SubtitleExportPreparation.new(
+          exporter: subtitle_exporter,
+          progress_reporter: progress_reporter
+        ).call(
+          trim_project: trim_project,
+          video_tracks_by_source: video_tracks_by_source,
+          subtitle_tracks_by_source: subtitle_tracks_by_source,
+          audio_output_tracks: selected_audio_tracks,
+          rendered_video_path: workspace.video_path
+        )
+      end
 
-      audio_inputs = render_audio_tracks(
-        trim_project,
-        sources,
-        selected_audio_tracks,
-        video_tracks_by_source,
-        total_steps
-      )
+      audio_inputs = measure(
+        :audio, concurrency: [@audio_concurrency, selected_audio_tracks.length].min,
+                roles: selected_audio_tracks.map(&:role)
+      ) do
+        render_audio_tracks(
+          trim_project, sources, selected_audio_tracks, video_tracks_by_source, total_steps
+        )
+      end
 
       report_progress(:remux, step: total_steps, total: total_steps)
 
@@ -73,7 +75,7 @@ module VideoEncoder
         output_path: output_path
       }
       args[:subtitle_path] = subtitle_path if subtitle_path
-      @remuxer.remux(**args)
+      measure(:remux) { @remuxer.remux(**args) }
     end
 
     private
@@ -119,61 +121,58 @@ module VideoEncoder
       video_tracks_by_source,
       total_steps
     )
-      audio_tracks.each_with_index.map do |output_track, index|
-        render_audio_track(
-          trim_project,
-          sources,
-          output_track,
-          video_tracks_by_source,
-          index,
-          audio_tracks.length,
-          total_steps
+      inputs = audio_tracks.map do |output_track|
+        prepare_audio_track(trim_project, sources, output_track, video_tracks_by_source)
+      end
+
+      render_prepared_audio(inputs, total_steps)
+      inputs.map { |input| input.except(:render) }
+    end
+
+    def render_prepared_audio(inputs, total_steps)
+      if inputs.length > 1 && @audio_concurrency == 2
+        report_progress(
+          :audio, step: subtitle_exporter ? 3 : 2, total: total_steps,
+                  tracks: inputs.length, parallel: true
         )
+        renderer.render_audio_batch(inputs.map { |input| input.fetch(:render) })
+      else
+        render_sequential_audio(inputs, total_steps)
       end
     end
 
-    def render_audio_track(
-      trim_project,
-      sources,
-      output_track,
-      video_tracks_by_source,
-      index,
-      track_count,
-      total_steps
-    )
-      report_progress(
-        :audio,
-        step: index + (subtitle_exporter ? 3 : 2),
-        total: total_steps,
-        track: index + 1,
-        tracks: track_count,
-        role: output_track.role
-      )
+    def render_sequential_audio(inputs, total_steps)
+      inputs.each_with_index do |input, index|
+        report_progress(
+          :audio, step: index + (subtitle_exporter ? 3 : 2), total: total_steps,
+                  track: index + 1, tracks: inputs.length, role: input.fetch(:output_track).role
+        )
+        renderer.render_audio(**input.fetch(:render))
+      end
+    end
 
+    def prepare_audio_track(trim_project, sources, output_track, video_tracks_by_source)
       tracks_by_source = sources.to_h do |source|
         [source, output_track.track_for(source)]
       end
-
       audio_xml = builder.build(
         trim_project,
         video_index: -1,
         audio_tracks_by_source: tracks_by_source,
         video_tracks_by_source: video_tracks_by_source
       )
-
-      workspace.write_mlt(audio_xml)
-
+      project_path = workspace.write_audio_mlt(audio_xml, output_track)
       audio_path = workspace.audio_path(output_track)
-
-      renderer.render_audio(
-        project_path: workspace.mlt_path,
-        output_path: audio_path
-      )
-
       {
-        path: audio_path,
-        output_track: output_track
+        path: audio_path, output_track: output_track,
+        render: { project_path: project_path, output_path: audio_path }
       }
+    end
+
+    def measure(stage, **details, &)
+      return yield unless @timings
+
+      @timings.measure(stage, **details, &)
     end
 
     def report_progress(stage, **details)

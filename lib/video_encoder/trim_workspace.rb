@@ -41,6 +41,12 @@ module VideoEncoder
       File.join(directory, "audio_#{output_track.role}.mka")
     end
 
+    def write_audio_mlt(xml, output_track)
+      path = File.join(directory, "audio_#{output_track.role}.mlt")
+      File.write(path, xml)
+      path
+    end
+
     def subtitle_transport_path(segment_index)
       File.join(
         directory,

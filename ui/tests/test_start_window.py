@@ -34,20 +34,18 @@ class StartWindowTest(unittest.TestCase):
     def test_offers_the_main_startup_actions(self):
         self.assertEqual(
             self.window.windowTitle(),
-            "video_encoder"
+            "video_encoder — Montages"
         )
         self.assertEqual(
-            self.window.new_project_button.text(),
-            "Nouveau montage…"
+            self.window.new_project_action.text(),
+            "Ouvrir une source…"
         )
         self.assertEqual(
-            self.window.open_project_button.text(),
-            "Ouvrir un projet de découpage…"
+            self.window.open_project_action.text(),
+            "Ouvrir un projet…"
         )
-        self.assertEqual(
-            self.window.queue_button.text(),
-            "File des montages…"
-        )
+        self.assertEqual(self.window.tabs.count(), 8)
+        self.assertFalse(hasattr(self.window, "queue_button"))
 
     def test_emits_the_selected_action(self):
         new_requested = Mock()
@@ -64,13 +62,13 @@ class StartWindowTest(unittest.TestCase):
             queue_requested
         )
 
-        self.window.new_project_button.click()
-        self.window.open_project_button.click()
-        self.window.queue_button.click()
+        self.window.new_project_action.trigger()
+        self.window.open_project_action.trigger()
+
 
         new_requested.assert_called_once_with()
         open_requested.assert_called_once_with()
-        queue_requested.assert_called_once_with()
+        queue_requested.assert_not_called()
 
     def test_requests_source_quarantine(self):
         quarantine_requested = Mock()
@@ -80,20 +78,20 @@ class StartWindowTest(unittest.TestCase):
         )
 
         self.assertEqual(
-            self.window.quarantine_button.text(),
+            self.window.quarantine_action.text(),
             "Mettre une source en quarantaine…"
         )
 
-        self.window.quarantine_button.click()
+        self.window.quarantine_action.trigger()
 
         quarantine_requested.assert_called_once_with()
 
     def test_keeps_editing_actions_available(self):
         self.assertTrue(
-            self.window.new_project_button.isEnabled()
+            self.window.new_project_action.isEnabled()
         )
         self.assertTrue(
-            self.window.open_project_button.isEnabled()
+            self.window.open_project_action.isEnabled()
         )
 
 if __name__ == "__main__":

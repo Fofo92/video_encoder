@@ -7,12 +7,14 @@ module VideoEncoder
       runner:,
       ccextractor_executable:,
       synchronization_delay:,
-      progress_reporter: nil
+      progress_reporter: nil,
+      timings: nil
     )
       @runner = runner
       @ccextractor_executable = ccextractor_executable
       @synchronization_delay = synchronization_delay
       @progress_reporter = progress_reporter
+      @timings = timings
     end
 
     def build(workspace_directory:)
@@ -26,7 +28,9 @@ module VideoEncoder
         remuxer: FfmpegRemuxer.new(runner: runner),
         workspace: workspace,
         subtitle_exporter: build_subtitle_exporter(workspace),
-        progress_reporter: progress_reporter
+        progress_reporter: progress_reporter,
+        timings: @timings,
+        audio_concurrency: Integer(ENV.fetch('VIDEO_ENCODER_AUDIO_CONCURRENCY', '2'), 10)
       )
 
       exporter = WorkspaceCleaningExporter.new(

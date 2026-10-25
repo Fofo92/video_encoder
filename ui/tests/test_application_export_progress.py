@@ -71,6 +71,26 @@ class ApplicationExportProgressTest(unittest.TestCase):
                     monitor.export_progress_bar.setValue\
                         .assert_not_called()
 
+    def test_parallel_audio_uses_activity_instead_of_two_conflicting_percentages(self):
+        monitor = self.make_monitor("audio", "Audio parallèle")
+        MltFrameMonitor.export_stage_changed(
+            monitor, {"stage": "audio", "step": 3, "total": 5, "parallel": True}
+        )
+        monitor.export_progress_bar.setVisible.assert_called_once_with(True)
+        monitor.export_progress_bar.setRange.assert_called_once_with(0, 0)
+        MltFrameMonitor.export_progress_changed(monitor, 90)
+        monitor.export_progress_bar.setValue.assert_not_called()
+        self.assertEqual(
+            MltFrameMonitor.export_stage_name(monitor, {"stage": "audio", "parallel": True}),
+            "Audio français + original (parallèle)",
+        )
+        monitor.export_progress_bar.reset_mock()
+        MltFrameMonitor.export_stage_changed(
+            monitor, {"stage": "video", "step": 1, "total": 5}
+        )
+        monitor.export_progress_bar.setRange.assert_called_once_with(0, 100)
+        self.assertFalse(monitor.export_audio_parallel)
+
     def test_describes_unmeasurable_progress(self):
         status_bar = Mock()
         monitor = SimpleNamespace(

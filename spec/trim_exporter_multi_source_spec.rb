@@ -3,6 +3,12 @@
 require 'spec_helper'
 
 RSpec.describe VideoEncoder::TrimExporter do
+  before do
+    allow(workspace).to receive(:write_audio_mlt) do |_xml, track|
+      "tmp/audio_#{track.role}.mlt"
+    end
+  end
+
   subject(:exporter) do
     described_class.new(
       builder: builder,

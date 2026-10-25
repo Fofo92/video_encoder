@@ -10,6 +10,20 @@ from video_encoder_ui.trim_export_queue_client import (
 
 
 class TrimExportQueueClientTest(unittest.TestCase):
+    def test_moves_a_project_without_shell_interpolation(self):
+        runner = Mock(return_value=SimpleNamespace(returncode=0, stdout="/new/Film.json\n", stderr=""))
+        client = TrimExportQueueClient(executable="/app/video_encoder", runner=runner)
+        self.assertEqual(client.move_project("/old/Film : A & B.json", "/new"), "/new/Film.json")
+        runner.assert_called_once_with(
+            ["/app/video_encoder", "move-project", "/old/Film : A & B.json", "--directory", "/new"],
+            text=True, capture_output=True, check=False)
+
+    def test_reports_project_relocation_errors(self):
+        runner = Mock(return_value=SimpleNamespace(returncode=1, stdout="", stderr="Destination occupée"))
+        client = TrimExportQueueClient(executable="/app/video_encoder", runner=runner)
+        with self.assertRaisesRegex(TrimExportQueueError, "Destination occupée"):
+            client.move_project("/old/Film.json", "/new")
+
     def test_enqueues_a_trim_export(self):
         runner = Mock(
             return_value=SimpleNamespace(

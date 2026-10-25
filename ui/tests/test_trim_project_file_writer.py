@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 from unittest.mock import Mock
 from types import SimpleNamespace
@@ -42,14 +43,9 @@ class TrimProjectFileWriterTest(unittest.TestCase):
             )
 
             self.assertEqual(result, destination)
-            self.assertEqual(
-                json.loads(
-                    destination.read_text(
-                        encoding="utf-8"
-                    )
-                ),
-                document
-            )
+            saved = json.loads(destination.read_text(encoding="utf-8"))
+            self.assertEqual({key: value for key, value in saved.items() if key != "project_id"}, document)
+            self.assertEqual(uuid.UUID(saved["project_id"]).version, 4)
 
 
 if __name__ == "__main__":

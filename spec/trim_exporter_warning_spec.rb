@@ -3,6 +3,12 @@
 require 'spec_helper'
 
 RSpec.describe VideoEncoder::TrimExporter, 'subtitle warnings' do
+  before do
+    allow(workspace).to receive(:write_audio_mlt) do |_xml, track|
+      "tmp/audio_#{track.role}.mlt"
+    end
+  end
+
   let(:builder) { instance_double(VideoEncoder::MltProjectBuilder) }
   let(:renderer) { instance_double(VideoEncoder::MltRenderer) }
   let(:remuxer) { instance_double(VideoEncoder::FfmpegRemuxer) }
@@ -136,7 +142,7 @@ RSpec.describe VideoEncoder::TrimExporter, 'subtitle warnings' do
 
     expect(steps).to eq(%i[video subtitles audio remux])
     expect(renderer).to have_received(:render_audio).with(
-      project_path: 'tmp/project.mlt',
+      project_path: 'tmp/audio_french.mlt',
       output_path: 'tmp/french.mka'
     ).once
     expect(remuxer).to have_received(:remux).with(

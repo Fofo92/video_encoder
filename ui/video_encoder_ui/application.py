@@ -28,6 +28,8 @@ from .trim_project_exporter import (
 )
 from .audio_preflight_runner import AudioPreflightRunner
 from .project_destination import select_project_output
+from .vidb_project_review import offer_vidb_review
+from .vidb_project_link import VidbProjectLink
 from .trim_project_file_reader import (
     TrimProjectFileReader,
 )
@@ -56,6 +58,7 @@ from .trim_export_queue_controller import (
     TrimExportQueueController,
 )
 from .start_window import StartWindow
+from .window_placement import place_initial_window
 from .application_controller import (
     ApplicationController,
 )
@@ -68,6 +71,7 @@ from .source_quarantine_client import (
 from .source_quarantine_controller import (
     SourceQuarantineController,
 )
+from .source_completion_controller import SourceCompletionController
 
 PREVIEW_WIDTH = 640
 PREVIEW_HEIGHT = 360
@@ -126,7 +130,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.source_id = sources[0].identifier
 
         self.trim_project_writer = TrimProjectFileWriter(
-            TrimProjectBridge()
+            TrimProjectBridge(), vidb_link=VidbProjectLink()
         )
         self.trim_project_archiver = (
             TrimProjectArchiver()
@@ -327,25 +331,15 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.shuttle_label.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignCenter
         )
-        self.shuttle_label.setFixedSize(88, 30)
+        self.shuttle_label.setFixedSize(64, 28)
         self.update_transport_indicator(0.0)
-
-        self.previous_button = QtWidgets.QPushButton()
-        self.previous_button.clicked.connect(
-            self.show_previous_frame
-        )
-
-        self.next_button = QtWidgets.QPushButton()
-        self.next_button.clicked.connect(
-            self.show_next_frame
-        )
 
         self.boundary_start_button = QtWidgets.QToolButton()
         self.boundary_end_button = QtWidgets.QToolButton()
         for button in (self.boundary_start_button, self.boundary_end_button):
-            button.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-            button.setIconSize(QtCore.QSize(22, 22))
-            button.setMinimumHeight(36)
+            button.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonIconOnly)
+            button.setIconSize(QtCore.QSize(18, 18))
+            button.setFixedSize(28, 28)
         self.boundary_start_button.clicked.connect(self.go_to_context_start)
         self.boundary_end_button.clicked.connect(self.go_to_context_end)
 
@@ -456,9 +450,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
                 )
             )
             button.setIconSize(
-                QtCore.QSize(22, 22)
+                QtCore.QSize(18, 18)
             )
-            button.setFixedSize(36, 36)
+            button.setFixedSize(28, 28)
 
             button.setToolTip(tooltip)
             button.setToolTipDuration(5_000)
@@ -472,7 +466,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
                 """
                 QPushButton {
                     border: 1px solid palette(mid);
-                    border-radius: 18px;
+                    border-radius: 6px;
                     background: palette(button);
                     padding: 0;
                 }
@@ -503,18 +497,6 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.forward_button,
             QtWidgets.QStyle.StandardPixmap.SP_MediaSeekForward,
             "Augmenter la vitesse ou lire en avant (L)"
-        )
-
-        configure_icon_button(
-            self.previous_button,
-            QtWidgets.QStyle.StandardPixmap.SP_MediaSkipBackward,
-            "Afficher l’image précédente"
-        )
-
-        configure_icon_button(
-            self.next_button,
-            QtWidgets.QStyle.StandardPixmap.SP_MediaSkipForward,
-            "Afficher l’image suivante"
         )
 
         def create_button_group(*buttons):
@@ -590,14 +572,8 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.forward_button
         )
 
-        frame_button_group = create_button_group(
-            self.previous_button,
-            self.next_button
-        )
 
         transport_separator = create_vertical_separator()
-        markers_separator = create_vertical_separator()
-        information_separator = create_vertical_separator()
 
         def create_marker_label(tooltip):
             label = QtWidgets.QLabel("--:--:--:--")
@@ -646,9 +622,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         markers_layout.addWidget(
             self.add_segment_button
         )
-        markers_layout.addWidget(self.nudge_marker_selector)
-        markers_layout.addWidget(self.nudge_backward_button)
-        markers_layout.addWidget(self.nudge_forward_button)
+        self.nudge_marker_selector.hide()
+        self.nudge_backward_button.hide()
+        self.nudge_forward_button.hide()
 
         markers_widget.setSizePolicy(
             QtWidgets.QSizePolicy.Policy.Fixed,
@@ -656,13 +632,10 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
         controls_layout = QtWidgets.QHBoxLayout()
+        controls_layout.setSpacing(2)
 
         controls_layout.addWidget(
             transport_button_group
-        )
-        controls_layout.addSpacing(8)
-        controls_layout.addWidget(
-            frame_button_group
         )
         controls_layout.addSpacing(4)
         controls_layout.addWidget(
@@ -678,22 +651,13 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.shuttle_label
         )
 
-        controls_layout.addWidget(
-            markers_separator
-        )
-        controls_layout.addWidget(
-            markers_widget,
-            stretch=0
-        )
+        controls_layout.addSpacing(4)
+        controls_layout.addWidget(markers_widget)
         controls_layout.addStretch(1)
+        position_row = QtWidgets.QHBoxLayout()
+        position_row.addStretch(1)
+        position_row.addWidget(self.position_label)
 
-        controls_layout.addWidget(
-            information_separator
-        )
-        controls_layout.addWidget(
-            self.position_label,
-            stretch=0
-        )
         self.segment_list = SegmentListWidget()
         self.segment_list.segment_selected.connect(
             self.select_segment
@@ -707,7 +671,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.update_segment_navigation_actions
         )
 
-        self.segment_list.setVisible(False)
+        self.segment_list.setMinimumHeight(85)
+        self.segment_list.setMaximumHeight(140)
+        self.segment_list.setVisible(True)
 
         self.export_progress_bar = (
             QtWidgets.QProgressBar()
@@ -728,6 +694,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         layout.addWidget(self.video_label, stretch=1)
         layout.addWidget(self.position_slider)
         layout.addLayout(controls_layout)
+        layout.addLayout(position_row)
         layout.addWidget(self.segment_list)
 
         layout.addWidget(
@@ -993,7 +960,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
         self.export_project_action = QtGui.QAction(
-            "Exporter le montage…",
+            "Encoder le montage…",
             self
         )
         self.export_project_action.setShortcut(
@@ -1128,15 +1095,14 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             lambda: self.schedule_wheel_move(1)
         )
 
-        file_menu = self.menuBar().addMenu("&Fichier")
+        sources_menu = self.menuBar().addMenu("&Sources")
+        sources_menu.addAction(self.source_information_action)
+        file_menu = self.menuBar().addMenu("&Projets")
         file_menu.addAction(
             self.save_project_action
         )
         file_menu.addAction(
             self.save_project_as_action
-        )
-        file_menu.addAction(
-            self.source_information_action
         )
         file_menu.addSeparator()
         file_menu.addAction(
@@ -1146,9 +1112,6 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.queue_export_action
         )
 
-        file_menu.addAction(
-            self.show_export_queue_action
-        )
 
         file_menu.addAction(
             self.cancel_export_action
@@ -1157,9 +1120,24 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         montage_menu = self.menuBar().addMenu(
             "&Montage"
         )
-        montage_menu.addAction(
-            self.clear_all_segments_action
-        )
+        self.new_montage_action = QtGui.QAction("Nouveau montage…", self)
+        self.new_montage_action.setIcon(themed_icon("document-new", QtWidgets.QStyle.StandardPixmap.SP_FileIcon))
+        self.new_montage_action.setShortcut(QtGui.QKeySequence("Ctrl+N"))
+        self.new_montage_action.triggered.connect(self.new_montage)
+        montage_menu.addAction(self.new_montage_action)
+        montage_menu.addAction(self.export_project_action)
+        montage_menu.addAction(self.queue_export_action)
+        montage_menu.addSeparator()
+        for label, index in (("Ajuster IN du segment", 1), ("Ajuster OUT du segment", 2)):
+            action = montage_menu.addAction(label)
+            action.triggered.connect(lambda checked=False, mode=index: self.nudge_marker_selector.setCurrentIndex(mode))
+        montage_menu.addAction(self.clear_all_segments_action)
+        self.identify_vidb_action = QtGui.QAction("Identifier l’œuvre dans vidb", self)
+        self.identify_vidb_action.triggered.connect(self.review_vidb_project)
+        self.identify_vidb_action.setEnabled(self.save_project_action.isEnabled())
+        self.save_project_action.changed.connect(
+            lambda: self.identify_vidb_action.setEnabled(self.save_project_action.isEnabled()))
+        montage_menu.addAction(self.identify_vidb_action)
 
         main_toolbar = self.addToolBar(
             "Actions principales"
@@ -1189,9 +1167,6 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.queue_export_action
         )
 
-        main_toolbar.addAction(
-            self.show_export_queue_action
-        )
 
         main_toolbar.addSeparator()
         main_toolbar.addAction(
@@ -1203,7 +1178,6 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.source_information_action,
             self.export_project_action,
             self.queue_export_action,
-            self.show_export_queue_action,
             self.cancel_export_action
         ):
             tool_button = main_toolbar.widgetForAction(
@@ -1499,19 +1473,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             event_timestamp
         )
 
-        if elapsed_ms is None or elapsed_ms >= 300:
+        if elapsed_ms is None or elapsed_ms >= 180:
             return 1
-
-        if elapsed_ms >= 180:
-            return 5
-
-        if elapsed_ms >= 100:
-            return self.frames_per_second
-
-        if elapsed_ms >= 50:
-            return 5 * self.frames_per_second
-
-        return 10 * self.frames_per_second
+        return 2 if elapsed_ms >= 80 else 3
 
     def timecode_for(self, position):
         total_seconds, frame_number = divmod(
@@ -1755,8 +1719,23 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         self.set_project_modified()
         self.refresh_segment_list()
 
+    def new_montage(self):
+        if self.export_status in {"running", "preflight", "confirming"}:
+            return
+        if not self.confirm_unsaved_changes():
+            return
+        source = select_media_path()
+        if source is None:
+            return
+        window = create_editor_window(source)
+        if window is not None:
+            self._new_montage_window = window
+            window.show()
+
     def start_new_project_from_current_source(self):
         self.trim_session.clear_segments()
+        self.trim_session.project_id = None
+        self.trim_session.vidb = {}
         self.project_path = None
         self.clear_active_markers()
         self.refresh_segment_list()
@@ -1839,9 +1818,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             source_colors=source_colors
         )
 
-        self.segment_list.setVisible(
-            bool(segments)
-        )
+        self.segment_list.setVisible(True)
         busy = self.export_status in {
             "running",
             "preflight",
@@ -2187,6 +2164,12 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             5_000
         )
 
+        vidb_result = getattr(self.trim_project_writer, "vidb_result", None)
+        if isinstance(vidb_result, dict) and vidb_result.get("status") == "identified":
+            self.statusBar().showMessage(f"Projet enregistré · fiche vidb {vidb_result['record_id']}", 8_000)
+        elif isinstance(vidb_result, dict) and vidb_result.get("status") != "disabled":
+            self.statusBar().showMessage("Projet enregistré · identification vidb à compléter (menu Montage)", 8_000)
+
         if self.trim_project_writer.cleanup_warnings:
             QtWidgets.QMessageBox.warning(
                 self, "Projet enregistré ; nettoyage différé",
@@ -2195,6 +2178,10 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             )
 
         return destination
+
+    def review_vidb_project(self):
+        if self.save_project() is not None:
+            offer_vidb_review(self, self.trim_project_writer)
 
     def select_output_path(self, suggested):
         return select_project_output(self, suggested, self.project_path)
@@ -2224,6 +2211,8 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             return
         project_path = self.write_project(Path(output_path).with_suffix(".json"))
         if project_path is None:
+            return
+        if not offer_vidb_review(self, getattr(self, "trim_project_writer", None), before_encoding=True):
             return
 
         self.pending_export_mode = (
@@ -2598,6 +2587,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.export_stage_name(event)
         )
 
+        self.export_audio_parallel = bool(event.get("parallel"))
         measurable = self.export_stage in {
             "video",
             "audio"
@@ -2607,7 +2597,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             measurable
         )
 
-        if measurable:
+        if self.export_audio_parallel:
+            self.export_progress_bar.setRange(0, 0)
+        elif measurable:
             self.export_progress_bar.setRange(
                 0,
                 100
@@ -2624,6 +2616,8 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             return "Vidéo"
 
         if stage == "audio":
+            if event.get("parallel"):
+                return "Audio français + original (parallèle)"
             roles = {
                 "french": "Audio français",
                 "original": "Audio original"
@@ -2643,6 +2637,8 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         return stage
 
     def export_progress_changed(self, percentage):
+        if getattr(self, "export_audio_parallel", False):
+            return
         if self.export_stage not in {
             "video",
             "audio"
@@ -2665,7 +2661,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         if self.export_stage in {
             "video",
             "audio"
-        }:
+        } and not getattr(self, "export_audio_parallel", False):
             text = f"{prefix} — %p %"
         else:
             text = f"{prefix}…"
@@ -3069,6 +3065,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         if (
             queue_runner is not None
             and queue_runner.is_running
+            and not getattr(self, "queue_owned_by_home", False)
         ):
             event.ignore()
 
@@ -3347,6 +3344,7 @@ def create_editor_window(
         ),
     )
 
+    place_initial_window(window)
     return window
 
 def main():
@@ -3433,6 +3431,14 @@ def main():
         parent=start_window,
     )
 
+    queue_controller.attach(start_window)
+    queue_controller.refresh(start_window)
+    start_window.relocate_requested.connect(queue_controller.relocate_project)
+
+    source_completion = SourceCompletionController(start_window, queue_client, SourceQuarantineClient())
+    source_completion.install_menu_bar(start_window.menu_bar)
+    QtCore.QTimer.singleShot(0, source_completion.start)
+
     mlt_factory = mlt.Factory()
     mlt_initialized = False
 
@@ -3443,9 +3449,18 @@ def main():
             mlt_factory.init()
             mlt_initialized = True
 
-        return create_editor_window(
-            selected_path
-        )
+        window = create_editor_window(selected_path)
+        if window is not None:
+            window.trim_export_queue_client = queue_client
+            window.trim_export_queue_runner = queue_runner
+            window.trim_export_queue_controller = queue_controller
+            window.queue_owned_by_home = True
+            window.new_montage_action.triggered.disconnect()
+            window.new_montage_action.triggered.connect(application_controller.new_project)
+            source_completion.install_menu_bar(window.menuBar())
+            window.trim_project_exporter.succeeded.connect(
+                lambda output, editor=window: source_completion.record_export(editor.project_path, output))
+        return window
 
     editor_controller = EditorWindowController(
         start_window=start_window,

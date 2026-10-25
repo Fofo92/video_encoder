@@ -21,7 +21,7 @@ class EditorWindowControllerTest(
             editor_factory=self.editor_factory,
         )
 
-    def test_opens_the_editor_and_hides_start(self):
+    def test_opens_the_editor_and_keeps_the_queue_visible(self):
         selected_path = Path(
             "/recordings/movie.m2t"
         )
@@ -32,7 +32,7 @@ class EditorWindowControllerTest(
             selected_path
         )
         self.editor_window.show.assert_called_once_with()
-        self.start_window.hide.assert_called_once_with()
+        self.start_window.show.assert_called_once_with()
         self.assertIs(
             self.controller.editor_window,
             self.editor_window,

@@ -36,14 +36,16 @@ L’application peut être lancée sans argument :
 
     bin/video_encoder_ui
 
-Elle affiche alors une fenêtre d’accueil proposant trois parcours :
+Elle affiche directement la file des montages et ses onglets. Les menus Sources,
+Projets et Montage donnent accès à l’ouverture d’une capture, à la quarantaine,
+à l’ouverture et au déplacement d’un projet, à la création d’un montage et aux
+commandes de la file. Il n’y a plus de fenêtre de choix ni de bouton pour afficher
+une file qui constitue déjà l’accueil.
 
-- créer un nouveau montage à partir d’une source vidéo ;
-- ouvrir un projet de découpage JSON existant ;
-- consulter et lancer la file des montages.
-
-La consultation de la file ne nécessite pas l’ouverture préalable d’une source.
-MLT n’est initialisé qu’au moment où un éditeur doit réellement être créé.
+La file reste visible pendant l’édition. MLT n’est initialisé que lorsqu’un éditeur
+est créé. Les fenêtres s’ouvrent dans le tiers gauche et la moitié supérieure de
+la zone disponible de l’écran courant ; leurs minima restent prioritaires sur les
+très petits écrans. La liste des segments réserve sa place dès l’ouverture.
 
 Un chemin peut également être fourni directement :
 
@@ -140,8 +142,10 @@ actif empêche le lancement d’un second worker.
 La relance depuis l’interface crée un nouveau travail. Le travail interrompu ou échoué reste dans
 l’historique avec son diagnostic et son nombre de tentatives.
 
-Lorsque la file est lancée depuis la fenêtre d’accueil, l’ouverture d’un éditeur et la fermeture de l’application 
-sont désactivées jusqu’à la fin du processus.
+La fermeture de l’accueil est refusée pendant le traitement de la file. Un éditeur
+peut être ouvert pendant ce traitement ; sa fermeture ne doit pas interrompre le
+worker partagé. Le déplacement d’un projet et la quarantaine sont indisponibles
+tant qu’un éditeur est ouvert, pour éviter de déplacer un document encore utilisé.
 
 ## Évolutions prévues
 
@@ -154,3 +158,16 @@ Les prochaines évolutions de la file devront :
 Le montage multi-source viendra ensuite compléter l’éditeur avec plusieurs
 sources, une couleur propre à chacune et des moniteurs adaptés, sans modifier
 les responsabilités du moteur Ruby.
+
+## Navigation et déplacement des projets
+
+Le menu Montage de l’éditeur propose Nouveau montage, Encoder le montage et
+Ajouter le montage à la file. Les commandes image précédente/suivante restent
+accessibles au clavier et à la souris, sans boutons supplémentaires. Les anciens
+boutons Navigation et −1/+1 sont retirés de l’affichage ; les ajustements IN/OUT
+restent accessibles depuis Montage et Ctrl+←/→.
+
+La couronne du ShuttleXpress conserve ses vitesses d’origine, de 1× à 50× dans les deux sens.
+L’accélération de la molette verticale est limitée à 1, 2 ou 3 images par cran.
+
+Le déplacement est décrit dans [project-relocation.md](project-relocation.md).

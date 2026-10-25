@@ -20,11 +20,13 @@ module VideoEncoder
     end
 
     def build(workspace_directory:)
+      timings = ExportTimings.new
       exporter = TrimExportFactory.new(
         runner: runner,
         ccextractor_executable: ccextractor_executable,
         synchronization_delay: synchronization_delay,
-        progress_reporter: progress_reporter
+        progress_reporter: progress_reporter,
+        timings: timings
       ).build(
         workspace_directory: workspace_directory
       )
@@ -33,7 +35,8 @@ module VideoEncoder
         reader: reader,
         loader: TrimProjectLoader.new(media_probe: media_probe),
         exporter: exporter,
-        receipt: ExportReceipt.new
+        receipt: ExportReceipt.new,
+        timings: timings
       )
     end
 

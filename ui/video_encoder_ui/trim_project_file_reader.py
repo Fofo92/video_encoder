@@ -22,9 +22,12 @@ class TrimProjectFileReader:
         self.validate(document)
 
         if document["version"] == 1:
-            return self.load_version_1(document)
-
-        return self.load_version_2(document)
+            session = self.load_version_1(document)
+        else:
+            session = self.load_version_2(document)
+        session.project_id = document.get("project_id")
+        session.vidb = document.get("vidb", {})
+        return session
 
     def validate(self, document):
         if document.get("format") != self.FORMAT:

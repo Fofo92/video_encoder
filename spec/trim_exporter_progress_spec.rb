@@ -3,6 +3,12 @@
 require 'spec_helper'
 
 RSpec.describe VideoEncoder::TrimExporter, 'progress reporting' do
+  before do
+    allow(workspace).to receive(:write_audio_mlt) do |_xml, track|
+      "tmp/audio_#{track.role}.mlt"
+    end
+  end
+
   let(:media) { instance_double(VideoEncoder::Media) }
   let(:segment) { instance_double(VideoEncoder::Segment, source: media) }
 

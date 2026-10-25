@@ -299,6 +299,18 @@ class TrimExportQueueDialogTest(unittest.TestCase):
             "Étape 4/5 — Audio 2/2 (qaa) — 00:00",
         )
 
+    def test_parallel_audio_names_both_tracks_and_ignores_individual_percentages(self):
+        dialog = TrimExportQueueDialog([])
+        dialog.set_progress({"stage": "audio", "step": 3, "total": 5,
+                             "tracks": 2, "parallel": True})
+        dialog.set_percentage(90)
+        self.assertIn("Audio français + original (parallèle)", dialog.progress_text())
+        self.assertNotIn("90 %", dialog.progress_text())
+        dialog.set_progress({"stage": "video", "step": 1, "total": 5})
+        dialog.set_percentage(10)
+        self.assertIn("10 %", dialog.progress_text())
+        dialog.close()
+
     def test_status_column_fits_progress_text(self):
         dialog = TrimExportQueueDialog([])
 
@@ -948,11 +960,11 @@ class TrimExportQueueDialogTest(unittest.TestCase):
         self.assertEqual(dialog.jobs_table.rowCount(), 15)
         self.assertEqual(
             dialog.jobs_table.item(0, 0).text(),
-            "movie-03.json",
+            "movie-17.json",
         )
         self.assertEqual(
             dialog.jobs_table.item(14, 0).text(),
-            "movie-17.json",
+            "movie-03.json",
         )
 
     def test_filters_complete_history_with_tabs(self):
@@ -1031,11 +1043,11 @@ class TrimExportQueueDialogTest(unittest.TestCase):
         self.assertEqual(dialog.jobs_table.rowCount(), 18)
         self.assertEqual(
             dialog.jobs_table.item(0, 0).text(),
-            "movie-00.json",
+            "movie-17.json",
         )
         self.assertEqual(
             dialog.jobs_table.item(17, 0).text(),
-            "movie-17.json",
+            "movie-00.json",
         )
 
     def test_searches_only_the_all_history_tab(self):

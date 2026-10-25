@@ -94,7 +94,9 @@ class AdAnalysisWorkspaceCleanupTest(unittest.TestCase):
     def test_cleanup_failure_keeps_a_successfully_saved_project_and_is_reported_separately(self):
         with patch("video_encoder_ui.ad_analysis_workspace.shutil.rmtree", side_effect=PermissionError("denied")):
             self.assertEqual(self.writer.save(self.session, self.destination), self.destination)
-        self.assertEqual(json.loads(self.destination.read_text()), self.document)
+        saved = json.loads(self.destination.read_text())
+        self.assertIn("project_id", saved)
+        self.assertEqual({key: value for key, value in saved.items() if key != "project_id"}, self.document)
         self.assertTrue(self.root.exists())
         self.assertIn("denied", self.writer.cleanup_warnings[0])
         self.writer.save(self.session, self.destination)

@@ -462,6 +462,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         return sorted(
             jobs,
             key=cls.job_activity_timestamp,
+            reverse=True,
         )
 
     def job_matches_search(self, job, query):
@@ -526,6 +527,8 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.update_running_progress()
 
     def set_percentage(self, percentage):
+        if (self.progress_event or {}).get("parallel"):
+            return
         self.progress_percentage = percentage
         self.update_running_progress()
 
@@ -559,7 +562,10 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             "remux": "Remuxage",
         }.get(stage, str(stage))
 
-        if stage == "audio":
+        if stage == "audio" and event.get("parallel"):
+            stage_label = "Audio français + original (parallèle)"
+
+        if stage == "audio" and not event.get("parallel"):
             track = event.get("track")
             tracks = event.get("tracks")
             role = event.get("role")

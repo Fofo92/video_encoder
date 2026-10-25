@@ -39,53 +39,58 @@ class TrimExportQueueController:
         self.dialog = None
 
     def show(self):
+        if self.dialog is not None:
+            self.refresh(self.dialog)
+            self.dialog.show()
+            self.dialog.raise_()
+            self.dialog.activateWindow()
+            return
         try:
             jobs = self.client.list_jobs()
         except TrimExportQueueError as error:
-            QtWidgets.QMessageBox.warning(
-                self.parent,
-                "File indisponible",
-                str(error),
-            )
+            QtWidgets.QMessageBox.warning(self.parent, "File indisponible", str(error))
             return
+        dialog = self.dialog_class(jobs, self.parent)
+        self.attach(dialog)
+        dialog.exec()
+        if self.dialog is dialog:
+            self.dialog = None
 
-        dialog = self.dialog_class(
-            jobs,
-            self.parent,
-        )
+    def attach(self, dialog):
         self.dialog = dialog
-
-        dialog.set_running(
-            self.runner.is_running
-        )
-        dialog.refresh_requested.connect(
-            lambda: self.refresh(dialog)
-        )
-        dialog.start_requested.connect(
-            lambda: self.start(dialog)
-        )
-
-        dialog.stop_requested.connect(
-            lambda: self.stop(dialog)
-        )
-        dialog.finish_current_requested.connect(
-            lambda: self.finish_current(dialog)
-        )
-
-        dialog.retry_requested.connect(
-            lambda job: self.retry(dialog, job)
-        )
-        dialog.remove_requested.connect(
-            lambda job: self.remove(dialog, job)
-        )
+        dialog.set_running(self.runner.is_running)
+        dialog.refresh_requested.connect(lambda: self.refresh(dialog))
+        dialog.start_requested.connect(lambda: self.start(dialog))
+        dialog.stop_requested.connect(lambda: self.stop(dialog))
+        dialog.finish_current_requested.connect(lambda: self.finish_current(dialog))
+        dialog.retry_requested.connect(lambda job: self.retry(dialog, job))
+        dialog.remove_requested.connect(lambda job: self.remove(dialog, job))
         dialog.defer_requested.connect(lambda job: self.defer(dialog, job))
         dialog.output_requested.connect(lambda job: self.change_output(dialog, job))
         dialog.delete_project_requested.connect(lambda job: self.delete_project(dialog, job))
 
-        dialog.exec()
+    def relocate_project(self):
+        from pathlib import Path
 
-        if self.dialog is dialog:
-            self.dialog = None
+        job = self.dialog.selected_job() if self.dialog is not None else None
+        project = job.get("input_path") if job is not None else None
+        if not project:
+            project, _filter = QtWidgets.QFileDialog.getOpenFileName(
+                self.parent, "Projet à déplacer", "/videos", "Projet JSON (*.json)")
+        if not project:
+            return
+        directory = QtWidgets.QFileDialog.getExistingDirectory(
+            self.parent, "Déplacer le projet et sa vidéo vers…", str(Path(project).parent))
+        if not directory:
+            return
+        try:
+            destination = self.client.move_project(project, directory)
+        except TrimExportQueueError as error:
+            QtWidgets.QMessageBox.warning(self.parent, "Déplacement impossible", str(error))
+            return
+        if self.dialog is not None:
+            self.refresh(self.dialog)
+        QtWidgets.QMessageBox.information(self.parent, "Projet déplacé", destination)
 
     def refresh(self, dialog):
         try:

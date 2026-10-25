@@ -1,65 +1,115 @@
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
+
+from .trim_export_queue_dialog import TrimExportQueueDialog
+from .window_placement import place_initial_window
 
 
-class StartWindow(QtWidgets.QWidget):
+class StartWindow(TrimExportQueueDialog):
+    """The queue is the application's home, including source/project actions."""
     new_project_requested = QtCore.Signal()
     open_project_requested = QtCore.Signal()
     queue_requested = QtCore.Signal()
     quarantine_requested = QtCore.Signal()
+    relocate_requested = QtCore.Signal()
 
     def __init__(self):
-        super().__init__()
+        super().__init__(jobs=[])
+        self.setWindowTitle("video_encoder — Montages")
+        self.setWindowModality(QtCore.Qt.WindowModality.NonModal)
+        self.menu_bar = QtWidgets.QMenuBar(self)
+        self.layout().setMenuBar(self.menu_bar)
+        sources = self.menu_bar.addMenu("&Sources")
+        projects = self.menu_bar.addMenu("&Projets")
+        montages = self.menu_bar.addMenu("&Montage")
+        self.new_project_action = self.add_home_action(
+            sources, "Ouvrir une source…", "document-new", self.new_project_requested)
+        self.quarantine_action = self.add_home_action(
+            sources, "Mettre une source en quarantaine…", "folder-move", self.quarantine_requested)
+        self.open_project_action = self.add_home_action(
+            projects, "Ouvrir un projet…", "document-open", self.open_project_requested, "Ctrl+O")
+        self.relocate_project_action = self.add_home_action(
+            projects, "Déplacer un projet et sa vidéo…", "folder-move", self.relocate_requested)
+        self.new_montage_action = self.add_home_action(
+            montages, "Nouveau montage…", "document-new", self.new_project_requested, "Ctrl+N")
+        for button in (self.start_button, self.stop_button, self.finish_current_button):
+            action = montages.addAction(button.text())
+            action.triggered.connect(button.click)
+            button.installEventFilter(self)
+            button.setProperty("home_menu_action", action)
+            action.setEnabled(button.isEnabled())
+        names = {
+            self.start_button: ("media-playback-start", QtWidgets.QStyle.StandardPixmap.SP_MediaPlay),
+            self.stop_button: ("media-playback-stop", QtWidgets.QStyle.StandardPixmap.SP_MediaStop),
+            self.finish_current_button: ("media-playback-pause", QtWidgets.QStyle.StandardPixmap.SP_MediaPause),
+            self.retry_button: ("view-refresh", QtWidgets.QStyle.StandardPixmap.SP_BrowserReload),
+            self.refresh_button: ("view-refresh", QtWidgets.QStyle.StandardPixmap.SP_BrowserReload),
+        }
+        for button, (name, fallback) in names.items():
+            self.set_action_icon(button, name, fallback)
+        for box in self.findChildren(QtWidgets.QDialogButtonBox):
+            toolbar = QtWidgets.QToolBar(self)
+            toolbar.setIconSize(QtCore.QSize(22, 22))
+            for button in box.buttons():
+                if box.standardButton(button) == QtWidgets.QDialogButtonBox.StandardButton.Close:
+                    button.setText("Quitter")
+                    self.set_action_icon(button, "application-exit", QtWidgets.QStyle.StandardPixmap.SP_DialogCloseButton)
+                action = toolbar.addAction(button.icon(), button.text())
+                action.setToolTip(button.toolTip() or button.text())
+                action.triggered.connect(button.click)
+                button.installEventFilter(self)
+                button.setProperty("home_action", action)
+                action.setEnabled(button.isEnabled())
+            self.layout().insertWidget(self.layout().indexOf(box), toolbar)
+            box.hide()
+        place_initial_window(self)
+        header = self.jobs_table.horizontalHeader()
+        header.setMinimumSectionSize(35)
+        width = max(200, self.width() - 36)
+        for column, fraction in enumerate((0.25, 0.20, 0.25, 0.22, 0.08)):
+            header.resizeSection(column, max(35, int(width * fraction)))
 
-        self.setWindowTitle("video_encoder")
-        self.setMinimumWidth(420)
+    def add_home_action(self, menu, text, icon_name, signal, shortcut=None):
+        icon = QtGui.QIcon.fromTheme(icon_name)
+        if icon.isNull():
+            icon = self.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_FileIcon)
+        action = menu.addAction(icon, text)
+        if shortcut:
+            action.setShortcut(QtGui.QKeySequence(shortcut))
+        action.triggered.connect(lambda checked=False: signal.emit())
+        return action
 
-        title_label = QtWidgets.QLabel(
-            "Que souhaites-tu faire ?",
-            self,
-        )
-        title_label.setAlignment(
-            QtCore.Qt.AlignmentFlag.AlignCenter
-        )
+    def eventFilter(self, watched, event):
+        if event.type() == QtCore.QEvent.Type.EnabledChange:
+            for name in ("home_action", "home_menu_action"):
+                action = watched.property(name)
+                if action is not None:
+                    action.setEnabled(watched.isEnabled())
+        return super().eventFilter(watched, event)
 
-        self.new_project_button = QtWidgets.QPushButton(
-            "Nouveau montage…",
-            self,
-        )
-        self.open_project_button = QtWidgets.QPushButton(
-            "Ouvrir un projet de découpage…",
-            self,
-        )
-        self.queue_button = QtWidgets.QPushButton(
-            "File des montages…",
-            self,
-        )
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.refresh_timer.start()
 
-        self.quarantine_button = QtWidgets.QPushButton(
-            "Mettre une source en quarantaine…",
-            self,
-        )
+    def hideEvent(self, event):
+        self.refresh_timer.stop()
+        super().hideEvent(event)
 
-        self.new_project_button.clicked.connect(
-            self.new_project_requested
-        )
-        self.open_project_button.clicked.connect(
-            self.open_project_requested
-        )
-        self.queue_button.clicked.connect(
-            self.queue_requested
-        )
-        self.quarantine_button.clicked.connect(
-            self.quarantine_requested
-        )
+    def set_running(self, running):
+        super().set_running(running)
+        if self.isVisible():
+            self.refresh_timer.start()
 
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(32, 32, 32, 32)
-        layout.setSpacing(12)
-        layout.addWidget(title_label)
-        layout.addSpacing(12)
-        layout.addWidget(self.new_project_button)
-        layout.addWidget(self.open_project_button)
-        layout.addWidget(self.queue_button)
-        layout.addWidget(self.quarantine_button)
+    def reject(self):
+        if self.running:
+            QtWidgets.QMessageBox.information(
+                self, "File en cours", "Arrête la file ou attends sa fin avant de quitter video_encoder.")
+            return
+        super().reject()
 
-        layout.addStretch()
+    def closeEvent(self, event):
+        if self.running:
+            QtWidgets.QMessageBox.information(
+                self, "File en cours", "Arrête la file ou attends sa fin avant de quitter video_encoder.")
+            event.ignore()
+            return
+        super().closeEvent(event)

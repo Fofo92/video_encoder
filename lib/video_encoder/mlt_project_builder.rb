@@ -73,6 +73,8 @@ module VideoEncoder
     private
 
     def track_index(tracks_by_source, source, default_index)
+      return -1 if default_index == -1
+
       return default_index unless tracks_by_source
 
       tracks_by_source.fetch(source).index

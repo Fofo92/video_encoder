@@ -12,12 +12,14 @@ require_relative 'cli/enqueue_trim_export_command'
 require_relative 'cli/run_trim_exports_command'
 require_relative 'cli/inspect_media_command'
 require_relative 'cli/manage_trim_job_command'
+require_relative 'project_relocation'
 
 module VideoEncoder
   # CLI handles command-line interface for VideoEncoder.
 
   COMMANDS = {
     'version' => :print_version,
+    'move-project' => :move_project,
     'enqueue-trim-export' => :enqueue_trim_export,
     'remove-job' => :remove_job,
     'defer-job' => :defer_job,
@@ -39,6 +41,7 @@ module VideoEncoder
   CLI_USAGE = <<~TEXT
     Usage:
       video_encoder version
+      video_encoder move-project <project.json> --directory <folder>
       video_encoder run-trim-exports [--once]
       video_encoder enqueue-trim-export <project.json> --output <movie.mkv>
       video_encoder remove-job <job_id>
@@ -104,6 +107,14 @@ module VideoEncoder
         dependency_checker: @dependency_checker,
         command_probe: command_probe
       ).run
+    end
+
+    def move_project
+      project, option, directory = @argv
+      abort('Usage: move-project PROJECT.json --directory FOLDER') unless @argv.length == 3 && option == '--directory'
+      puts ProjectRelocation.new(database).call(project, directory)
+    rescue ProjectRelocationError, ArgumentError, SystemCallError, JSON::ParserError, Sequel::DatabaseError => e
+      abort(e.message)
     end
 
     def preflight_audio

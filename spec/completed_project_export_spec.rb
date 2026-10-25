@@ -17,6 +17,22 @@ RSpec.describe VideoEncoder::ExportTrimProjectFile do
     expect(service.call(project_path: 'project.json', output_path: 'final.mkv')).to eq(:exported)
   end
 
+  it 'includes measured stage durations in the existing receipt after success' do
+    clock = double('Clock')
+    allow(clock).to receive(:call).and_return(20.0, 23.0)
+    timings = VideoEncoder::ExportTimings.new(clock: clock)
+    allow(exporter).to receive(:call) { timings.measure(:audio, concurrency: 2) { :exported } }
+    service = described_class.new(
+      reader: reader, loader: loader, exporter: exporter, receipt: receipt, timings: timings
+    )
+
+    expect(service.call(project_path: 'project.json', output_path: 'final.mkv')).to eq(:exported)
+    expect(receipt).to have_received(:call).with(
+      project_path: 'project.json', project_json: '{}', trim_project: project, output_path: 'final.mkv',
+      timings: [{ stage: :audio, elapsed_seconds: 3.0, status: 'done', concurrency: 2 }]
+    )
+  end
+
   it 'never publishes a failed export' do
     allow(exporter).to receive(:call).and_raise('encoding failed')
     expect(receipt).not_to receive(:call)

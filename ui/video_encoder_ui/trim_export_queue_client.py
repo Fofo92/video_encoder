@@ -91,6 +91,15 @@ class TrimExportQueueClient:
     def delete_project(self, job_id):
         return self.manage("delete-job", job_id, "--delete-project")
 
+    def move_project(self, project_path, directory):
+        result = self.runner(
+            [str(self.executable), "move-project", str(project_path), "--directory", str(directory)],
+            text=True, capture_output=True, check=False,
+        )
+        if result.returncode != 0:
+            raise TrimExportQueueError(self.error_message(result, fallback="project relocation failed"))
+        return "\n".join(part for part in (result.stdout.strip(), result.stderr.strip()) if part)
+
     def list_jobs(self):
         result = self.runner(
             [

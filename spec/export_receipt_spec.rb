@@ -14,10 +14,14 @@ RSpec.describe VideoEncoder::ExportReceipt do
       allow(writer).to receive(:probe).and_return('format' => { 'duration' => '2400' }, 'streams' => [])
       allow(writer).to receive(:roles).with(project).and_return(%w[french original])
       receipt_path = writer.call(project_path: '/projects/episode.json', project_json: '{}',
-                                 trim_project: project, output_path: path)
+                                 trim_project: project, output_path: path,
+                                 timings: [{ stage: 'audio', elapsed_seconds: 3.125, concurrency: 2 }])
       receipt = JSON.parse(File.read(receipt_path))
       expect(receipt['output_path']).to eq(path)
       expect(receipt['roles']).to eq(%w[french original])
+      expect(receipt['timings']).to eq(
+        [{ 'stage' => 'audio', 'elapsed_seconds' => 3.125, 'concurrency' => 2 }]
+      )
       expect(receipt['byte_size']).to eq(5)
       expect(receipt['project_sha256']).to eq(Digest::SHA256.hexdigest('{}'))
     end

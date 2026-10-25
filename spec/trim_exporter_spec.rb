@@ -3,6 +3,12 @@
 require 'spec_helper'
 
 RSpec.describe VideoEncoder::TrimExporter do
+  before do
+    allow(workspace).to receive(:write_audio_mlt) do |_xml, track|
+      "tmp/audio_#{track.role}.mlt"
+    end
+  end
+
   subject(:exporter) do
     described_class.new(
       builder: builder,
@@ -98,7 +104,7 @@ RSpec.describe VideoEncoder::TrimExporter do
       )
 
       expect(renderer).to have_received(:render_audio).with(
-        project_path: 'tmp/project.mlt',
+        project_path: 'tmp/audio_french.mlt',
         output_path: 'tmp/audio_french.mka'
       )
 
@@ -144,12 +150,12 @@ RSpec.describe VideoEncoder::TrimExporter do
       .with('<video-mlt/>')
       .ordered
 
-    expect(workspace).to have_received(:write_mlt)
-      .with('<audio-mlt/>')
+    expect(workspace).to have_received(:write_audio_mlt)
+      .with('<audio-mlt/>', audio_output_track)
       .ordered
   end
 
-  it 'renders each selected audio output separately' do
+  it 'renders selected audio outputs in parallel with separate MLT files' do
     original_source_track = instance_double(VideoEncoder::Track)
 
     original_output_track = instance_double(
@@ -186,7 +192,7 @@ RSpec.describe VideoEncoder::TrimExporter do
       .and_return('tmp/audio_original.mka')
 
     allow(renderer).to receive(:render_video)
-    allow(renderer).to receive(:render_audio)
+    allow(renderer).to receive(:render_audio_batch)
     allow(remuxer).to receive(:remux)
 
     exporter.call(
@@ -199,14 +205,11 @@ RSpec.describe VideoEncoder::TrimExporter do
       output_path: 'movie.mkv'
     )
 
-    expect(renderer).to have_received(:render_audio).with(
-      project_path: 'tmp/project.mlt',
-      output_path: 'tmp/audio_french.mka'
-    )
-
-    expect(renderer).to have_received(:render_audio).with(
-      project_path: 'tmp/project.mlt',
-      output_path: 'tmp/audio_original.mka'
+    expect(renderer).to have_received(:render_audio_batch).with(
+      [
+        { project_path: 'tmp/audio_french.mlt', output_path: 'tmp/audio_french.mka' },
+        { project_path: 'tmp/audio_original.mlt', output_path: 'tmp/audio_original.mka' }
+      ]
     )
 
     expect(remuxer).to have_received(:remux).with(

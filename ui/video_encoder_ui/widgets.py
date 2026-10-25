@@ -10,7 +10,7 @@ class VideoLabel(QtWidgets.QLabel):
         self.setAlignment(
             QtCore.Qt.AlignmentFlag.AlignCenter
         )
-        self.setMinimumSize(640, 360)
+        self.setMinimumSize(240, 135)
         self.setStyleSheet(
             "background: black;"
         )

@@ -47,14 +47,14 @@ class StartWindowControllerTest(unittest.TestCase):
         self.window.deleteLater()
 
     def test_routes_the_startup_actions(self):
-        self.window.new_project_button.click()
-        self.window.open_project_button.click()
-        self.window.queue_button.click()
-        self.window.quarantine_button.click()
+        self.window.new_project_action.trigger()
+        self.window.open_project_action.trigger()
+
+        self.window.quarantine_action.trigger()
 
         self.new_project.assert_called_once_with()
         self.open_project.assert_called_once_with()
-        self.show_queue.assert_called_once_with()
+        self.show_queue.assert_not_called()
         self.quarantine_source.assert_called_once_with()
 
     def test_shows_the_start_window(self):
