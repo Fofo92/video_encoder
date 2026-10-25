@@ -21,12 +21,13 @@ class VidbProjectLink:
             "VIDEO_ENCODER_VIDB_CONFIG", root / "video_encoder" / "vidb.json"))
         self.transport = transport or self.request
 
-    def identify(self, document, destination):
+    def identify(self, document, destination, refresh=False):
         if not Path(destination).absolute().is_relative_to(Path("/videos")):
             return {"status": "disabled"}
         current = document.get("vidb", {})
         if (isinstance(current, dict) and current.get("status") == "identified"
-                and current.get("binding_token") and current.get("project_id") == document.get("project_id")):
+                and current.get("binding_token") and current.get("project_id") == document.get("project_id")
+                and not refresh):
             return current
         if not self.config_path.is_file():
             return {"status": "disabled"}
@@ -38,6 +39,9 @@ class VidbProjectLink:
             response = self.transport(config, {"project": project})
             return self.checked_response(config, response, document["project_id"])
         except (OSError, URLError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            if (isinstance(current, dict) and current.get("status") == "identified"
+                    and current.get("binding_token") and current.get("project_id") == document.get("project_id")):
+                return current
             return {"status": "pending", "reason": "vidb indisponible ; identification à reprendre"}
 
     def configuration(self):
@@ -85,7 +89,10 @@ class VidbProjectLink:
             if binding["record_id"] <= 0 or not isinstance(binding.get("binding_token"), str) or not binding["binding_token"]:
                 raise ValueError("liaison vidb invalide")
             result = {key: binding[key] for key in ("project_id", "record_id", "binding_token")}
-            return {**result, "status": "identified", "record_title": response.get("record_title", "")}
+            result.update(status="identified", record_title=response.get("record_title", ""))
+            if isinstance(response.get("metadata"), dict):
+                result["metadata"] = response["metadata"]
+            return result
         if status not in {"needs_review", "unmatched"}:
             raise ValueError("réponse vidb invalide")
         review_url = response.get("review_url", "")

@@ -23,14 +23,14 @@ class TrimProjectFileWriter:
         document["project_id"] = session.project_id
         previous = getattr(session, "vidb", {})
         if isinstance(previous, dict) and previous:
-            document["vidb"] = previous
+            document["vidb"] = {key: value for key, value in previous.items() if key != "metadata"}
 
         text = json.dumps(document, ensure_ascii=False, indent=2) + "\n"
         self.write_atomic(destination, text)
         self.vidb_result = self.vidb_link.identify(document, destination) if self.vidb_link else {"status": "disabled"}
         if self.vidb_result.get("status") != "disabled":
-            document["vidb"] = self.vidb_result
-            session.vidb = self.vidb_result
+            document["vidb"] = {key: value for key, value in self.vidb_result.items() if key != "metadata"}
+            session.vidb = document["vidb"]
             self.write_atomic(destination, json.dumps(document, ensure_ascii=False, indent=2) + "\n")
         self.clean_analysis(session, destination)
 

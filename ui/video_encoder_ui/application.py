@@ -72,6 +72,7 @@ from .source_quarantine_controller import (
     SourceQuarantineController,
 )
 from .source_completion_controller import SourceCompletionController
+from .catalogue_destination import prepare_catalogue_destination
 
 PREVIEW_WIDTH = 640
 PREVIEW_HEIGHT = 360
@@ -2075,10 +2076,15 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
                 DEFAULT_VIDEO_DIRECTORY
                 / self.source_path.with_suffix(".json").name
             )
+            suggested_path = prepare_catalogue_destination(
+                self, getattr(self, "trim_session", None), self.source_path,
+                suggested_path, getattr(self, "trim_project_writer", None))
+            if suggested_path is None:
+                return None
             selected_path, _ = QtWidgets.QFileDialog.getSaveFileName(
                 self,
                 "Enregistrer le projet",
-                str(suggested_path),
+                str(suggested_path.with_suffix(".json")),
                 "Projet video_encoder (*.json);;Tous les fichiers (*)",
             )
             if not selected_path:
@@ -2184,6 +2190,10 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             offer_vidb_review(self, self.trim_project_writer)
 
     def select_output_path(self, suggested):
+        suggested = prepare_catalogue_destination(
+            self, self.trim_session, self.source_path, suggested, getattr(self, "trim_project_writer", None))
+        if suggested is None:
+            return None
         return select_project_output(self, suggested, self.project_path)
 
     def export_project(self, queued=False):
