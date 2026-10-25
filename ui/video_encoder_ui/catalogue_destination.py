@@ -17,7 +17,13 @@ def suggested_film_output(metadata, suggested, film_root=Path("/videos/Films")):
     basename = basename.encode("utf-8")[:220].decode("utf-8", errors="ignore")
     if not basename:
         return Path(suggested)
-    directory = genre_directory(metadata.get("genres", []), film_root) or Path(suggested).parent
+    documentary = any(genre_key(value) == "documentaire" for value in metadata.get("genres", [])
+                      if isinstance(value, str))
+    if documentary:
+        documentary_root = Path("/videos/Documentaires")
+        directory = Path(suggested).parent if Path(suggested).is_relative_to(documentary_root) else documentary_root
+    else:
+        directory = genre_directory(metadata.get("genres", []), film_root) or Path(suggested).parent
     return directory / f"{basename}.mkv"
 
 
@@ -42,7 +48,18 @@ def genre_directory(genres, film_root):
     return matches[0] if len(matches) == 1 else None
 
 
+def documentary_fallback(suggested, source=None):
+    path = Path(suggested)
+    # Preserve an already chosen destination, including documentary subfolders.
+    if path.parent != Path("/videos"):
+        return path
+    if source is not None and Path(source).is_relative_to(Path("/videos/Documentaires")):
+        return Path("/videos/Documentaires") / path.name
+    return path
+
+
 def prepare_catalogue_destination(parent, session, source, suggested, writer):
+    suggested = documentary_fallback(suggested, source)
     link = getattr(writer, "vidb_link", None)
     if not isinstance(link, VidbProjectLink) or session is None:
         return Path(suggested)
@@ -99,7 +116,8 @@ def confirm_destination(parent, metadata, suggested):
                    f"Genres : {', '.join(metadata.get('genres', [])) or 'à compléter'}\n"
                    f"Pays : {', '.join(metadata.get('countries', [])) or 'à compléter'}")
     explanation = f"Destination proposée :\n{proposed}\n\nTu pourras l’ajuster dans la fenêtre suivante."
-    if genre_directory(metadata.get("genres", []), Path("/videos/Films")) is None:
+    if (not proposed.is_relative_to(Path("/videos/Documentaires"))
+            and genre_directory(metadata.get("genres", []), Path("/videos/Films")) is None):
         explanation += "\nAucun dossier unique correspondant à tous les genres : vérifie le répertoire choisi."
     dialog.setInformativeText(explanation)
     dialog.setDetailedText(metadata.get("abstract", ""))
@@ -110,7 +128,7 @@ def confirm_destination(parent, metadata, suggested):
     dialog.exec()
     if dialog.clickedButton() is use:
         return proposed
-    return Path(suggested) if dialog.clickedButton() is manual else None
+    return proposed if dialog.clickedButton() is manual else None
 
 
 def confirm_episode_destination(parent, metadata, suggested, review_url=None):

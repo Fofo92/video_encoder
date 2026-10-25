@@ -32,6 +32,15 @@ module VideoEncoder
       log('No queued trim exports') if processed.zero?
     end
 
+    def run_selected(job_id)
+      job = repo.find(job_id)
+      raise ArgumentError, 'La tâche sélectionnée doit être en attente' unless job && job.status == Status::QUEUED
+
+      return if process_job(job)
+
+      raise ArgumentError, 'La tâche sélectionnée a échoué ou n’est plus disponible ; la file reste arrêtée'
+    end
+
     def run
       log('Trim export worker started')
 
@@ -60,6 +69,7 @@ module VideoEncoder
 
       repo.mark_done(job)
       log("Done trim export #{job.id}")
+      true
     rescue Interrupt
       repo.mark_interrupted(
         job,
@@ -73,6 +83,7 @@ module VideoEncoder
         "Failed trim export #{job.id}: " \
         "#{e.message}"
       )
+      false
     end
 
     def log(message)

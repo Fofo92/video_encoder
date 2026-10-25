@@ -9,6 +9,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from .shuttle_xpress import ShuttleXpressReader
 from .widgets import ClickableSlider, VideoLabel
 from .mlt_frame_source import MltFrameSource
+from .multi_source_editor import MultiSourceEditor
 from .mlt_audio_player import MltAudioPlayer
 from .trim_session import (
     SegmentSelection,
@@ -28,7 +29,7 @@ from .trim_project_exporter import (
 )
 from .audio_preflight_runner import AudioPreflightRunner
 from .project_destination import select_project_output
-from .vidb_project_review import offer_vidb_review
+from .vidb_project_review import offer_vidb_review, offer_saved_vidb_review
 from .vidb_project_link import VidbProjectLink
 from .trim_project_file_reader import (
     TrimProjectFileReader,
@@ -95,7 +96,7 @@ SHUTTLE_SPEED_BY_POSITION = {
     7: 50.0,
 }
 
-class MltFrameMonitor(QtWidgets.QMainWindow):
+class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
     def __init__(
         self,
         source_path,
@@ -123,12 +124,11 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         else:
             sources = self.trim_session.sources
 
-            if len(sources) != 1:
-                raise ValueError(
-                    "the editor requires exactly one source"
-                )
-
-            self.source_id = sources[0].identifier
+            if not sources:
+                raise ValueError("Le montage ne contient aucune source")
+            active = next((source for source in sources if source.path.resolve() == self.source_path.resolve()), sources[0])
+            self.source_id = active.identifier
+            self.source_path = active.path
 
         self.trim_project_writer = TrimProjectFileWriter(
             TrimProjectBridge(), vidb_link=VidbProjectLink()
@@ -233,7 +233,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
         self.frame_source = MltFrameSource(
-            source_path,
+            self.source_path,
             preview_width=PREVIEW_WIDTH,
             preview_height=PREVIEW_HEIGHT
         )
@@ -241,9 +241,12 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             self.frame_source.frames_per_second
         )
 
-        self.audio_player = MltAudioPlayer(
-            source_path
-        )
+        try:
+            self.validate_source_cadences()
+            self.audio_player = MltAudioPlayer(self.source_path)
+        except (OSError, ValueError, RuntimeError):
+            self.frame_source.close()
+            raise
 
         self.current_position = 0
         self.pending_position = 0
@@ -1216,6 +1219,7 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
                 self.set_transport_position
             )
 
+        self.setup_source_controls()
         self.refresh_segment_list()
 
     def schedule_scrub(self, position):
@@ -1676,7 +1680,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         segment = segments[index]
 
         if segment.source_id != self.source_id:
-            return
+            if not self.activate_source(segment.source_id):
+                return
+            self.segment_list.selectRow(index)
 
         if getattr(self, "editing_segment_index", None) is not None and index != self.editing_segment_index:
             self.clear_active_markers()
@@ -1814,10 +1820,15 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
             )
         }
 
-        self.segment_list.set_rows(
-            rows,
-            source_colors=source_colors
-        )
+        self.segment_list.set_rows(rows, source_colors=source_colors)
+        if len(self.trim_session.sources) > 1:
+            source_names = {source.identifier: str(source.path) for source in self.trim_session.sources}
+            for row, segment in enumerate(segments):
+                item = self.segment_list.item(row, 1)
+                item.setText(Path(source_names[segment.source_id]).name)
+                item.setToolTip(source_names[segment.source_id])
+        if hasattr(self, "update_source_controls"):
+            self.update_source_controls()
 
         self.segment_list.setVisible(True)
         busy = self.export_status in {
@@ -2193,8 +2204,9 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         return destination
 
     def review_vidb_project(self):
-        if self.save_project() is not None:
-            offer_vidb_review(self, self.trim_project_writer)
+        path = self.save_project()
+        if path is not None:
+            offer_saved_vidb_review(self, self.trim_project_writer, path)
 
     def select_output_path(self, suggested):
         suggested = prepare_catalogue_destination(
@@ -2486,6 +2498,8 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         )
 
         self.update_segment_navigation_actions()
+        if hasattr(self, "update_source_controls"):
+            self.update_source_controls()
 
 
         if status in {"preflight", "confirming"}:
@@ -3267,14 +3281,14 @@ def load_startup_selection(
     trim_session = reader.load(selected_path)
     sources = trim_session.sources
 
-    if len(sources) != 1:
-        raise ValueError(
-            "the editor currently supports "
-            "single-source projects only"
-        )
+    if not sources:
+        raise ValueError("Le projet ne contient aucune source")
+    first_id = (trim_session.segments[0].source_id if len(sources) > 1 and trim_session.segments
+                else sources[0].identifier)
+    first_source = next((source for source in sources if source.identifier == first_id), sources[0])
 
     source_path = (
-        sources[0]
+        first_source
         .path
         .expanduser()
         .resolve()
@@ -3333,11 +3347,11 @@ def create_editor_window(
         )
         return None
 
-    window = editor_class(
-        source_path,
-        trim_session=trim_session,
-        project_path=project_path,
-    )
+    try:
+        window = editor_class(source_path, trim_session=trim_session, project_path=project_path)
+    except (OSError, ValueError, RuntimeError) as error:
+        QtWidgets.QMessageBox.critical(None, "Montage non ouvert", str(error))
+        return None
 
     window.setAttribute(
         QtCore.Qt.WidgetAttribute.WA_DeleteOnClose,

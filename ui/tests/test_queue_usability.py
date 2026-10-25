@@ -153,6 +153,7 @@ class QueueEligibilityTest(unittest.TestCase):
         dialog = SimpleNamespace(
             selected_job=Mock(return_value={"id": "job", "status": "running"}),
             remove_button=Mock(), defer_button=Mock(), output_button=Mock(), delete_project_button=Mock(),
+            start_selected_button=Mock(),
             running=True, jobs=[], set_action_icon=Mock(),
         )
         TrimExportQueueDialog.update_remove_button(dialog)
@@ -163,6 +164,7 @@ class QueueEligibilityTest(unittest.TestCase):
         dialog = SimpleNamespace(
             selected_job=Mock(return_value={"id": "job", "status": "deferred"}),
             remove_button=Mock(), defer_button=Mock(), output_button=Mock(), delete_project_button=Mock(),
+            start_selected_button=Mock(),
             running=False, jobs=[], set_action_icon=Mock(),
         )
         TrimExportQueueDialog.update_remove_button(dialog)

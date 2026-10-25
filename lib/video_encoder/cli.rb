@@ -42,7 +42,7 @@ module VideoEncoder
     Usage:
       video_encoder version
       video_encoder move-project <project.json> --directory <folder>
-      video_encoder run-trim-exports [--once]
+      video_encoder run-trim-exports [--once | --job JOB_ID]
       video_encoder enqueue-trim-export <project.json> --output <movie.mkv>
       video_encoder remove-job <job_id>
       video_encoder defer-job <job_id>

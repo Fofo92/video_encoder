@@ -7,7 +7,7 @@ module VideoEncoder
     # Runs queued trim exports once or continuously.
     class RunTrimExportsCommand
       USAGE = 'Usage: video_encoder run-trim-exports ' \
-              '[--once]'
+              '[--once | --job JOB_ID]'
 
       def initialize(
         argv:,
@@ -36,11 +36,15 @@ module VideoEncoder
         end
         check_dependencies
 
-        if argv == ['--once']
+        if argv.first == '--job'
+          worker.run_selected(argv.last)
+        elsif argv == ['--once']
           worker.run_once
         else
           worker.run
         end
+      rescue ArgumentError => e
+        abort(e.message)
       end
 
       private
@@ -52,8 +56,9 @@ module VideoEncoder
                   :logger
 
       def validate_arguments
-        valid = argv.empty? ||
-                argv == ['--once']
+        selected = argv.size == 2 && argv.first == '--job' &&
+                   !argv.last.to_s.strip.empty? && !argv.last.start_with?('-')
+        valid = argv.empty? || argv == ['--once'] || selected
 
         abort(USAGE) unless valid
       end

@@ -128,7 +128,7 @@ RSpec.describe VideoEncoder::CLI::RunTrimExportsCommand do
       .to raise_error(
         SystemExit,
         'Usage: video_encoder run-trim-exports ' \
-        '[--once]'
+        '[--once | --job JOB_ID]'
       )
   end
 end

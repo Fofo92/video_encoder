@@ -100,20 +100,17 @@ class ApplicationSourceSelectionTest(unittest.TestCase):
             Path("/projects/movie.json")
         )
 
-    def test_rejects_a_multi_source_project(self):
+    def test_reopens_a_multi_source_project_on_the_first_timeline_source(self):
+        from types import SimpleNamespace
         reader = Mock()
-        session = Mock()
-        session.sources = (Mock(), Mock())
+        sources = (SimpleNamespace(identifier="A", path=Path("/recordings/a.m2t")),
+                   SimpleNamespace(identifier="B", path=Path("/recordings/b.m2t")))
+        session = SimpleNamespace(sources=sources, segments=[SimpleNamespace(source_id="B")])
         reader.load.return_value = session
-
-        with self.assertRaisesRegex(
-            ValueError,
-            "single-source projects only"
-        ):
-            load_startup_selection(
-                Path("/projects/movie.json"),
-                reader=reader
-            )
+        path, restored, project = load_startup_selection(Path("/projects/movie.json"), reader=reader)
+        self.assertEqual(path, Path("/recordings/b.m2t"))
+        self.assertIs(restored, session)
+        self.assertEqual(project, Path("/projects/movie.json"))
 
     def test_selects_a_new_media_source(self):
         with patch(

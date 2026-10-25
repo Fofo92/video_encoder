@@ -37,6 +37,7 @@ class TrimExportQueueController:
         )
         self.parent = parent
         self.dialog = None
+        self.selected_job_id = None
 
     def show(self):
         if self.dialog is not None:
@@ -61,6 +62,7 @@ class TrimExportQueueController:
         dialog.set_running(self.runner.is_running)
         dialog.refresh_requested.connect(lambda: self.refresh(dialog))
         dialog.start_requested.connect(lambda: self.start(dialog))
+        dialog.start_selected_requested.connect(lambda job: self.start_selected(dialog, job))
         dialog.stop_requested.connect(lambda: self.stop(dialog))
         dialog.finish_current_requested.connect(lambda: self.finish_current(dialog))
         dialog.retry_requested.connect(lambda job: self.retry(dialog, job))
@@ -235,6 +237,7 @@ class TrimExportQueueController:
     def start(self, dialog):
         try:
             self.runner.start()
+            self.selected_job_id = None
         except RuntimeError as error:
             QtWidgets.QMessageBox.warning(
                 self.parent,
@@ -243,6 +246,23 @@ class TrimExportQueueController:
             )
             return
 
+        dialog.set_running(True)
+
+    def start_selected(self, dialog, job):
+        try:
+            if self.runner.is_running:
+                raise RuntimeError("Un encodage est déjà en cours.")
+            jobs = self.client.list_jobs()
+            selected = next((item for item in jobs if item.get("id") == job.get("id")), None)
+            if selected is None or selected.get("status") != "queued":
+                raise RuntimeError("La tâche sélectionnée n’est plus en attente. Actualise la file.")
+            if any(item.get("status") == "running" for item in jobs):
+                raise RuntimeError("Un encodage est déjà en cours.")
+            self.runner.start(job_id=selected["id"])
+            self.selected_job_id = selected["id"]
+        except (TrimExportQueueError, RuntimeError) as error:
+            QtWidgets.QMessageBox.warning(self.parent, "Lancement impossible", str(error))
+            return
         dialog.set_running(True)
 
     def stop(self, dialog):
@@ -313,6 +333,8 @@ class TrimExportQueueController:
         dialog.set_finish_current_requested(True)
 
     def succeeded(self):
+        selected = self.selected_job_id is not None
+        self.selected_job_id = None
         dialog = self.dialog
 
         if dialog is not None:
@@ -321,14 +343,13 @@ class TrimExportQueueController:
 
         QtWidgets.QMessageBox.information(
             self.parent,
-            "File terminée",
-            (
-                "Tous les montages en attente "
-                "ont été traités."
-            ),
+            "Montage terminé" if selected else "File terminée",
+            ("La tâche sélectionnée est terminée. Les autres montages restent en attente."
+             if selected else "Tous les montages en attente ont été traités."),
         )
 
     def interrupted(self):
+        self.selected_job_id = None
         dialog = self.dialog
 
         if dialog is not None:
@@ -345,6 +366,7 @@ class TrimExportQueueController:
         )
 
     def stopped(self):
+        self.selected_job_id = None
         dialog = self.dialog
 
         if dialog is not None:
@@ -373,6 +395,7 @@ class TrimExportQueueController:
             dialog.set_percentage(percentage)
 
     def failed(self, message):
+        self.selected_job_id = None
         dialog = self.dialog
 
         if dialog is not None:

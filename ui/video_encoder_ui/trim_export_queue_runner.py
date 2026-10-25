@@ -135,7 +135,7 @@ class TrimExportQueueRunner(QtCore.QObject):
             != QtCore.QProcess.ProcessState.NotRunning
         )
 
-    def start(self):
+    def start(self, job_id=None):
         if self.is_running:
             raise RuntimeError(
                 "the trim export queue is already running"
@@ -164,10 +164,9 @@ class TrimExportQueueRunner(QtCore.QObject):
         )
 
         program = self.executable
-        arguments = [
-            "run-trim-exports",
-            "--once",
-        ]
+        arguments = ["run-trim-exports", "--once"]
+        if job_id is not None:
+            arguments = ["run-trim-exports", "--job", str(job_id)]
 
         if self.inhibitor_executable is not None:
             arguments = [

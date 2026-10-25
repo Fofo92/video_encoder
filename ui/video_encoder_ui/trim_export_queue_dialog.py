@@ -12,6 +12,7 @@ from .trim_project_source_names import (
 class TrimExportQueueDialog(QtWidgets.QDialog):
     refresh_requested = QtCore.Signal()
     start_requested = QtCore.Signal()
+    start_selected_requested = QtCore.Signal(object)
     retry_requested = QtCore.Signal(object)
     remove_requested = QtCore.Signal(object)
     defer_requested = QtCore.Signal(object)
@@ -238,6 +239,14 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.finish_current_button.clicked.connect(
             self.finish_current_requested
         )
+
+        self.start_selected_button = job_buttons.addButton(
+            "Lancer uniquement la sélection", QtWidgets.QDialogButtonBox.ButtonRole.ActionRole)
+        self.set_action_icon(self.start_selected_button, "media-playback-start",
+                             QtWidgets.QStyle.StandardPixmap.SP_MediaPlay)
+        self.start_selected_button.setToolTip(
+            "Encoder seulement cette tâche, sans lancer les autres ni modifier l’ordre de la file")
+        self.start_selected_button.clicked.connect(self.request_selected_start)
 
         self.retry_button = job_buttons.addButton(
             "Relancer le travail",
@@ -758,6 +767,9 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
     def update_remove_button(self):
         job = self.selected_job()
+        self.start_selected_button.setEnabled(
+            job is not None and job.get("status") == "queued" and not self.running
+            and not any(item.get("status") == "running" for item in self.jobs))
 
         self.remove_button.setEnabled(
             job is not None
@@ -788,6 +800,12 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             and project.is_file() and project.suffix.lower() == ".json" and not project.is_symlink()
             and not shared_project
         )
+
+    def request_selected_start(self):
+        job = self.selected_job()
+        if (job is not None and job.get("status") == "queued" and not self.running
+                and not any(item.get("status") == "running" for item in self.jobs)):
+            self.start_selected_requested.emit(job)
 
     def request_selected_deferral(self):
         job = self.selected_job()

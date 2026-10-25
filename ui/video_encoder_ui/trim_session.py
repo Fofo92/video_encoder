@@ -94,6 +94,17 @@ class TrimSession:
         self._segments[index] = segment
         return segment
 
+    def move_segment(self, index, target):
+        if not 0 <= index < len(self._segments) or not 0 <= target < len(self._segments):
+            raise ValueError("Position de segment invalide")
+        proposed = list(self._segments)
+        proposed.insert(target, proposed.pop(index))
+        for previous, current in zip(proposed, proposed[1:]):
+            if previous.source_id == current.source_id and current.start_frame <= previous.end_frame + 1:
+                raise ValueError("Deux plages successives d’une même source doivent rester dans l’ordre, "
+                                 "sans chevauchement ni contiguïté.")
+        self._segments = proposed
+
     def clear_segments(self):
         self._segments.clear()
         self.analysis_workspaces.clear()
