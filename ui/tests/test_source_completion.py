@@ -4,7 +4,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from PySide6 import QtWidgets
+try:
+    from PySide6 import QtWidgets
+except ModuleNotFoundError as error:
+    if error.name != "PySide6":
+        raise
+    raise unittest.SkipTest("PySide6 is unavailable") from error
 
 from video_encoder_ui.source_completion_controller import SourceCompletionController
 from video_encoder_ui.source_completion_plan import SourceCompletionPlan, SourceCompletionError

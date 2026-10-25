@@ -5,6 +5,13 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+try:
+    import PySide6
+except ModuleNotFoundError as error:
+    if error.name != "PySide6":
+        raise
+    raise unittest.SkipTest("PySide6 is unavailable") from error
+
 from video_encoder_ui import catalogue_destination as destination
 from video_encoder_ui.vidb_project_link import VidbProjectLink
 from video_encoder_ui.trim_project_file_writer import TrimProjectFileWriter
