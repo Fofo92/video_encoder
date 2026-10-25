@@ -5,6 +5,7 @@ from pathlib import Path
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from .vidb_project_link import VidbProjectLink
+from .episode_destination import suggested_episode_output
 
 
 def suggested_film_output(metadata, suggested, film_root=Path("/videos/Films")):
@@ -62,6 +63,8 @@ def prepare_catalogue_destination(parent, session, source, suggested, writer):
         return review_before_destination(parent, result, suggested)
     session.vidb = {key: value for key, value in result.items() if key != "metadata"}
     metadata = result.get("metadata", {})
+    if metadata.get("record_kind") == "episode":
+        return confirm_episode_destination(parent, metadata, suggested)
     if metadata.get("record_kind") != "standalone_video":
         return Path(suggested)
     return confirm_destination(parent, metadata, suggested)
@@ -70,7 +73,7 @@ def prepare_catalogue_destination(parent, session, source, suggested, writer):
 def review_before_destination(parent, result, suggested):
     dialog = QtWidgets.QMessageBox(parent)
     dialog.setWindowTitle("Identifier l’œuvre avant de choisir sa destination")
-    dialog.setText("La fiche vidb permettra de proposer le titre, l’année et le classement du film.")
+    dialog.setText("La fiche vidb permettra de proposer le titre, l’année et le classement de l’œuvre.")
     dialog.setInformativeText("Tu peux rechercher l’œuvre et créer sa fiche dans vidb, puis reprendre "
                               "l’enregistrement de ce montage. Les coupures restent dans la fenêtre ouverte.")
     open_button = None
@@ -99,6 +102,23 @@ def confirm_destination(parent, metadata, suggested):
         explanation += "\nAucun dossier unique correspondant à tous les genres : vérifie le répertoire choisi."
     dialog.setInformativeText(explanation)
     dialog.setDetailedText(metadata.get("abstract", ""))
+    use = dialog.addButton("Utiliser cette proposition", QtWidgets.QMessageBox.ButtonRole.AcceptRole)
+    dialog.setDefaultButton(use)
+    manual = dialog.addButton("Choisir moi-même", QtWidgets.QMessageBox.ButtonRole.ActionRole)
+    dialog.addButton("Revenir au montage", QtWidgets.QMessageBox.ButtonRole.RejectRole)
+    dialog.exec()
+    if dialog.clickedButton() is use:
+        return proposed
+    return Path(suggested) if dialog.clickedButton() is manual else None
+
+
+def confirm_episode_destination(parent, metadata, suggested):
+    proposed = suggested_episode_output(metadata, suggested)
+    dialog = QtWidgets.QMessageBox(parent)
+    dialog.setWindowTitle("Épisode identifié dans vidb")
+    dialog.setText(f"Destination proposée :\n{proposed}")
+    dialog.setInformativeText("Vérifie le dossier de la série et de la saison dans la fenêtre suivante."
+                              " Aucun fichier existant n’est déplacé ou renommé.")
     use = dialog.addButton("Utiliser cette proposition", QtWidgets.QMessageBox.ButtonRole.AcceptRole)
     dialog.setDefaultButton(use)
     manual = dialog.addButton("Choisir moi-même", QtWidgets.QMessageBox.ButtonRole.ActionRole)

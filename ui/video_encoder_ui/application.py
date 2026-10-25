@@ -2103,10 +2103,17 @@ class MltFrameMonitor(QtWidgets.QMainWindow):
         if self.project_path is None or self.project_path.name == "proposal.json":
             suggested_path = (
                 self.source_path.parent
-                / f"{self.source_path.stem} - valide.json"
+                / self.source_path.with_suffix(".json").name
             )
         else:
             suggested_path = self.project_path
+
+        suggested_path = prepare_catalogue_destination(
+            self, getattr(self, "trim_session", None), self.source_path,
+            suggested_path, getattr(self, "trim_project_writer", None))
+        if suggested_path is None:
+            return None
+        suggested_path = suggested_path.with_suffix(".json")
 
         selected_path, _selected_filter = QtWidgets.QFileDialog.getSaveFileName(
             self,
