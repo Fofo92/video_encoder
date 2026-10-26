@@ -76,6 +76,8 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.displayed_jobs = []
         self.running = False
         self.finishing_current = False
+        self.single_job_running = False
+        self.continue_after_current = False
         self.progress_event = None
         self.progress_percentage = None
         self.progress_job_id = None
@@ -510,6 +512,8 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
         if not self.running:
             self.finishing_current = False
+            self.single_job_running = False
+            self.continue_after_current = False
             self.progress_timer.stop()
 
         if self.running:
@@ -525,6 +529,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
     def set_finish_current_requested(self, requested):
         self.finishing_current = bool(requested)
         self.update_finish_current_button()
+        self.update_start_button()
 
     def set_progress(self, event):
         if self.progress_started_at is None:
@@ -709,20 +714,25 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
         return f"{minutes:02d}:{seconds:02d}"
 
+    def set_single_job_running(self, selected):
+        self.single_job_running = bool(selected)
+        self.update_start_button()
+
+    def set_continue_after_current_requested(self, requested):
+        self.continue_after_current = bool(requested)
+        self.update_start_button()
+
     def update_start_button(self):
-        has_queued_jobs = any(
-            job.get("status") == "queued"
-            for job in self.jobs
-        )
+        has_queued_jobs = any(job.get("status") == "queued" for job in self.jobs)
+        can_continue = self.running and (self.single_job_running or self.finishing_current)
         self.start_button.setEnabled(
-            has_queued_jobs
-            and not self.running
-        )
-        self.start_button.setText(
-            "File en cours…"
-            if self.running
-            else "Lancer la file"
-        )
+            (has_queued_jobs and not self.running) or (can_continue and not self.continue_after_current))
+        if self.running:
+            text = ("Suite programmée" if self.continue_after_current else
+                    "Enchaîner après le montage en cours" if can_continue else "File en cours…")
+        else:
+            text = "Lancer la file"
+        self.start_button.setText(text)
 
     def update_stop_button(self):
         self.stop_button.setEnabled(

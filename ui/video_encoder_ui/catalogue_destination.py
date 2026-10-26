@@ -2,17 +2,19 @@ import re
 import unicodedata
 from pathlib import Path
 
-from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6 import QtWidgets
 
 from .vidb_project_link import VidbProjectLink
+from .vidb_project_context import project_identification_context
 from .episode_destination import suggested_episode_output
+from .vidb_export_review import await_vidb_identification
+from .vidb_modal_browser import open_vidb_modal
 
 
 def suggested_film_output(metadata, suggested, film_root=Path("/videos/Films")):
-    title = str(metadata.get("french_title") or metadata.get("original_title") or "").strip()
-    original = str(metadata.get("original_title") or "").strip()
-    if original and original.casefold() != title.casefold():
-        title += f" ({original})"
+    from .title_convention import title_with_original
+
+    title = title_with_original(metadata)
     basename = re.sub(r"[/\\\x00-\x1f]", "_", title).strip(" .")
     basename = basename.encode("utf-8")[:220].decode("utf-8", errors="ignore")
     if not basename:
@@ -58,33 +60,41 @@ def documentary_fallback(suggested, source=None):
     return path
 
 
-def prepare_catalogue_destination(parent, session, source, suggested, writer):
+def prepare_catalogue_destination(parent, session, source, suggested, writer, continue_export=False):
     suggested = documentary_fallback(suggested, source)
     link = getattr(writer, "vidb_link", None)
     if not isinstance(link, VidbProjectLink) or session is None:
         return Path(suggested)
     if not any(Path(source).absolute().is_relative_to(Path(root)) for root in ("/commun", "/videos")):
         return Path(suggested)
-    session.project_id = VidbProjectLink.project_id(session)
-    provisional = Path(suggested).with_suffix(".json")
-    if not provisional.is_relative_to(Path("/videos")):
-        provisional = Path("/videos") / Path(source).with_suffix(".json").name
-    sources = getattr(session, "sources", ())
-    document = {"version": 2, "project_id": session.project_id, "vidb": getattr(session, "vidb", {}),
-                "sources": [{"path": str(item.path), "inspection": getattr(item, "inspection", None)}
-                            for item in sources] or [{"path": str(source)}]}
+    document, provisional = project_identification_context(session, source, suggested)
     result = link.identify(document, provisional, refresh=True)
     writer.vidb_result = result
     if result.get("status") == "disabled":
         return Path(suggested)
     if result.get("status") != "identified":
-        return review_before_destination(parent, result, suggested)
+        if not continue_export:
+            return review_before_destination(parent, result, suggested)
+        result = await_vidb_identification(
+            parent, result, lambda: link.identify(document, provisional, refresh=True))
+        if result is None:
+            return None
+        writer.vidb_result = result
+        if result.get("status") != "identified":
+            return Path(suggested)
     session.vidb = {key: value for key, value in result.items() if key != "metadata"}
     metadata = result.get("metadata", {})
+    complete = all(metadata.get(field) for field in ("year", "abstract", "genres", "countries"))
     if metadata.get("record_kind") == "episode":
-        return confirm_episode_destination(parent, metadata, suggested, result.get("review_url"))
+        if continue_export and complete and metadata.get("language_version") not in (None, "", "IND"):
+            return suggested_episode_output(metadata, suggested)
+        return confirm_episode_destination(
+            parent, metadata, suggested, result.get("review_url"),
+            refresh=(lambda: link.identify(document, provisional, refresh=True)) if continue_export else None)
     if metadata.get("record_kind") != "standalone_video":
         return Path(suggested)
+    if continue_export and complete:
+        return suggested_film_output(metadata, suggested)
     return confirm_destination(parent, metadata, suggested)
 
 
@@ -102,7 +112,7 @@ def review_before_destination(parent, result, suggested):
     dialog.addButton("Revenir au montage", QtWidgets.QMessageBox.ButtonRole.RejectRole)
     dialog.exec()
     if open_button is not None and dialog.clickedButton() is open_button:
-        QtGui.QDesktopServices.openUrl(QtCore.QUrl(result["review_url"]))
+        open_vidb_modal(parent, result["review_url"])
         return None
     return Path(suggested) if dialog.clickedButton() is manual else None
 
@@ -131,7 +141,7 @@ def confirm_destination(parent, metadata, suggested):
     return proposed if dialog.clickedButton() is manual else None
 
 
-def confirm_episode_destination(parent, metadata, suggested, review_url=None):
+def confirm_episode_destination(parent, metadata, suggested, review_url=None, refresh=None):
     proposed = suggested_episode_output(metadata, suggested)
     dialog = QtWidgets.QMessageBox(parent)
     dialog.setWindowTitle("Épisode identifié dans vidb")
@@ -153,7 +163,13 @@ def confirm_episode_destination(parent, metadata, suggested, review_url=None):
     dialog.addButton("Revenir au montage", QtWidgets.QMessageBox.ButtonRole.RejectRole)
     dialog.exec()
     if complete is not None and dialog.clickedButton() is complete:
-        QtGui.QDesktopServices.openUrl(QtCore.QUrl(review_url))
+        if refresh is not None:
+            updated = await_vidb_identification(
+                parent, {"status": "identified", "metadata": metadata, "review_url": review_url}, refresh)
+            if updated is None:
+                return None
+            return suggested_episode_output(updated.get("metadata", metadata), suggested)
+        open_vidb_modal(parent, review_url)
         return None
     if dialog.clickedButton() is use:
         return proposed

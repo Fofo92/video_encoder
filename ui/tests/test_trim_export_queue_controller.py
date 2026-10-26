@@ -322,7 +322,7 @@ class TrimExportQueueControllerTest(
         dialog.mark_refreshed.assert_called_once()
 
     def test_starts_the_queue(self):
-        runner = Mock()
+        runner = Mock(is_running=False)
         controller = TrimExportQueueController(
             client=Mock(),
             runner=runner,
@@ -612,7 +612,7 @@ class TrimExportQueueControllerTest(
         dialog.set_jobs.assert_not_called()
 
     def test_reports_a_start_failure(self):
-        runner = Mock()
+        runner = Mock(is_running=False)
         runner.start.side_effect = RuntimeError(
             "worker unavailable"
         )

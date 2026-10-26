@@ -79,7 +79,7 @@ class StartWindowTest(unittest.TestCase):
 
         self.assertEqual(
             self.window.quarantine_action.text(),
-            "Mettre une source en quarantaine…"
+            "Mettre des sources en quarantaine…"
         )
 
         self.window.quarantine_action.trigger()
@@ -93,6 +93,35 @@ class StartWindowTest(unittest.TestCase):
         self.assertTrue(
             self.window.open_project_action.isEnabled()
         )
+    def test_home_actions_are_owned_by_the_home_window_not_temporary_menus(self):
+        for name in ("new_project_action", "open_project_action", "quarantine_action", "relocate_project_action"):
+            self.assertIs(self.window, getattr(self.window, name).parent())
+
+    def test_rebuilding_a_menu_does_not_destroy_actions_used_when_opening_an_editor(self):
+        from video_encoder_ui.editor_window_controller import EditorWindowController
+
+        import gc
+
+        gc.collect()
+        self.application.processEvents()
+        menu = self.window.home_menus[0]
+        self.assertIs(menu.parent(), self.window.menu_bar)
+        self.assertIs(self.window.menu_bar.actions()[0].menu(), menu)
+        actions = menu.actions()
+        menu.clear()
+        for action in actions:
+            menu.addAction(action)
+        editor = QtWidgets.QWidget()
+        self.addCleanup(editor.close)
+        self.addCleanup(editor.deleteLater)
+        controller = EditorWindowController(self.window, lambda _path: editor)
+        controller.open("/videos/test.json")
+        self.assertFalse(self.window.quarantine_action.isEnabled())
+        self.assertFalse(self.window.relocate_project_action.isEnabled())
+        controller.editor_closed()
+        self.assertTrue(self.window.quarantine_action.isEnabled())
+        self.assertTrue(self.window.relocate_project_action.isEnabled())
+
 
 if __name__ == "__main__":
     unittest.main()

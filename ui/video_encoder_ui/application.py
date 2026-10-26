@@ -29,7 +29,8 @@ from .trim_project_exporter import (
 )
 from .audio_preflight_runner import AudioPreflightRunner
 from .project_destination import select_project_output
-from .vidb_project_review import offer_vidb_review, offer_saved_vidb_review
+from .vidb_project_review import offer_vidb_review
+from .vidb_montage_review import review_montage_identification
 from .vidb_project_link import VidbProjectLink
 from .trim_project_file_reader import (
     TrimProjectFileReader,
@@ -69,6 +70,7 @@ from .editor_window_controller import (
 from .source_quarantine_client import (
     SourceQuarantineClient,
 )
+from .source_quarantine_dialogs import select_quarantine_sources, confirm_quarantine_sources, report_quarantine_batch
 from .source_quarantine_controller import (
     SourceQuarantineController,
 )
@@ -1008,7 +1010,7 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
         )
 
         self.queue_export_action = QtGui.QAction(
-            "Ajouter le montage à la file…",
+            "Identifier et mettre en file…",
             self,
         )
         self.queue_export_action.setShortcut(
@@ -1023,7 +1025,7 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
             queue_video_icon()
         )
         self.queue_export_action.setToolTip(
-            "Ajouter le montage à la file "
+            "Identifier dans vidb puis mettre en file "
             "(Ctrl+Shift+E)"
         )
         self.queue_export_action.setStatusTip(
@@ -2204,15 +2206,24 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
         return destination
 
     def review_vidb_project(self):
-        path = self.save_project()
-        if path is not None:
-            offer_saved_vidb_review(self, self.trim_project_writer, path)
+        if self.export_status in {"running", "preflight", "confirming"}:
+            return
+        if self.source_path is None:
+            return
+        suggested = self.project_path
+        if suggested is None or Path(suggested).name == "proposal.json":
+            suggested = DEFAULT_VIDEO_DIRECTORY / self.source_path.with_suffix(".json").name
+        review_montage_identification(
+            self, self.trim_session, self.source_path, suggested, self.trim_project_writer)
 
     def select_output_path(self, suggested):
+        self._destination_review_done = False
         suggested = prepare_catalogue_destination(
-            self, self.trim_session, self.source_path, suggested, getattr(self, "trim_project_writer", None))
+            self, self.trim_session, self.source_path, suggested, getattr(self, "trim_project_writer", None),
+            continue_export=True)
         if suggested is None:
             return None
+        self._destination_review_done = True
         return select_project_output(self, suggested, self.project_path)
 
     def export_project(self, queued=False):
@@ -2241,8 +2252,9 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
         project_path = self.write_project(Path(output_path).with_suffix(".json"))
         if project_path is None:
             return
-        if not offer_vidb_review(self, getattr(self, "trim_project_writer", None), before_encoding=True):
-            return
+        if not getattr(self, "_destination_review_done", False):
+            if not offer_vidb_review(self, getattr(self, "trim_project_writer", None), before_encoding=True):
+                return
 
         self.pending_export_mode = (
             "queued"
@@ -3191,27 +3203,7 @@ def select_media_path():
     )
 
 def select_quarantine_source_path():
-    selected_path, _selected_filter = (
-        QtWidgets.QFileDialog.getOpenFileName(
-            None,
-            "Mettre une source en quarantaine",
-            "",
-            (
-                "Enregistrements TV "
-                "(*.m2t *.mts *.ts);;"
-                "Tous les fichiers (*)"
-            ),
-        )
-    )
-
-    if not selected_path:
-        return None
-
-    return (
-        Path(selected_path)
-        .expanduser()
-        .resolve()
-    )
+    return select_quarantine_sources()
 
 def select_project_path():
     selected_path, _selected_filter = (
@@ -3389,6 +3381,7 @@ def main():
         )
         return 2
 
+    QtCore.QCoreApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
     app = QtWidgets.QApplication(sys.argv)
     start_window = StartWindow()
 
@@ -3396,29 +3389,10 @@ def main():
     queue_runner = TrimExportQueueRunner()
 
     def confirm_quarantine(source_path):
-        answer = QtWidgets.QMessageBox.question(
-            start_window,
-            "Confirmer la mise en quarantaine",
-            (
-                "Cette source peut contenir plusieurs "
-                "films ou épisodes.\n\n"
-                "Confirme que tous les montages utiles "
-                "ont été réalisés :\n"
-                f"{source_path}\n\n"
-                "La source sera déplacée vers le dossier "
-                "de quarantaine. Elle ne sera pas supprimée."
-            ),
-            (
-                QtWidgets.QMessageBox.StandardButton.Yes
-                | QtWidgets.QMessageBox.StandardButton.No
-            ),
-            QtWidgets.QMessageBox.StandardButton.No,
-        )
+        return confirm_quarantine_sources(start_window, source_path)
 
-        return (
-            answer
-            == QtWidgets.QMessageBox.StandardButton.Yes
-        )
+    def report_source_batch(moved, failed):
+        report_quarantine_batch(start_window, moved, failed)
 
     def report_quarantine_success(source_path):
         QtWidgets.QMessageBox.information(
@@ -3446,6 +3420,7 @@ def main():
                 select_quarantine_source_path
             ),
             confirm=confirm_quarantine,
+            report_batch=report_source_batch,
             report_success=(
                 report_quarantine_success
             ),

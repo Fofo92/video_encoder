@@ -153,6 +153,14 @@ class ApplicationSourceSelectionTest(unittest.TestCase):
             dialog.call_args.args[1],
             "Ouvrir un projet de découpage"
         )
+    def test_quarantine_action_uses_the_multiple_source_picker(self):
+        from video_encoder_ui.application import select_quarantine_source_path
+
+        paths = ["/commun/to_be_cut/one.m2t", "/commun/to_be_cut/two.m2t"]
+        with patch("video_encoder_ui.source_quarantine_dialogs.QtWidgets.QFileDialog.getOpenFileNames",
+                   return_value=(paths, "")):
+            self.assertEqual([Path(path) for path in paths], select_quarantine_source_path())
+
 
 if __name__ == "__main__":
     unittest.main()

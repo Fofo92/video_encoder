@@ -82,6 +82,42 @@ class SourceQuarantineControllerTest(unittest.TestCase):
         )
         self.report_success.assert_not_called()
 
+    def test_batch_confirms_once_deduplicates_and_continues_after_a_refusal(self):
+        paths = ["/commun/first.m2t", "/commun/busy.m2t", "/commun/last.m2t", "/commun/first.m2t"]
+        self.select_source.return_value = paths
+        self.confirm.return_value = True
+        self.client.quarantine.side_effect = [None, SourceQuarantineError("active_trim_exports"), None]
+        report = Mock()
+        self.controller.report_batch = report
+        self.controller.run()
+        self.confirm.assert_called_once_with(paths[:3])
+        self.assertEqual(self.client.quarantine.call_count, 3)
+        report.assert_called_once_with([paths[0], paths[2]], [(paths[1], "active_trim_exports")])
+        self.report_success.assert_not_called()
+        self.report_failure.assert_not_called()
+
+    def test_cancelled_batch_moves_no_sources(self):
+        self.select_source.return_value = ["/commun/one.m2t", "/commun/two.m2t"]
+        self.confirm.return_value = False
+        self.controller.run()
+        self.client.quarantine.assert_not_called()
+
+    def test_batch_continues_after_a_system_error_and_reports_the_preserved_source(self):
+        self.select_source.return_value = ["/commun/one.m2t", "/commun/two.m2t"]
+        self.confirm.return_value = True
+        self.client.quarantine.side_effect = [OSError("permission denied"), None]
+        report = Mock()
+        self.controller.report_batch = report
+        self.controller.run()
+        self.assertEqual(2, self.client.quarantine.call_count)
+        report.assert_called_once_with(["/commun/two.m2t"], [("/commun/one.m2t", "permission denied")])
+
+    def test_empty_batch_neither_confirms_nor_moves_sources(self):
+        self.select_source.return_value = []
+        self.controller.run()
+        self.confirm.assert_not_called()
+        self.client.quarantine.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

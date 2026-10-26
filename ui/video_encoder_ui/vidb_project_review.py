@@ -1,7 +1,9 @@
 import json
 from pathlib import Path
 
-from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6 import QtWidgets
+
+from .vidb_modal_browser import open_vidb_modal
 
 
 def offer_vidb_review(parent, writer, before_encoding=False):
@@ -28,7 +30,7 @@ def offer_vidb_review(parent, writer, before_encoding=False):
     dialog.addButton("Revenir au montage", QtWidgets.QMessageBox.ButtonRole.RejectRole)
     dialog.exec()
     if open_button is not None and dialog.clickedButton() is open_button:
-        QtGui.QDesktopServices.openUrl(QtCore.QUrl(result["review_url"]))
+        open_vidb_modal(parent, result["review_url"])
         return False
     return dialog.clickedButton() is continue_button
 
@@ -49,7 +51,7 @@ def offer_saved_vidb_review(parent, writer, path):
     if not isinstance(result, dict) or result.get("status") != "identified":
         return offer_vidb_review(parent, writer)
     if result.get("review_url"):
-        return QtGui.QDesktopServices.openUrl(QtCore.QUrl(result["review_url"]))
+        return open_vidb_modal(parent, result["review_url"])
     QtWidgets.QMessageBox.information(
         parent, "Identification dans vidb",
         "La fiche est déjà identifiée, mais vidb ne fournit pas de lien de complément. "

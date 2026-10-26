@@ -18,13 +18,16 @@ class StartWindow(TrimExportQueueDialog):
         self.setWindowModality(QtCore.Qt.WindowModality.NonModal)
         self.menu_bar = QtWidgets.QMenuBar(self)
         self.layout().setMenuBar(self.menu_bar)
-        sources = self.menu_bar.addMenu("&Sources")
-        projects = self.menu_bar.addMenu("&Projets")
-        montages = self.menu_bar.addMenu("&Montage")
+        sources = QtWidgets.QMenu("&Sources", self.menu_bar)
+        projects = QtWidgets.QMenu("&Projets", self.menu_bar)
+        montages = QtWidgets.QMenu("&Montage", self.menu_bar)
+        self.home_menus = (sources, projects, montages)
+        for menu in self.home_menus:
+            self.menu_bar.addMenu(menu)
         self.new_project_action = self.add_home_action(
             sources, "Ouvrir une source…", "document-new", self.new_project_requested)
         self.quarantine_action = self.add_home_action(
-            sources, "Mettre une source en quarantaine…", "folder-move", self.quarantine_requested)
+            sources, "Mettre des sources en quarantaine…", "folder-move", self.quarantine_requested)
         self.open_project_action = self.add_home_action(
             projects, "Ouvrir un projet…", "document-open", self.open_project_requested, "Ctrl+O")
         self.relocate_project_action = self.add_home_action(
@@ -72,7 +75,8 @@ class StartWindow(TrimExportQueueDialog):
         icon = QtGui.QIcon.fromTheme(icon_name)
         if icon.isNull():
             icon = self.style().standardIcon(QtWidgets.QStyle.StandardPixmap.SP_FileIcon)
-        action = menu.addAction(icon, text)
+        action = QtGui.QAction(icon, text, self)
+        menu.addAction(action)
         if shortcut:
             action.setShortcut(QtGui.QKeySequence(shortcut))
         action.triggered.connect(lambda checked=False: signal.emit())

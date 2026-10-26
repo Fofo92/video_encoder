@@ -38,6 +38,7 @@ class TrimExportQueueController:
         self.parent = parent
         self.dialog = None
         self.selected_job_id = None
+        self.continue_after_current = False
 
     def show(self):
         if self.dialog is not None:
@@ -60,6 +61,8 @@ class TrimExportQueueController:
     def attach(self, dialog):
         self.dialog = dialog
         dialog.set_running(self.runner.is_running)
+        dialog.set_single_job_running(self.selected_job_id is not None)
+        dialog.set_continue_after_current_requested(self.continue_after_current)
         dialog.refresh_requested.connect(lambda: self.refresh(dialog))
         dialog.start_requested.connect(lambda: self.start(dialog))
         dialog.start_selected_requested.connect(lambda job: self.start_selected(dialog, job))
@@ -235,9 +238,15 @@ class TrimExportQueueController:
         self.refresh(dialog)
 
     def start(self, dialog):
+        if self.runner.is_running:
+            if self.selected_job_id is not None or self.runner.finish_current_requested:
+                self.continue_after_current = True
+                dialog.set_continue_after_current_requested(True)
+            return
         try:
             self.runner.start()
             self.selected_job_id = None
+            self.continue_after_current = False
         except RuntimeError as error:
             QtWidgets.QMessageBox.warning(
                 self.parent,
@@ -247,6 +256,8 @@ class TrimExportQueueController:
             return
 
         dialog.set_running(True)
+        dialog.set_single_job_running(False)
+        dialog.set_continue_after_current_requested(False)
 
     def start_selected(self, dialog, job):
         try:
@@ -260,10 +271,13 @@ class TrimExportQueueController:
                 raise RuntimeError("Un encodage est déjà en cours.")
             self.runner.start(job_id=selected["id"])
             self.selected_job_id = selected["id"]
+            self.continue_after_current = False
         except (TrimExportQueueError, RuntimeError) as error:
             QtWidgets.QMessageBox.warning(self.parent, "Lancement impossible", str(error))
             return
         dialog.set_running(True)
+        dialog.set_single_job_running(True)
+        dialog.set_continue_after_current_requested(False)
 
     def stop(self, dialog):
         answer = QtWidgets.QMessageBox.question(
@@ -290,6 +304,8 @@ class TrimExportQueueController:
 
         try:
             self.runner.stop()
+            self.continue_after_current = False
+            dialog.set_continue_after_current_requested(False)
         except RuntimeError as error:
             QtWidgets.QMessageBox.warning(
                 self.parent,
@@ -322,6 +338,8 @@ class TrimExportQueueController:
 
         try:
             self.runner.finish_current()
+            self.continue_after_current = False
+            dialog.set_continue_after_current_requested(False)
         except RuntimeError as error:
             QtWidgets.QMessageBox.warning(
                 self.parent,
@@ -332,10 +350,31 @@ class TrimExportQueueController:
 
         dialog.set_finish_current_requested(True)
 
+    def resume_requested_queue(self, dialog):
+        if not self.continue_after_current:
+            return False
+        self.continue_after_current = False
+        self.selected_job_id = None
+        if dialog is not None:
+            dialog.set_running(False)
+        try:
+            self.runner.start()
+        except RuntimeError as error:
+            QtWidgets.QMessageBox.warning(self.parent, "Suite non lancée", str(error))
+            return True
+        if dialog is not None:
+            dialog.set_running(True)
+            dialog.set_single_job_running(False)
+            dialog.set_continue_after_current_requested(False)
+            self.refresh(dialog)
+        return True
+
     def succeeded(self):
         selected = self.selected_job_id is not None
         self.selected_job_id = None
         dialog = self.dialog
+        if self.resume_requested_queue(dialog):
+            return
 
         if dialog is not None:
             dialog.set_running(False)
@@ -350,6 +389,7 @@ class TrimExportQueueController:
 
     def interrupted(self):
         self.selected_job_id = None
+        self.continue_after_current = False
         dialog = self.dialog
 
         if dialog is not None:
@@ -368,6 +408,8 @@ class TrimExportQueueController:
     def stopped(self):
         self.selected_job_id = None
         dialog = self.dialog
+        if self.resume_requested_queue(dialog):
+            return
 
         if dialog is not None:
             dialog.set_running(False)
@@ -397,6 +439,10 @@ class TrimExportQueueController:
     def failed(self, message):
         self.selected_job_id = None
         dialog = self.dialog
+        if self.continue_after_current:
+            self.resume_requested_queue(dialog)
+            QtWidgets.QMessageBox.warning(self.parent, "Échec du montage précédent", message)
+            return
 
         if dialog is not None:
             dialog.set_running(False)

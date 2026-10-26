@@ -3,6 +3,8 @@ import re
 import unicodedata
 from pathlib import Path
 
+from .title_convention import title_with_original
+
 
 def key(value):
     plain = unicodedata.normalize("NFKD", value).encode("ascii", errors="ignore").decode("ascii")
@@ -40,7 +42,7 @@ def suggested_episode_output(metadata, suggested, root=Path("/videos/Séries TV"
             return Path(suggested)
     except (KeyError, TypeError, ValueError):
         return Path(suggested)
-    title = str(metadata.get("french_title") or metadata.get("original_title") or "").strip()
+    title = title_with_original(metadata)
     title = re.sub(r"[/\\\x00-\x1f]", "_", title).strip(" .")
     title = title.encode("utf-8")[:210].decode("utf-8", errors="ignore")
     if not title:
