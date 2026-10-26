@@ -27,11 +27,11 @@ class EpisodeDestinationTest(unittest.TestCase):
         self.assertEqual(self.suggested.parent, result.parent)
         self.assertEqual('S02 E01 - Un nouvel espoir.mkv', result.name)
 
-    def test_a_missing_season_is_not_created_implicitly(self):
+    def test_a_missing_season_is_proposed_without_creating_it_yet(self):
         folder = self.root / "Cat's Eyes"
         folder.mkdir()
         result = suggested_episode_output(self.metadata, self.suggested, self.root)
-        self.assertEqual(self.suggested.parent, result.parent)
+        self.assertEqual(folder / "Saison 02", result.parent)
         self.assertFalse((folder / 'Saison 02').exists())
 
     def test_missing_numbers_keep_the_original_proposal(self):
@@ -42,3 +42,14 @@ class EpisodeDestinationTest(unittest.TestCase):
         result = suggested_episode_output(self.metadata, self.suggested, self.root)
         self.assertEqual(self.root, result.parent)
         self.assertNotIn('/', result.name)
+
+    def test_an_episode_without_a_known_directory_defaults_to_series_root(self):
+        self.metadata.update(french_title='Tous pour elle', original_title='It Takes a Village',
+                             season_number=7, episode_number=1, series_titles=['Esprits criminels'])
+        result = suggested_episode_output(self.metadata, Path('/videos/capture.mkv'), self.root)
+        self.assertEqual(self.root / 'S07 E01 - Tous pour elle (It Takes a Village).mkv', result)
+
+    def test_an_explicit_manual_directory_is_preserved(self):
+        suggested = self.root / 'mon classement/capture.mkv'
+        result = suggested_episode_output(self.metadata, suggested, self.root)
+        self.assertEqual(suggested.parent, result.parent)

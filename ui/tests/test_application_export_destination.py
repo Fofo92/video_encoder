@@ -38,7 +38,7 @@ class ApplicationExportDestinationTest(unittest.TestCase):
         self.monitor.select_output_path = MethodType(MltFrameMonitor.select_output_path, self.monitor)
 
     def export_to(self, output, queued=True):
-        with patch("video_encoder_ui.project_destination.QtWidgets.QFileDialog.getSaveFileName",
+        with patch("video_encoder_ui.project_destination.choose_project_output",
                    return_value=(str(output), "")) as dialog:
             MltFrameMonitor.export_project(self.monitor, queued=queued)
         dialog.assert_called_once()
@@ -80,6 +80,12 @@ class ApplicationExportDestinationTest(unittest.TestCase):
         self.monitor.pending_export = (self.root / "movie.json", self.root / "movie.mkv")
         MltFrameMonitor.audio_preflight_status_changed(self.monitor, "succeeded")
         self.monitor.export_status_changed.assert_called_once_with("confirming")
+
+    def test_export_creates_the_project_in_the_new_nested_destination(self):
+        output = self.root / 'Séries TV/Esprits criminels/Saison 07/S07 E01 - Tous pour elle.mkv'
+        self.export_to(output)
+        self.assertTrue(output.with_suffix('.json').is_file())
+        self.assertEqual((output.with_suffix('.json'), output), self.monitor.pending_export)
 
 
 if __name__ == "__main__":

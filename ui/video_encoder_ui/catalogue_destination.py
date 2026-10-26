@@ -173,4 +173,4 @@ def confirm_episode_destination(parent, metadata, suggested, review_url=None, re
         return None
     if dialog.clickedButton() is use:
         return proposed
-    return Path(suggested) if dialog.clickedButton() is manual else None
+    return proposed if dialog.clickedButton() is manual else None

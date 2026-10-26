@@ -57,5 +57,8 @@ def suggested_episode_output(metadata, suggested, root=Path("/videos/Séries TV"
             matches = []
         if len(matches) == 1:
             season_folder = matches[0]
-    folder = season_folder or Path(suggested).parent
+    if directory:
+        folder = season_folder or directory / f"Saison {season:02d}"
+    else:
+        folder = Path(root) if Path(suggested).parent == Path("/videos") else Path(suggested).parent
     return folder / f"S{season:02d} E{episode:02d} - {title}.mkv"
