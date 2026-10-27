@@ -2213,11 +2213,28 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
         suggested = self.project_path
         if suggested is None or Path(suggested).name == "proposal.json":
             suggested = DEFAULT_VIDEO_DIRECTORY / self.source_path.with_suffix(".json").name
-        review_montage_identification(
-            self, self.trim_session, self.source_path, suggested, self.trim_project_writer)
+        if review_montage_identification(
+                self, self.trim_session, self.source_path, suggested, self.trim_project_writer):
+            self.export_project(queued=True, identified_review=True)
 
-    def select_output_path(self, suggested):
+    def select_output_path(self, suggested, identified_review=False):
         self._destination_review_done = False
+        if identified_review:
+            result = getattr(self.trim_project_writer, "vidb_result", {})
+            metadata = result.get("metadata", {})
+            if metadata.get("record_kind") == "episode":
+                from .catalogue_destination import confirm_episode_destination
+                from .episode_destination import suggested_episode_output
+
+                proposed = suggested_episode_output(metadata, suggested)
+                while True:
+                    selected = select_project_output(self, proposed, self.project_path)
+                    if selected is not None:
+                        self._destination_review_done = True
+                        return selected
+                    proposed = confirm_episode_destination(self, metadata, suggested, result.get("review_url"))
+                    if proposed is None:
+                        return None
         suggested = prepare_catalogue_destination(
             self, self.trim_session, self.source_path, suggested, getattr(self, "trim_project_writer", None),
             continue_export=True)
@@ -2226,7 +2243,7 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
         self._destination_review_done = True
         return select_project_output(self, suggested, self.project_path)
 
-    def export_project(self, queued=False):
+    def export_project(self, queued=False, identified_review=False):
         if (
             self.trim_project_exporter.is_running
             or self.audio_preflight_runner.is_running
@@ -2246,7 +2263,10 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
         suggested = self.project_path
         if suggested is None or Path(suggested).name == "proposal.json":
             suggested = DEFAULT_VIDEO_DIRECTORY / self.source_path.with_suffix(".json").name
-        output_path = self.select_output_path(Path(suggested).with_suffix(".mkv"))
+        if identified_review:
+            output_path = self.select_output_path(Path(suggested).with_suffix(".mkv"), identified_review=True)
+        else:
+            output_path = self.select_output_path(Path(suggested).with_suffix(".mkv"))
         if output_path is None:
             return
         project_path = self.write_project(Path(output_path).with_suffix(".json"))
@@ -2434,7 +2454,21 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
                 f"Montage ajouté à la file : {output_path}",
                 5_000,
             )
-            self.start_new_project_from_current_source()
+            dialog = QtWidgets.QMessageBox(self)
+            dialog.setWindowTitle("Montage ajouté à la file")
+            dialog.setText("Le montage a été ajouté à la file.")
+            new = dialog.addButton("Nouveau montage", QtWidgets.QMessageBox.ButtonRole.AcceptRole)
+            current = dialog.addButton("Revenir au montage actuel", QtWidgets.QMessageBox.ButtonRole.RejectRole)
+            dialog.setDefaultButton(current)
+            dialog.exec()
+            if dialog.clickedButton() is new:
+                self.start_new_project_from_current_source()
+            else:
+                # A queued job reads its project later. Further edits must be
+                # saved under a new path, never over that queued project.
+                self.project_path = None
+                self.trim_session.project_id = None
+                self.set_project_modified(True)
             return
 
         try:

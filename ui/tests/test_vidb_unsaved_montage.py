@@ -48,7 +48,7 @@ class VidbUnsavedMontageTest(unittest.TestCase):
         segment = self.session.segments[0]
         with patch.object(review, "open_vidb_modal", return_value=True) as opened:
             self.assertTrue(self.identify())
-        opened.assert_called_once_with(None, self.url)
+        opened.assert_called_once_with(None, self.url, require_confirmation=True)
         self.assertEqual(2, len(self.calls))
         self.assertEqual(self.calls[0]["project_id"], self.calls[1]["project_id"])
         self.assertEqual(123, self.session.vidb["record_id"])
@@ -60,7 +60,7 @@ class VidbUnsavedMontageTest(unittest.TestCase):
         self.writer.vidb_link.transport = lambda _config, payload: self.identified(payload["project"]["project_id"])
         with patch.object(review, "open_vidb_modal", return_value=True) as opened:
             self.assertTrue(self.identify())
-        opened.assert_called_once_with(None, self.url)
+        opened.assert_called_once_with(None, self.url, require_confirmation=True)
 
     def test_unavailable_service_reports_the_problem_instead_of_silently_returning(self):
         self.writer.vidb_link.transport = Mock(side_effect=OSError("offline"))

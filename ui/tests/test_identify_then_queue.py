@@ -70,8 +70,14 @@ class IdentifyThenQueueTest(unittest.TestCase):
             MltFrameMonitor.export_project(monitor, queued=True)
         monitor.audio_preflight_runner.start.assert_called_once_with(project)
         self.assertEqual(monitor.pending_export_mode, "queued")
-        MltFrameMonitor.audio_preflight_succeeded(monitor, {"audio_checks": []})
+        new_button, current_button = object(), object()
+        dialog = Mock()
+        dialog.addButton.side_effect = [new_button, current_button]
+        dialog.clickedButton.return_value = new_button
+        with patch("video_encoder_ui.application.QtWidgets.QMessageBox", return_value=dialog):
+            MltFrameMonitor.audio_preflight_succeeded(monitor, {"audio_checks": []})
         monitor.trim_export_queue_client.enqueue.assert_called_once_with(project, output)
+        monitor.start_new_project_from_current_source.assert_called_once()
         MltFrameMonitor.audio_preflight_succeeded(monitor, {"audio_checks": []})
         monitor.trim_export_queue_client.enqueue.assert_called_once_with(project, output)
 

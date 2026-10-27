@@ -77,7 +77,7 @@ def size_vidb_dialog(dialog):
                   min(820, int(geometry.height() * .9)) if geometry else 750)
 
 
-def open_vidb_modal(parent, url):
+def open_vidb_modal(parent, url, require_confirmation=False):
     dialog = QtWidgets.QDialog(parent)
     dialog.setWindowTitle("Identification de l’œuvre dans vidb")
     observer = VidbWindowEvents(dialog)
@@ -125,4 +125,6 @@ def open_vidb_modal(parent, url):
     trace_vidb("entering modal event loop")
     result = dialog.exec()
     trace_vidb(f"modal returned={result}")
+    if require_confirmation:
+        return browser is not None and result == QtWidgets.QDialog.DialogCode.Accepted
     return browser is not None

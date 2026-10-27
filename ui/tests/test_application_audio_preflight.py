@@ -285,10 +285,14 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             "audio_checks": [],
         }
 
+        new_button, current_button = object(), object()
+        dialog = Mock()
+        dialog.addButton.side_effect = [new_button, current_button]
+        dialog.clickedButton.return_value = new_button
         with patch(
-            "video_encoder_ui.application."
-            "QtWidgets.QMessageBox.information"
-        ) as information:
+            "video_encoder_ui.application.QtWidgets.QMessageBox",
+            return_value=dialog,
+        ) as message_box:
             MltFrameMonitor.audio_preflight_succeeded(
                 monitor,
                 report,
@@ -307,7 +311,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
         monitor.export_status_changed.assert_called_with(
             "queued"
         )
-        information.assert_not_called()
+        message_box.information.assert_not_called()
         status_bar.showMessage.assert_called_once_with(
             f"Montage ajouté à la file : {output_path}",
             5_000,

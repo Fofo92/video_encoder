@@ -29,11 +29,11 @@ def review_montage_identification(parent, session, source, suggested, writer):
         QtWidgets.QMessageBox.information(parent, "Identification dans vidb",
                                           messages.get(result.get("status"), "vidb n’a fourni aucune proposition."))
         return False
-    if not open_vidb_modal(parent, url):
+    if not open_vidb_modal(parent, url, require_confirmation=True):
         return False
     # Keep the same identity for later save/export, including an unsaved montage.
     result = link.identify(document, provisional, refresh=True)
     writer.vidb_result = result
     if result.get("status") == "identified":
         session.vidb = {key: value for key, value in result.items() if key != "metadata"}
-    return True
+    return result.get("status") == "identified"
