@@ -1,8 +1,20 @@
 # Roadmap
 
+## État du parcours
+
+Le montage multi-source de même cadence, le déplacement d’un projet, la
+proposition de destination et l’identification vidb avant mise en file sont
+disponibles. Voir [l’index de la documentation](README.md).
+
+La source peut contenir plusieurs programmes : sa mise en quarantaine nécessite
+une confirmation explicite que tous les programmes utiles sont traités. La
+suppression automatique après un délai reste à définir. Le lancement et le suivi
+des encodages directement depuis vidb restent une évolution à étudier.
+
 ## Parcours utilisateur et intégration avec vidb — 18 octobre 2026
 
-Ordre convenu pour les prochaines évolutions :
+Ordre initial convenu ; les points 1 à 4 ont depuis reçu des réalisations,
+décrites par les documents liés depuis l’index. Le point 5 reste à étudier :
 
 1. Une seule saisie du nom et du dossier pour le projet de découpage JSON et le
    MKV ; modification possible après annulation du récapitulatif et avant le
@@ -90,17 +102,13 @@ Les évolutions suivantes pourront être étudiées lorsqu’un besoin concret l
 
 ### À réaliser
 
-- promouvoir l’image OCR corrigée après les contrôles de distribution ;
 - proposer une décision explicite en cas de sous-titres incomplets ;
 - reprendre la finalisation sans refaire les composants déjà validés ;
 - enregistrer un manifeste reliant les composants au projet, aux sources
   et aux paramètres de rendu ;
 - vérifier les composants avant réutilisation et le média final avant nettoyage ;
 - définir la conservation des diagnostics et la suppression contrôlée
-  des workspaces ;
-- ouvrir un projet JSON existant pour récupération ;
-- démarrer l’IHM sans argument, choisir un enregistrement et fournir un
-  lanceur KDE dans la catégorie Multimédia.
+  des workspaces.
 
 La récupération effectuée pendant le diagnostic était manuelle. Elle ne
 constitue pas encore une fonction de reprise disponible dans l’IHM.

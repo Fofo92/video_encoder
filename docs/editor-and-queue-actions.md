@@ -5,11 +5,11 @@
 Le sélecteur possède trois modes : **Navigation**, **Modifier IN**, **Modifier OUT**.
 La modification concerne exclusivement le segment sélectionné. Choisir un mode
 de modification charge ses bornes dans les repères. Basculer entre IN et OUT
-conserve les ajustements non appliqués. **Ctrl+← / Ctrl+→** et **−1 / +1** décalent
+conserve les ajustements non appliqués. **Ctrl+← / Ctrl+→** décalent
 la borne choisie d'une image. **Appliquer** (Entrée) remplace le segment à sa place.
 
 En mode Navigation, les commandes de décalage sont grisées. En mode modification,
-la pose de nouveaux repères, la création avec coupures, la sauvegarde et la mise
+la pose de nouveaux repères, la sauvegarde et la mise
 en file sont grisées jusqu'à l'application ou au retour en Navigation.
 Revenir à Navigation, ou sélectionner un autre segment, abandonne les ajustements
 non appliqués. Les segments déjà enregistrés restent inchangés.
@@ -54,7 +54,8 @@ extension : `S04 E05 - Suis ta route` donne les fichiers
 `S04 E05 - Suis ta route.json` et `S04 E05 - Suis ta route.mkv` dans le dossier choisi.
 Un projet déjà ouvert propose sa destination actuelle, qui reste modifiable.
 Une proposition automatique nommée `proposal.json` suggère un nom issu de la
-capture dans `/videos` ; son fichier d'origine reste préservé.
+capture ; la fiche vidb peut affiner le titre et la destination. Le fichier
+d'origine reste préservé. Voir [Destination des épisodes](architecture/episode-destination.md).
 
 Le choix précède l'enregistrement : annuler le choix de destination n'écrit pas
 de JSON et ne lance pas le contrôle audio. Une destination existante, un lien
@@ -100,8 +101,9 @@ contient le projet final ou une source. Les rapports fournis manuellement hors
 du dossier d'analyse reconnu restent conservés. Aucun nettoyage n'est déclenché
 par l'abandon d'une proposition non enregistrée.
 
-Le choix automatique de l'emplacement des analyses et leur file d'attente restent
-les évolutions suivantes.
+Cette section décrit le nettoyage des dossiers d’analyse associés aux projets
+existants. La détection publicitaire expérimentale est actuellement suspendue :
+voir [Montage manuel](manual-editing.md).
 
 ## Vérifications
 

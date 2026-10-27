@@ -57,8 +57,9 @@ puis positionne le moniteur sur le début du premier segment.
 
 La fermeture de l’éditeur rend la main à la fenêtre d’accueil, sans terminer l’application.
 
-L’éditeur ne prend actuellement en charge que les découpages mono-source. Le lecteur sait reconstruire 
-les références de plusieurs sources, mais le démarrage de l’IHM refuse encore un tel projet.
+L’éditeur permet aussi de monter plusieurs sources dans un projet, sous réserve
+qu’elles aient la même cadence. Le sélecteur de source, les segments et leur ordre
+sont décrits dans [Montage multi-source](multi-source-editor.md).
 
 ## Document de découpage
 
@@ -86,12 +87,11 @@ dans `vidb`, sa conservation ne sera pas obligatoire.
 
 ## Export
 
-Avant l’export, l’IHM enregistre le découpage puis lance un contrôle audio.
-Après confirmation de l’utilisateur, le JSON est archivé à côté du futur MKV.
-L’utilisateur peut alors démarrer immédiatement l’export ou ajouter le montage à la file persistante.
-
-Différer l’archivage jusqu’à cette confirmation évite de laisser un JSON orphelin dans le répertoire de 
-destination lorsqu’un contrôle audio échoue ou que l’utilisateur abandonne l’opération.
+Avant l’export, l’IHM propose l’identification vidb et la destination, enregistre
+le projet JSON à côté du futur MKV, puis lance un contrôle audio. L’utilisateur
+confirme ensuite l’export immédiat ou la mise en file. Annuler le contrôle conserve
+le projet enregistré et ne lance aucune tâche. Voir
+[Identifier puis mettre en file](identify-then-queue.md).
 
 Le contrôle audio mesure la présence d’un signal sur les pistes retenues. Les erreurs récupérables de 
 paquets MPEG-TS n’interrompent pas le contrôle lorsque FFmpeg parvient malgré tout à analyser des 
@@ -153,11 +153,10 @@ Les prochaines évolutions de la file devront :
 
 - ajouter un verrou exclusif atomique avant qu’un orchestrateur externe tel que `vidb` puisse lancer
   plusieurs workers simultanément ;
-- définir une politique contrôlée de validation puis de suppression des sources TV après export réussi.
+- définir une politique de durée et de suppression des fichiers en quarantaine.
 
-Le montage multi-source viendra ensuite compléter l’éditeur avec plusieurs
-sources, une couleur propre à chacune et des moniteurs adaptés, sans modifier
-les responsabilités du moteur Ruby.
+La fin d’utilisation d’une source demande déjà une confirmation explicite avant
+sa mise en quarantaine : [protocole](source-completion-confirmation.md).
 
 ## Navigation et déplacement des projets
 
