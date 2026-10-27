@@ -15,7 +15,7 @@ def series_key(name):
     return key(re.sub(r"\s*\([^()]*\d[^()]*\)\s*$", "", name))
 
 
-def series_directory(titles, root):
+def series_directories(titles, root):
     expected = {key(title) for title in titles if isinstance(title, str) and title.strip()}
     matches = []
     try:
@@ -31,8 +31,35 @@ def series_directory(titles, root):
                 if expected & alternatives:
                     matches.append(folder)
     except OSError:
-        return None
+        return []
+    return matches
+
+
+def series_directory(titles, root):
+    matches = series_directories(titles, root)
     return matches[0] if len(matches) == 1 else None
+
+
+def proposed_series_directory(metadata, root):
+    french = str(metadata.get('series_french_title') or '').strip()
+    original = str(metadata.get('series_original_title') or '').strip()
+    year = metadata.get('series_year')
+    if not french or not isinstance(year, int) or not 1800 <= year <= 2200:
+        return None
+    name = f'{french} ({original}) ({year})' if original else f'{french} ({year})'
+    name = re.sub(r'[/\\\x00-\x1f]', '_', name).strip(' .')
+    name = name.encode('utf-8')[:220].decode('utf-8', errors='ignore')
+    return Path(root) / name if name else None
+
+
+def episode_title(metadata):
+    french = str(metadata.get('french_title') or '')
+    original = str(metadata.get('original_title') or '')
+    local = re.fullmatch(r'episode\s*(\d+)', key(french))
+    native = re.fullmatch(r'(?:episode|dil)\s*(\d+)', key(original))
+    if local and native and local[1] == native[1]:
+        return french
+    return title_with_original(metadata)
 
 
 def suggested_episode_output(metadata, suggested, root=Path("/videos/Séries TV")):
@@ -42,12 +69,15 @@ def suggested_episode_output(metadata, suggested, root=Path("/videos/Séries TV"
             return Path(suggested)
     except (KeyError, TypeError, ValueError):
         return Path(suggested)
-    title = title_with_original(metadata)
+    title = episode_title(metadata)
     title = re.sub(r"[/\\\x00-\x1f]", "_", title).strip(" .")
     title = title.encode("utf-8")[:210].decode("utf-8", errors="ignore")
     if not title:
         return Path(suggested)
-    directory = series_directory(metadata.get("series_titles", []), Path(root))
+    matches = series_directories(metadata.get("series_titles", []), Path(root))
+    directory = matches[0] if len(matches) == 1 else None
+    if not matches and Path(suggested).parent in {Path('/videos'), Path(root)}:
+        directory = proposed_series_directory(metadata, root)
     season_folder = None
     if directory:
         try:

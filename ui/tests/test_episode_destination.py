@@ -53,3 +53,14 @@ class EpisodeDestinationTest(unittest.TestCase):
         suggested = self.root / 'mon classement/capture.mkv'
         result = suggested_episode_output(self.metadata, suggested, self.root)
         self.assertEqual(suggested.parent, result.parent)
+
+    def test_new_series_uses_its_bilingual_title_year_and_season_without_creating_directories(self):
+        self.metadata.update(series_french_title='Gerta et le monde déchiré',
+                             series_original_title='Gerta Schnirch', series_year=2026,
+                             series_titles=['Gerta et le monde déchiré', 'Gerta Schnirch'],
+                             season_number=1, french_title='Épisode 1', original_title='Díl 1',
+                             countries=['Tchéquie'])
+        result = suggested_episode_output(self.metadata, Path('/videos/capture.mkv'), self.root)
+        expected = self.root / 'Gerta et le monde déchiré (Gerta Schnirch) (2026)' / 'Saison 01'
+        self.assertEqual(expected / 'S01 E01 - Épisode 1.mkv', result)
+        self.assertFalse(expected.exists())

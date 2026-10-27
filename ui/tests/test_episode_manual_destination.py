@@ -20,7 +20,7 @@ class EpisodeManualDestinationTest(unittest.TestCase):
         dialog.addButton.side_effect = buttons
         dialog.clickedButton.return_value = buttons[1]
         with patch.object(destination.QtWidgets, 'QMessageBox', return_value=dialog), \
-             patch('video_encoder_ui.episode_destination.series_directory', return_value=None):
+             patch('video_encoder_ui.episode_destination.series_directories', return_value=[]):
             result = destination.confirm_episode_destination(
                 None, metadata, Path('/videos/Esprits criminels - S07 E01 Tous pour elle.mkv'))
         self.assertEqual(Path('/videos/Séries TV/S07 E01 - Tous pour elle (It Takes a Village).mkv'), result)
@@ -28,6 +28,6 @@ class EpisodeManualDestinationTest(unittest.TestCase):
     def test_identical_foreign_titles_remain_repeated_in_the_episode_name(self):
         metadata = {'french_title': 'Village', 'original_title': 'Village', 'countries': ['États-Unis'],
                     'season_number': 7, 'episode_number': 1}
-        with patch('video_encoder_ui.episode_destination.series_directory', return_value=None):
+        with patch('video_encoder_ui.episode_destination.series_directories', return_value=[]):
             result = destination.suggested_episode_output(metadata, Path('/videos/capture.mkv'))
         self.assertEqual('S07 E01 - Village (Village).mkv', result.name)
