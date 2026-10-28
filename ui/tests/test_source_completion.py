@@ -172,6 +172,75 @@ class SourceCompletionTest(unittest.TestCase):
         self.assertIsNotNone(self.controller.dialog)
         self.quarantine.quarantine.assert_not_called()
 
+    def multisource_job(self, version=2):
+        second = self.root / "autre capture.m2t"
+        second.write_bytes(b"second capture")
+        job = self.job("multisource", version=version)
+        project = Path(job["input_path"])
+        document = json.loads(project.read_text(encoding="utf-8"))
+        if version == 2:
+            document["sources"].append({"id": "second", "path": str(second)})
+        else:
+            document["timeline"].append({"type": "segment", "source": str(second)})
+        project.write_text(json.dumps(document), encoding="utf-8")
+        self.queue.list_jobs.return_value = [job]
+        return job, second
+
+    def test_confirming_first_source_still_proposes_second_source_of_same_job(self):
+        _job, second = self.multisource_job()
+        self.quarantine.quarantine.side_effect = lambda source: source.unlink()
+        self.controller.poll()
+        self.assertEqual(self.source, self.controller.case.source)
+        self.controller.confirm()
+        self.assertFalse(self.source.exists())
+        self.controller.poll()
+        self.assertIsNotNone(self.controller.dialog)
+        self.assertEqual(second, self.controller.case.source)
+        self.controller.confirm()
+        self.controller.poll()
+        self.assertIsNone(self.controller.dialog)
+        self.assertEqual([self.source, second],
+                         [call.args[0] for call in self.quarantine.quarantine.call_args_list])
+
+    def test_declining_first_source_does_not_decline_second_even_for_version_one(self):
+        _job, second = self.multisource_job(version=1)
+        self.controller.poll()
+        self.controller.dialog.reject()
+        self.controller.poll()
+        self.assertIsNotNone(self.controller.dialog)
+        self.assertEqual(second, self.controller.case.source)
+        self.controller.confirm()
+        self.controller.poll()
+        self.assertIsNone(self.controller.dialog)
+        self.quarantine.quarantine.assert_called_once_with(second)
+        self.assertTrue(self.source.exists())
+
+    def test_blocked_second_source_is_proposed_when_its_unfinished_job_is_removed(self):
+        job, second = self.multisource_job()
+        unfinished = self.job("still queued", status="queued", source=second)
+        self.queue.list_jobs.return_value = [job, unfinished]
+        self.controller.poll()
+        self.assertEqual(self.source, self.controller.case.source)
+        self.controller.confirm()
+        self.controller.poll()
+        self.assertIsNone(self.controller.dialog)
+        self.quarantine.quarantine.assert_called_once_with(self.source)
+        self.queue.list_jobs.return_value = [job]
+        self.controller.poll()
+        self.assertEqual(second, self.controller.case.source)
+        self.controller.confirm()
+        self.assertEqual(2, self.quarantine.quarantine.call_count)
+
+    def test_new_completion_can_ask_again_about_a_previously_declined_source(self):
+        self.controller.poll()
+        self.controller.dialog.reject()
+        self.controller.poll()
+        self.assertIsNone(self.controller.dialog)
+        self.queue.list_jobs.return_value = [self.first, self.job("new export")]
+        self.controller.poll()
+        self.assertIsNotNone(self.controller.dialog)
+        self.assertEqual(self.source, self.controller.case.source)
+
     def test_backend_refusal_keeps_the_question_and_source(self):
         self.controller.poll()
         self.quarantine.quarantine.side_effect = SourceQuarantineError("source encore utilisée")

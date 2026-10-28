@@ -2,6 +2,7 @@ module VideoEncoder
   # Represents a set of trim segments for a video project.
   class TrimProject
     attr_reader :segments, :timeline
+    attr_accessor :track_selection
 
     def initialize
       @segments = []

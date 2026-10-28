@@ -21,6 +21,23 @@ if QtWidgets is not None:
     "PySide6 or MLT is unavailable"
 )
 class ApplicationAudioPreflightTest(unittest.TestCase):
+    def setUp(self):
+        selection = patch("video_encoder_ui.original_language_review.prepare_track_selection", return_value=True)
+        self.track_selection_review = selection.start()
+        self.addCleanup(selection.stop)
+
+    def test_language_cancellation_prevents_audio_preflight(self):
+        self.track_selection_review.return_value = False
+        preflight = Mock(is_running=False)
+        monitor = self.make_monitor(
+            source_path=Path("/recordings/movie.ts"), project_path=Path("/projects/movie.json"),
+            trim_session=SimpleNamespace(segments=[object()]), trim_project_exporter=Mock(is_running=False),
+            audio_preflight_runner=preflight, pending_export=None)
+        MltFrameMonitor.export_project(monitor)
+        self.track_selection_review.assert_called_once_with(monitor, Path("/projects/movie.json"))
+        preflight.start.assert_not_called()
+        self.assertIsNone(monitor.pending_export)
+
     def make_monitor(self, **attributes):
         project_archiver = Mock()
         project_archiver.archive.side_effect = (
@@ -166,13 +183,13 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
                 "/videos/Films/movie.mkv",
             )
 
+        message_box.setTextFormat.assert_called_once()
         message = message_box.setText.call_args.args[0]
-        self.assertIn(
-            "Fichier de destination\n\n"
-            "/videos/Films/movie.mkv",
-            message,
-        )
-        self.assertIn("Pistes sélectionnées", message)
+        self.assertIn("<b>Destination</b>", message)
+        self.assertIn("Dossier : /videos/Films", message)
+        self.assertIn("Nom : movie", message)
+        self.assertIn("<b>Sources et pistes</b>", message)
+        self.assertIn("/videos/Films/movie.mkv", message_box.setDetailedText.call_args.args[0])
 
     def test_does_not_export_when_audio_confirmation_is_declined(self):
         exporter = Mock()
@@ -276,7 +293,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             trim_export_queue_client=queue_client,
             pending_export=(project_path, output_path),
             pending_export_mode="queued",
-            start_new_project_from_current_source=Mock(),
+            new_montage=Mock(),
             close=Mock(),
             statusBar=Mock(return_value=status_bar),
         )
@@ -287,7 +304,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
 
         new_button, current_button = object(), object()
         dialog = Mock()
-        dialog.addButton.side_effect = [new_button, current_button]
+        dialog.addButton.side_effect = [new_button, current_button, object()]
         dialog.clickedButton.return_value = new_button
         with patch(
             "video_encoder_ui.application.QtWidgets.QMessageBox",
@@ -317,7 +334,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             5_000,
         )
 
-        monitor.start_new_project_from_current_source.assert_called_once_with()
+        monitor.new_montage.assert_called_once_with()
         monitor.close.assert_not_called()
         self.assertIsNone(monitor.pending_export)
         self.assertIsNone(
@@ -347,7 +364,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             trim_export_queue_client=queue_client,
             pending_export=(project_path, output_path),
             pending_export_mode="queued",
-            start_new_project_from_current_source=Mock(),
+            new_montage=Mock(),
         )
 
         with patch(
@@ -374,7 +391,7 @@ class ApplicationAudioPreflightTest(unittest.TestCase):
             "output already exists: /output/movie.mkv",
         )
         exporter.start.assert_not_called()
-        monitor.start_new_project_from_current_source.assert_not_called()
+        monitor.new_montage.assert_not_called()
         self.assertIsNone(monitor.pending_export)
         self.assertIsNone(monitor.pending_export_mode)
 

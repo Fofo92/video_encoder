@@ -30,5 +30,13 @@ Les choix de conservation restent implicites dans la présence de la source :
 aucun reçu JSON supplémentaire n’est produit et aucune autorisation de déplacer
 automatiquement cette source lors d’un prochain encodage n’est mémorisée.
 
+Pour un montage multisource, chaque capture éligible est proposée successivement.
+Confirmer ou conserver la première ne décide rien pour les autres. Une source
+encore utilisée par une autre tâche reste protégée ; elle peut être proposée
+lorsque cette tâche ne la bloque plus. Le suivi des réponses distingue la source
+et les travaux terminés qui l’utilisent : il ne repose pas seulement sur le numéro
+du travail multisource. Un nouvel export de cette source permet une nouvelle
+question, même si la source avait été conservée auparavant.
+
 Ce protocole ne supprime aucun fichier de quarantaine. Le délai et les conditions
 de purge devront être fixés avant d’activer cette seconde étape.

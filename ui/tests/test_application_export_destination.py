@@ -15,6 +15,9 @@ except ModuleNotFoundError:
 @unittest.skipIf(MltFrameMonitor is None, "PySide6 or MLT is unavailable")
 class ApplicationExportDestinationTest(unittest.TestCase):
     def setUp(self):
+        selection = patch("video_encoder_ui.original_language_review.prepare_track_selection", return_value=True)
+        selection.start()
+        self.addCleanup(selection.stop)
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)

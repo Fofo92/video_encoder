@@ -31,6 +31,7 @@ from .audio_preflight_runner import AudioPreflightRunner
 from .project_destination import select_project_output
 from .vidb_project_review import offer_vidb_review
 from .vidb_montage_review import review_montage_identification
+from .vidb_modal_browser import trace_vidb
 from .vidb_project_link import VidbProjectLink
 from .trim_project_file_reader import (
     TrimProjectFileReader,
@@ -76,6 +77,7 @@ from .source_quarantine_controller import (
 )
 from .source_completion_controller import SourceCompletionController
 from .catalogue_destination import prepare_catalogue_destination
+from .audio_preflight_summary import audio_preflight_summary
 
 PREVIEW_WIDTH = 640
 PREVIEW_HEIGHT = 360
@@ -1740,6 +1742,7 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
         if window is not None:
             self._new_montage_window = window
             window.show()
+            self.close()
 
     def start_new_project_from_current_source(self):
         self.trim_session.clear_segments()
@@ -2166,6 +2169,11 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
         return self.write_project(destination)
 
     def write_project(self, destination):
+        from .montage_duration import confirm_montage_duration
+
+        if not confirm_montage_duration(self):
+            return None
+
         try:
             destination = self.trim_project_writer.save(
                 self.trim_session,
@@ -2206,6 +2214,7 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
         return destination
 
     def review_vidb_project(self):
+        trace_vidb("identification action; editor status=" + str(self.export_status))
         if self.export_status in {"running", "preflight", "confirming"}:
             return
         if self.source_path is None:
@@ -2220,7 +2229,7 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
     def select_output_path(self, suggested, identified_review=False):
         self._destination_review_done = False
         if identified_review:
-            result = getattr(self.trim_project_writer, "vidb_result", {})
+            result = getattr(getattr(self, "trim_project_writer", None), "vidb_result", None) or {}
             metadata = result.get("metadata", {})
             if metadata.get("record_kind") == "episode":
                 from .catalogue_destination import confirm_episode_destination
@@ -2241,17 +2250,30 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
         if suggested is None:
             return None
         self._destination_review_done = True
-        return select_project_output(self, suggested, self.project_path)
+        selected = select_project_output(self, suggested, self.project_path)
+        result = getattr(getattr(self, "trim_project_writer", None), "vidb_result", None) or {}
+        metadata = result.get("metadata", {})
+        while selected is None and metadata.get("record_kind") == "episode":
+            from .catalogue_destination import confirm_episode_destination
+
+            suggested = confirm_episode_destination(self, metadata, suggested, result.get("review_url"))
+            if suggested is None:
+                return None
+            selected = select_project_output(self, suggested, self.project_path)
+        return selected
 
     def export_project(self, queued=False, identified_review=False):
+        trace_vidb(f"export requested; queued={queued}; identified_review={identified_review}")
         if (
             self.trim_project_exporter.is_running
             or self.audio_preflight_runner.is_running
             or self.pending_export is not None
         ):
+            trace_vidb("export deferred: exporter, audio preflight or pending export is active")
             return
 
         if not self.trim_session.segments:
+            trace_vidb("export stopped: montage has no added segment")
             QtWidgets.QMessageBox.information(
                 self,
                 "Montage vide",
@@ -2268,6 +2290,7 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
         else:
             output_path = self.select_output_path(Path(suggested).with_suffix(".mkv"))
         if output_path is None:
+            trace_vidb("destination selection returned no path")
             return
         project_path = self.write_project(Path(output_path).with_suffix(".json"))
         if project_path is None:
@@ -2275,6 +2298,10 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
         if not getattr(self, "_destination_review_done", False):
             if not offer_vidb_review(self, getattr(self, "trim_project_writer", None), before_encoding=True):
                 return
+
+        from .original_language_review import prepare_track_selection
+        if not prepare_track_selection(self, project_path):
+            return
 
         self.pending_export_mode = (
             "queued"
@@ -2322,47 +2349,13 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
             )
 
     def confirm_audio_preflight(self, report, mode, output_path):
-        status_labels = {
-            "signal_detected": "signal détecté",
-            "inconclusive": "résultat non concluant",
-        }
-
-        lines = []
-        for check in report["audio_checks"]:
-            source = check["source"]
-            index = check["track_index"]
-            language = check.get("language") or "non précisée"
-            status = check["analysis"]["status"]
-
-            lines.append(
-                f"{source}\n"
-                f"  Piste {index} — {language} : "
-                f"{status_labels.get(status, status)}"
-            )
-
-        summary = "\n\n".join(lines)
-        if not summary:
-            summary = "Aucune piste audio à contrôler."
-
+        text, details = audio_preflight_summary(report, output_path)
         message_box = QtWidgets.QMessageBox(self)
         message_box.setWindowTitle("Contrôle audio avant export")
-        message_box.setIcon(
-            QtWidgets.QMessageBox.Icon.Question
-        )
-        message_box.setText(
-            "Projet de découpage\n\n"
-            f"{Path(output_path).with_suffix('.json')}\n\n"
-            "Fichier de destination\n\n"
-            f"{output_path}\n\n"
-            "Pistes sélectionnées\n\n"
-            f"{summary}\n\n"
-            "Ce contrôle mesure la présence d’un signal, "
-            "pas la langue réellement parlée.\n"
-            "Un résultat non concluant ne prouve pas "
-            "que la piste est inutilisable.\n\n"
-            "Annuler conserve le montage. Tu pourras choisir un autre nom "
-            "ou dossier lors de la prochaine mise en file ou de l’export."
-        )
+        message_box.setIcon(QtWidgets.QMessageBox.Icon.NoIcon)
+        message_box.setTextFormat(QtCore.Qt.TextFormat.RichText)
+        message_box.setText(text)
+        message_box.setDetailedText(details)
 
         cancel_button = message_box.addButton(
             "Annuler",
@@ -2459,10 +2452,13 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
             dialog.setText("Le montage a été ajouté à la file.")
             new = dialog.addButton("Nouveau montage", QtWidgets.QMessageBox.ButtonRole.AcceptRole)
             current = dialog.addButton("Revenir au montage actuel", QtWidgets.QMessageBox.ButtonRole.RejectRole)
+            close = dialog.addButton("Fermer la fenêtre", QtWidgets.QMessageBox.ButtonRole.ActionRole)
             dialog.setDefaultButton(current)
             dialog.exec()
             if dialog.clickedButton() is new:
-                self.start_new_project_from_current_source()
+                self.new_montage()
+            elif dialog.clickedButton() is close:
+                self.close()
             else:
                 # A queued job reads its project later. Further edits must be
                 # saved under a new path, never over that queued project.

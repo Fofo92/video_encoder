@@ -37,9 +37,8 @@ module VideoEncoder
         output_track.complete_for?(sources)
       end
 
-      total_steps = total_steps_for(
-        selected_audio_tracks
-      )
+      subtitle_steps = subtitle_steps_for(trim_project, subtitle_tracks_by_source)
+      total_steps = total_steps_for(selected_audio_tracks, subtitle_steps)
 
       measure(:video) do
         render_video(trim_project, video_tracks_by_source, total_steps)
@@ -63,7 +62,7 @@ module VideoEncoder
                 roles: selected_audio_tracks.map(&:role)
       ) do
         render_audio_tracks(
-          trim_project, sources, selected_audio_tracks, video_tracks_by_source, total_steps
+          trim_project, sources, selected_audio_tracks, video_tracks_by_source, total_steps, subtitle_steps
         )
       end
 
@@ -87,10 +86,14 @@ module VideoEncoder
                 :subtitle_exporter,
                 :progress_reporter
 
-    def total_steps_for(audio_tracks)
-      subtitle_steps = subtitle_exporter ? 1 : 0
-
+    def total_steps_for(audio_tracks, subtitle_steps)
       audio_tracks.length + subtitle_steps + 2
+    end
+
+    def subtitle_steps_for(trim_project, subtitle_tracks_by_source)
+      return 0 unless subtitle_exporter
+
+      SubtitleExportPreparation.skip?(trim_project, subtitle_tracks_by_source) ? 0 : 1
     end
 
     def render_video(trim_project, video_tracks_by_source, total_steps)
@@ -119,32 +122,33 @@ module VideoEncoder
       sources,
       audio_tracks,
       video_tracks_by_source,
-      total_steps
+      total_steps,
+      subtitle_steps
     )
       inputs = audio_tracks.map do |output_track|
         prepare_audio_track(trim_project, sources, output_track, video_tracks_by_source)
       end
 
-      render_prepared_audio(inputs, total_steps)
+      render_prepared_audio(inputs, total_steps, subtitle_steps)
       inputs.map { |input| input.except(:render) }
     end
 
-    def render_prepared_audio(inputs, total_steps)
+    def render_prepared_audio(inputs, total_steps, subtitle_steps)
       if inputs.length > 1 && @audio_concurrency == 2
         report_progress(
-          :audio, step: subtitle_exporter ? 3 : 2, total: total_steps,
+          :audio, step: subtitle_steps + 2, total: total_steps,
                   tracks: inputs.length, parallel: true
         )
         renderer.render_audio_batch(inputs.map { |input| input.fetch(:render) })
       else
-        render_sequential_audio(inputs, total_steps)
+        render_sequential_audio(inputs, total_steps, subtitle_steps)
       end
     end
 
-    def render_sequential_audio(inputs, total_steps)
+    def render_sequential_audio(inputs, total_steps, subtitle_steps)
       inputs.each_with_index do |input, index|
         report_progress(
-          :audio, step: index + (subtitle_exporter ? 3 : 2), total: total_steps,
+          :audio, step: index + subtitle_steps + 2, total: total_steps,
                   track: index + 1, tracks: inputs.length, role: input.fetch(:output_track).role
         )
         renderer.render_audio(**input.fetch(:render))

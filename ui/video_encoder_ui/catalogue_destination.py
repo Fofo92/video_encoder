@@ -86,7 +86,7 @@ def prepare_catalogue_destination(parent, session, source, suggested, writer, co
     metadata = result.get("metadata", {})
     complete = all(metadata.get(field) for field in ("year", "abstract", "genres", "countries"))
     if metadata.get("record_kind") == "episode":
-        if continue_export and complete and metadata.get("language_version") not in (None, "", "IND"):
+        if continue_export:
             return suggested_episode_output(metadata, suggested)
         return confirm_episode_destination(
             parent, metadata, suggested, result.get("review_url"),

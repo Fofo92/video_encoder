@@ -5,6 +5,7 @@ import uuid
 from pathlib import Path
 
 from .vidb_project_link import VidbProjectLink
+from .original_language_review import selection_scope
 
 
 class TrimProjectFileWriter:
@@ -24,6 +25,9 @@ class TrimProjectFileWriter:
         previous = getattr(session, "vidb", {})
         if isinstance(previous, dict) and previous:
             document["vidb"] = {key: value for key, value in previous.items() if key != "metadata"}
+        selection = getattr(session, "track_selection", None)
+        if isinstance(selection, dict) and selection.get("scope") == selection_scope(document):
+            document["track_selection"] = selection
 
         text = json.dumps(document, ensure_ascii=False, indent=2) + "\n"
         self.write_atomic(destination, text)
@@ -31,6 +35,9 @@ class TrimProjectFileWriter:
         if self.vidb_result.get("status") != "disabled":
             document["vidb"] = {key: value for key, value in self.vidb_result.items() if key != "metadata"}
             session.vidb = document["vidb"]
+            if document.get("track_selection", {}).get("scope") != selection_scope(document):
+                document.pop("track_selection", None)
+                session.track_selection = None
             self.write_atomic(destination, json.dumps(document, ensure_ascii=False, indent=2) + "\n")
         self.clean_analysis(session, destination)
 

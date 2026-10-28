@@ -27,6 +27,7 @@ class TrimProjectFileReader:
             session = self.load_version_2(document)
         session.project_id = document.get("project_id")
         session.vidb = document.get("vidb", {})
+        session.track_selection = document.get("track_selection")
         return session
 
     def validate(self, document):

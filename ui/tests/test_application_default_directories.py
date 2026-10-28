@@ -103,9 +103,13 @@ class ApplicationDefaultDirectoriesTest(unittest.TestCase):
                 "/another/location/other.mkv",
                 "",
             ),
-        ) as dialog:
+        ) as dialog, patch(
+            "video_encoder_ui.original_language_review.prepare_track_selection",
+            return_value=True,
+        ) as language_review:
             MltFrameMonitor.export_project(monitor)
 
+        language_review.assert_called_once_with(monitor, Path("/another/location/other.json"))
         dialog.assert_not_called()
         monitor.save_project.assert_not_called()
         monitor.select_output_path.assert_called_once_with(project_path.with_suffix(".mkv"))

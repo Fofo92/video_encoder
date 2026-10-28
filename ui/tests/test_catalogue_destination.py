@@ -32,6 +32,21 @@ class CatalogueDestinationTest(unittest.TestCase):
                 "genres": ["Comédie", "Drame"], "countries": ["France"],
                 "record_kind": "standalone_video", **changes}
 
+    def test_a_bound_episode_goes_to_destination_even_with_unknown_optional_metadata(self):
+        def transport(_config, payload):
+            return {'status': 'identified', 'binding': {
+                'project_id': payload['project']['project_id'], 'record_id': 123, 'binding_token': 'signed'},
+                'metadata': {'record_kind': 'episode', 'language_version': 'IND'}}
+
+        writer = SimpleNamespace(vidb_link=VidbProjectLink(self.config, transport=transport))
+        expected = Path('/videos/episode.mkv')
+        with patch.object(destination, 'confirm_episode_destination') as confirmation, \
+             patch.object(destination, 'suggested_episode_output', return_value=expected):
+            result = destination.prepare_catalogue_destination(
+                None, self.session, self.session.sources[0].path, self.proposed, writer, continue_export=True)
+        self.assertEqual(expected, result)
+        confirmation.assert_not_called()
+
     def test_proposes_the_combined_directory_for_both_film_genres(self):
         (self.root / 'Drame').mkdir()
         (self.root / 'Comédie, Drame').mkdir()

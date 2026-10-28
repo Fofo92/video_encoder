@@ -12,6 +12,7 @@ class VidbExportReview(QtWidgets.QDialog):
 
     def __init__(self, parent, result, refresh):
         super().__init__(parent)
+        trace_vidb("export review opened; initial status=" + str(result.get("status")))
         self.result_data = result
         self.wait_for_change = result.get("status") == "identified"
         self.confirmed_record_id = None
@@ -97,6 +98,11 @@ class VidbExportReview(QtWidgets.QDialog):
         except Exception:
             self.status_label.setText("vidb est temporairement indisponible ; la vérification va reprendre.")
         else:
+            previous = getattr(self, "_trace_last_status", None)
+            current = (result.get("status"), result.get("record_id"), self.confirmed_record_id)
+            if current != previous:
+                trace_vidb(f"export review binding={current[0]}; record={current[1]}; confirmed={current[2]}")
+                self._trace_last_status = current
             if result.get("status") != "pending" or self.result_data.get("status") != "identified":
                 self.result_data = result
             if result.get("status") == "identified":
@@ -118,6 +124,7 @@ class VidbExportReview(QtWidgets.QDialog):
         self.next_refresh = time.monotonic() + 3
 
     def finish_review(self, _result):
+        trace_vidb("export review closed; dialog result=" + str(_result))
         self.closed = True
         self.timer.stop()
         self.executor.shutdown(wait=False, cancel_futures=True)
@@ -125,6 +132,19 @@ class VidbExportReview(QtWidgets.QDialog):
 
 def await_vidb_identification(parent, result, refresh):
     dialog = VidbExportReview(parent, result, refresh)
-    if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
+    outcome = dialog.exec()
+    # WebEngine may interrupt the nested modal loop while the dialog is
+    # still active. Only finished (which sets closed) ends this workflow.
+    if not dialog.closed:
+        trace_vidb("modal loop returned before finished; waiting for identification")
+        loop = QtCore.QEventLoop()
+        dialog.finished.connect(loop.quit)
+        try:
+            if not dialog.closed:
+                loop.exec()
+            outcome = dialog.result()
+        finally:
+            dialog.finished.disconnect(loop.quit)
+    if outcome == QtWidgets.QDialog.DialogCode.Accepted:
         return dialog.result_data
     return None

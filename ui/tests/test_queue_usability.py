@@ -82,7 +82,10 @@ class LoadedProjectDestinationTest(unittest.TestCase):
 
     def test_requeued_existing_project_uses_the_new_output_directory(self):
         monitor = self.monitor(Path("/new/name.mkv"))
-        MltFrameMonitor.export_project(monitor, queued=True)
+        with patch("video_encoder_ui.original_language_review.prepare_track_selection",
+                   return_value=True) as language_review:
+            MltFrameMonitor.export_project(monitor, queued=True)
+        language_review.assert_called_once_with(monitor, Path("/new/name.json"))
         monitor.select_output_path.assert_called_once_with(Path("/old/project.mkv"))
         self.assertEqual(monitor.pending_export, (Path("/new/name.json"), Path("/new/name.mkv")))
         monitor.audio_preflight_runner.start.assert_called_once_with(Path("/new/name.json"))

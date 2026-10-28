@@ -18,6 +18,7 @@ class SourceCompletionController(QtCore.QObject):
         self.plan = plan or SourceCompletionPlan()
         self.known_done = {}
         self.pending_ids = set()
+        self.reviewed_sources = {}
         self.direct_jobs = []
         self.dialog = None
         self.case = None
@@ -50,7 +51,7 @@ class SourceCompletionController(QtCore.QObject):
             self.known_done = done
             cases = self.plan.collect(jobs)
             for case in cases:
-                if inspect_all or any(job["id"] in self.pending_ids for job in case.jobs):
+                if inspect_all or self.needs_confirmation(case):
                     self.show_confirmation(case)
                     return
             if inspect_all:
@@ -60,6 +61,11 @@ class SourceCompletionController(QtCore.QObject):
         except (TrimExportQueueError, SourceCompletionError) as error:
             if inspect_all:
                 QtWidgets.QMessageBox.warning(self.parent_window, "Sources conservées", str(error))
+
+    def needs_confirmation(self, case):
+        completed = self.completed_keys(case.jobs)
+        return (any(job_id in self.pending_ids for job_id in completed)
+                and self.reviewed_sources.get(case.source) != completed)
 
     def record_export(self, project_path, output_path):
         if project_path is None:
@@ -115,7 +121,9 @@ class SourceCompletionController(QtCore.QObject):
         self.dialog.accept()
 
     def closed(self, _result):
-        self.pending_ids.difference_update(job["id"] for job in self.case.jobs)
+        # One completed job can reference several sources. A decision concerns
+        # only this source, never the other sources of those same jobs.
+        self.reviewed_sources[self.case.source] = self.completed_keys(self.case.jobs)
         dialog = self.dialog
         self.dialog = None
         self.case = None

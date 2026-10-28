@@ -5,6 +5,10 @@ module VideoEncoder
     FRENCH_CODES = %w[fra fre].freeze
     ORIGINAL_VERSION_CODES = %w[qaa].freeze
 
+    def initialize(french_only: false)
+      @french_only = french_only
+    end
+
     def select(media)
       {
         video: media.video_tracks.first,
@@ -16,6 +20,12 @@ module VideoEncoder
     def select_audio_outputs(media_sources)
       french = build_audio_output(media_sources, :french) do |track|
         french?(track)
+      end
+
+      if @french_only
+        raise ArgumentError, 'Aucune piste audio française disponible pour chaque source.' unless french
+
+        return [french]
       end
 
       original = build_audio_output(media_sources, :original) do |track|
@@ -32,7 +42,7 @@ module VideoEncoder
     end
 
     def select_subtitle_tracks(media_sources)
-      return {} unless complete_original_audio?(media_sources)
+      return {} unless @french_only || complete_original_audio?(media_sources)
 
       media_sources.each_with_object({}) do |media, tracks_by_source|
         subtitle = select_subtitles(media).first
@@ -59,12 +69,16 @@ module VideoEncoder
       usable = tracks.reject(&:visual_impaired)
 
       french = usable.find { |track| french?(track) }
+      return [french].compact if @french_only
+
       original = usable.find { |track| original_version?(track) }
 
       [french, original].compact.uniq
     end
 
     def select_subtitles(media)
+      return forced_subtitles(media) if @french_only
+
       original_audio = select_audio(media.audio_tracks).find { |track| !french?(track) }
 
       return [] unless original_audio
@@ -76,6 +90,10 @@ module VideoEncoder
 
     def french?(track)
       FRENCH_CODES.include?(track.language)
+    end
+
+    def forced_subtitles(media)
+      media.subtitle_tracks.select { |track| french?(track) && track.forced && !track.hearing_impaired }
     end
 
     def original_version?(track)

@@ -14,19 +14,38 @@ module VideoEncoder
 
       validate_format(document)
 
-      case document.fetch('version')
-      when 1
-        load_version_one(document)
-      when TrimProjectDocument::VERSION
-        load_version_two(document)
-      else
-        raise_unsupported_version(document)
+      project = case document.fetch('version')
+                when 1
+                  load_version_one(document)
+                when TrimProjectDocument::VERSION
+                  load_version_two(document)
+                else
+                  raise_unsupported_version(document)
+                end
+      selection = document['track_selection']
+      if selection.is_a?(Hash) && %w[french_only original_with_subtitles].include?(selection['mode'])
+        validate_track_selection!(selection, document)
+        project.track_selection = selection
       end
+      project
     end
 
     private
 
     attr_reader :media_probe
+
+    def validate_track_selection!(selection, document)
+      paths = if document['version'] == 1
+                document.fetch('timeline').filter_map { |item| item['source'] }
+              else
+                document.fetch('sources').map { |source| source.fetch('path') }
+              end
+      expected = { 'project_id' => document['project_id'], 'record_id' => document.dig('vidb', 'record_id'),
+                   'source_paths' => paths.uniq.sort }
+      return if selection['scope'] == expected
+
+      raise ArgumentError, 'Sélection des pistes périmée : revalider la langue originale dans le montage.'
+    end
 
     def load_version_one(document)
       media_by_path = {}

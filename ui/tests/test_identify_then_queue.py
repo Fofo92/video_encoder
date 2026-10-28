@@ -61,23 +61,25 @@ class IdentifyThenQueueTest(unittest.TestCase):
             audio_preflight_runner=Mock(is_running=False), pending_export=None, write_project=Mock(return_value=project),
             export_status_changed=Mock(), trim_export_queue_client=Mock(), trim_project_archiver=Mock(),
             audio_preflight_cancel_prompt_active=False, confirm_audio_preflight=Mock(return_value=True),
-            statusBar=Mock(), start_new_project_from_current_source=Mock())
+            statusBar=Mock(), new_montage=Mock())
         monitor.select_output_path = MethodType(MltFrameMonitor.select_output_path, monitor)
         monitor.trim_project_archiver.archive.return_value = project
         with patch.object(destination, "await_vidb_identification", return_value={"status": "unmatched"}), \
              patch("video_encoder_ui.application.select_project_output", return_value=output), \
-             patch("video_encoder_ui.application.offer_vidb_review", side_effect=AssertionError("second menu")):
+             patch("video_encoder_ui.application.offer_vidb_review", side_effect=AssertionError("second menu")), \
+             patch("video_encoder_ui.original_language_review.prepare_track_selection", return_value=True) as language_review:
             MltFrameMonitor.export_project(monitor, queued=True)
+        language_review.assert_called_once_with(monitor, project)
         monitor.audio_preflight_runner.start.assert_called_once_with(project)
         self.assertEqual(monitor.pending_export_mode, "queued")
         new_button, current_button = object(), object()
         dialog = Mock()
-        dialog.addButton.side_effect = [new_button, current_button]
+        dialog.addButton.side_effect = [new_button, current_button, object()]
         dialog.clickedButton.return_value = new_button
         with patch("video_encoder_ui.application.QtWidgets.QMessageBox", return_value=dialog):
             MltFrameMonitor.audio_preflight_succeeded(monitor, {"audio_checks": []})
         monitor.trim_export_queue_client.enqueue.assert_called_once_with(project, output)
-        monitor.start_new_project_from_current_source.assert_called_once()
+        monitor.new_montage.assert_called_once()
         MltFrameMonitor.audio_preflight_succeeded(monitor, {"audio_checks": []})
         monitor.trim_export_queue_client.enqueue.assert_called_once_with(project, output)
 

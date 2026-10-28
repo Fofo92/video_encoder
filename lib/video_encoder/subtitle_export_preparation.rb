@@ -3,6 +3,11 @@
 module VideoEncoder
   # Prepares subtitles and applies the original-audio retention policy.
   class SubtitleExportPreparation
+    def self.skip?(trim_project, subtitle_tracks_by_source)
+      selection = trim_project.track_selection if trim_project.respond_to?(:track_selection)
+      selection.is_a?(Hash) && selection['mode'] == 'french_only' && subtitle_tracks_by_source.empty?
+    end
+
     def initialize(exporter:, progress_reporter:)
       @exporter = exporter
       @progress_reporter = progress_reporter
@@ -16,6 +21,7 @@ module VideoEncoder
       rendered_video_path:
     )
       return [nil, audio_output_tracks] unless exporter
+      return [nil, audio_output_tracks] if self.class.skip?(trim_project, subtitle_tracks_by_source)
 
       progress_reporter&.call(
         stage: :subtitles,
