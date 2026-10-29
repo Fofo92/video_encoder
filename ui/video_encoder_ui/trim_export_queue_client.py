@@ -91,13 +91,31 @@ class TrimExportQueueClient:
     def delete_project(self, job_id):
         return self.manage("delete-job", job_id, "--delete-project")
 
-    def move_project(self, project_path, directory):
+    def move_project(self, project_path, directory, *, name=None, preview=False):
+        command = [str(self.executable), "move-project", str(project_path), "--directory", str(directory)]
+        if name is not None:
+            command.extend(["--name", str(name)])
+        if preview:
+            command.append("--preview")
         result = self.runner(
-            [str(self.executable), "move-project", str(project_path), "--directory", str(directory)],
+            command,
             text=True, capture_output=True, check=False,
         )
         if result.returncode != 0:
             raise TrimExportQueueError(self.error_message(result, fallback="project relocation failed"))
+        if preview:
+            try:
+                plan = json.loads(result.stdout)
+                valid = (isinstance(plan, dict) and plan.get("format") == "video_encoder.project_relocation"
+                         and plan.get("version") == 1 and isinstance(plan.get("files"), list)
+                         and isinstance(plan.get("outputs"), list)
+                         and all(isinstance(item, dict) and isinstance(item.get("source"), str)
+                                 and isinstance(item.get("destination"), str) for item in plan["files"]))
+                if not valid:
+                    raise ValueError("unsupported relocation preview")
+            except (ValueError, TypeError) as error:
+                raise TrimExportQueueError("Prévisualisation du déplacement invalide.") from error
+            return plan
         return "\n".join(part for part in (result.stdout.strip(), result.stderr.strip()) if part)
 
     def list_jobs(self):

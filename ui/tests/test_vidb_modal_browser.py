@@ -20,6 +20,26 @@ class VidbModalBrowserTest(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
+    def setUp(self):
+        self.dialogs = []
+
+        def size_dialog(dialog):
+            # These tests mock exec(): they exercise browser/form behaviour,
+            # not the native screen. Size calculations are tested separately.
+            self.dialogs.append(dialog)
+            dialog.resize(1000, 750)
+
+        self.addCleanup(self.delete_dialogs)
+        sizing = patch.object(browser, "size_vidb_dialog", side_effect=size_dialog)
+        sizing.start()
+        self.addCleanup(sizing.stop)
+
+    def delete_dialogs(self):
+        for dialog in self.dialogs:
+            dialog.close()
+            dialog.deleteLater()
+        self.app.sendPostedEvents(None, QtCore.QEvent.Type.DeferredDelete)
+
     def test_profile_identity_uses_only_the_server_not_request_tokens(self):
         self.assertEqual(browser.profile_key("https://vidb.test/episode?token=one"),
                          browser.profile_key("https://vidb.test/catalogue?token=two"))
@@ -110,3 +130,24 @@ class VidbModalBrowserTest(unittest.TestCase):
              patch.object(browser.QtWidgets.QDialog, "exec", side_effect=execute):
             self.assertTrue(browser.open_vidb_modal(None, "https://vidb.test/encoder_projects/episode"))
         self.assertEqual([QtWidgets.QDialog.DialogCode.Accepted], observed)
+
+
+class VidbDialogSizeTest(unittest.TestCase):
+    def test_limits_the_dialog_to_the_available_screen(self):
+        dialog = Mock()
+        geometry = QtCore.QRect(0, 0, 800, 600)
+        dialog.screen.return_value.availableGeometry.return_value = geometry
+        browser.size_vidb_dialog(dialog)
+        dialog.resize.assert_called_once_with(720, 540)
+
+    def test_caps_the_size_on_a_large_screen(self):
+        dialog = Mock()
+        dialog.screen.return_value.availableGeometry.return_value = QtCore.QRect(0, 0, 3840, 2160)
+        browser.size_vidb_dialog(dialog)
+        dialog.resize.assert_called_once_with(1100, 820)
+
+    def test_uses_a_fallback_without_a_screen(self):
+        dialog = Mock()
+        dialog.screen.return_value = None
+        browser.size_vidb_dialog(dialog)
+        dialog.resize.assert_called_once_with(1000, 750)

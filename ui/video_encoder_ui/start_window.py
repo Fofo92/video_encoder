@@ -31,7 +31,7 @@ class StartWindow(TrimExportQueueDialog):
         self.open_project_action = self.add_home_action(
             projects, "Ouvrir un projet…", "document-open", self.open_project_requested, "Ctrl+O")
         self.relocate_project_action = self.add_home_action(
-            projects, "Déplacer un projet et sa vidéo…", "folder-move", self.relocate_requested)
+            projects, "Déplacer ou renommer un projet et sa vidéo…", "folder-move", self.relocate_requested)
         self.new_montage_action = self.add_home_action(
             montages, "Nouveau montage…", "document-new", self.new_project_requested, "Ctrl+N")
         for button in (self.start_button, self.stop_button, self.finish_current_button):

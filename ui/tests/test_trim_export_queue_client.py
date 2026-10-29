@@ -1,3 +1,4 @@
+import json
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,6 +18,21 @@ class TrimExportQueueClientTest(unittest.TestCase):
         runner.assert_called_once_with(
             ["/app/video_encoder", "move-project", "/old/Film : A & B.json", "--directory", "/new"],
             text=True, capture_output=True, check=False)
+
+    def test_previews_a_rename_without_shell_interpolation(self):
+        plan = {"format": "video_encoder.project_relocation", "version": 1, "files": [], "outputs": []}
+        runner = Mock(return_value=SimpleNamespace(returncode=0, stdout=json.dumps(plan), stderr=""))
+        client = TrimExportQueueClient(executable="/app/video_encoder", runner=runner)
+        self.assertEqual(client.move_project("/old/Film.json", "/old", name="A : B & C", preview=True), plan)
+        self.assertEqual(runner.call_args.args[0], ["/app/video_encoder", "move-project", "/old/Film.json",
+                         "--directory", "/old", "--name", "A : B & C", "--preview"])
+
+    def test_rejects_an_invalid_preview(self):
+        for response in ("invalid", "[]", '{"format":"other"}'):
+            runner = Mock(return_value=SimpleNamespace(returncode=0, stdout=response, stderr=""))
+            client = TrimExportQueueClient(runner=runner)
+            with self.assertRaises(TrimExportQueueError):
+                client.move_project("/old/Film.json", "/new", preview=True)
 
     def test_reports_project_relocation_errors(self):
         runner = Mock(return_value=SimpleNamespace(returncode=1, stdout="", stderr="Destination occupée"))

@@ -42,9 +42,7 @@ check_git_whitespace() {
 
 run_python_unit_tests() {
   PYTHONPATH="$PROJECT_ROOT/ui" \
-    python3 -m unittest discover \
-      -s ui/tests \
-      -p 'test_*.py'
+    python3 -X faulthandler ui/run_tests.py
 }
 
 run_integration_checks() {

@@ -9,7 +9,7 @@ require_relative '../lib/video_encoder/domain/trim_export_job'
 require_relative '../lib/video_encoder/persistence/job_repository'
 require_relative '../lib/video_encoder/trim_export_worker'
 
-RSpec.describe VideoEncoder::ProjectRelocation do
+RSpec.shared_context 'project relocation files' do
   around do |example|
     Dir.mktmpdir do |directory|
       @root = directory
@@ -45,6 +45,10 @@ RSpec.describe VideoEncoder::ProjectRelocation do
   def move_project
     described_class.new(@db).call(@project, @new)
   end
+end
+
+RSpec.describe VideoEncoder::ProjectRelocation do
+  include_context 'project relocation files'
 
   it 'moves a project, its video and receipt while updating every associated job' do
     File.binwrite(@output, 'encoded video')
@@ -180,5 +184,96 @@ RSpec.describe VideoEncoder::ProjectRelocation do
     expect(File.file?(@project)).to be(true)
     expect(Dir.children(@new)).to be_empty
     expect(@db[:jobs].first[:project_path]).to eq(@project)
+  end
+end
+
+RSpec.describe VideoEncoder::ProjectRelocation, 'renaming' do
+  include_context 'project relocation files'
+
+  it 'renames the project video and receipt in the same directory without changing cuts or binding' do
+    document = JSON.parse(File.read(@project))
+    document['project_id'] = 'stable-id'
+    document['vidb'] = { 'record_id' => 42, 'binding_token' => 'stable-token' }
+    document['timeline'] = [{ 'type' => 'segment', 'source_id' => 'source', 'start_frame' => 4, 'end_frame' => 123 }]
+    File.write(@project, JSON.generate(document))
+    File.write(@output, 'video')
+    receipt_document = { format: 'video_encoder.completed_export', version: 1,
+                         project_path: @project, output_path: @output, project_id: 'stable-id',
+                         project_sha256: Digest::SHA256.file(@project).hexdigest,
+                         probe: { format: { filename: @output } } }
+    File.write("#{@output}.video_encoder-export.json", JSON.generate(receipt_document))
+    destination = described_class.new(@db).call(@project, @old, name: 'Épisode : A & B')
+    video = File.join(@old, 'Épisode : A & B.mkv')
+    expect(destination).to eq(File.join(@old, 'Épisode : A & B.json'))
+    expect(JSON.parse(File.read(destination))).to eq(document)
+    expect(File.read(video)).to eq('video')
+    expect(File.exist?(@project)).to be(false)
+    expect(File.exist?(@output)).to be(false)
+    receipt = JSON.parse(File.read("#{video}.video_encoder-export.json"))
+    expect(receipt).to include('project_path' => destination, 'output_path' => video, 'project_id' => 'stable-id')
+    expect(receipt.dig('probe', 'format', 'filename')).to eq(video)
+    expect(receipt['project_sha256']).to eq(Digest::SHA256.file(destination).hexdigest)
+    expect(@db[:jobs].first).to include(project_path: destination, output_path: video, status: 'done')
+  end
+
+  it 'previews every existing file without changing files or the queue' do
+    File.write(@output, 'video')
+    before = @db[:jobs].all
+    plan = described_class.new(@db).call(@project, @old, name: 'Nouveau', preview: true)
+    expect(plan[:project_path]).to eq(File.join(@old, 'Nouveau.json'))
+    expect(plan[:files]).to include(source: @output, destination: File.join(@old, 'Nouveau.mkv'))
+    expect(@db[:jobs].all).to eq(before)
+    expect(Dir.children(@old).sort).to eq(['Film & suite.json', 'Film & suite.mkv'])
+    expect(@db.in_transaction?).to be(false)
+  end
+
+  it 'renames and relocates together including an output that does not exist yet' do
+    destination = described_class.new(@db).call(@project, @new, name: 'Nouveau')
+    expect(File.file?(destination)).to be(true)
+    expect(@db[:jobs].first[:output_path]).to eq(File.join(@new, 'Nouveau.mkv'))
+    expect(File.exist?(File.join(@new, 'Nouveau.mkv'))).to be(false)
+  end
+
+  it 'rejects unsafe or empty names without changing anything' do
+    ['', ' ', '..', '../film', 'film/suite', 'film\\suite', "film\n", 'film.json'].each do |name|
+      expect { described_class.new(@db).call(@project, @old, name: name) }
+        .to raise_error(VideoEncoder::ProjectRelocationError)
+    end
+    expect(File.file?(@project)).to be(true)
+    expect(@db[:jobs].first[:project_path]).to eq(@project)
+  end
+
+  it 'rejects an occupied new name in preview and execution' do
+    target = File.join(@old, 'Nouveau.mkv')
+    File.write(target, 'keep')
+    [true, false].each do |preview|
+      expect { described_class.new(@db).call(@project, @old, name: 'Nouveau', preview: preview) }
+        .to raise_error(VideoEncoder::ProjectRelocationError, /présente/)
+    end
+    expect(File.read(target)).to eq('keep')
+    expect(File.file?(@project)).to be(true)
+  end
+
+  it 'rechecks running jobs when executing a previously valid preview' do
+    described_class.new(@db).call(@project, @old, name: 'Nouveau', preview: true)
+    @db[:jobs].update(status: 'running')
+    expect { described_class.new(@db).call(@project, @old, name: 'Nouveau') }
+      .to raise_error(VideoEncoder::ProjectRelocationError, /encodage/)
+    expect(File.file?(@project)).to be(true)
+  end
+
+  it 'rolls back renamed files when the queue cannot be updated' do
+    File.write(@output, 'video')
+    @db.run("CREATE TRIGGER reject_move BEFORE UPDATE ON jobs BEGIN SELECT RAISE(ABORT, 'database failure'); END")
+    expect { described_class.new(@db).call(@project, @old, name: 'Nouveau') }.to raise_error(Sequel::DatabaseError)
+    expect(Dir.children(@old).sort).to eq(['Film & suite.json', 'Film & suite.mkv'])
+    expect(@db[:jobs].first[:project_path]).to eq(@project)
+  end
+  it 'refuses to merge distinct queued outputs under one renamed path' do
+    @db[:jobs].insert(project_path: @project, output_path: File.join(@old, 'Other.mkv'), status: 'queued')
+    expect { described_class.new(@db).call(@project, @old, name: 'Nouveau') }
+      .to raise_error(VideoEncoder::ProjectRelocationError, /sorties distinctes/)
+    expect(File.file?(@project)).to be(true)
+    expect(@db[:jobs].select_map(:project_path).uniq).to eq([@project])
   end
 end

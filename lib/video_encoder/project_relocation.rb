@@ -12,7 +12,7 @@ module VideoEncoder
       @database = database
     end
 
-    def call(project_path, directory)
+    def call(project_path, directory, name: nil, preview: false)
       files = nil
       @database.transaction(mode: :immediate) do
         raise ProjectRelocationError, 'Les liens symboliques ne sont pas déplaçables.' if File.symlink?(project_path)
@@ -21,9 +21,11 @@ module VideoEncoder
         rows = @database[:jobs].all.select { |row| same_path?(row[:project_path], project) }
         raise ProjectRelocationError, 'Un encodage utilise ce projet.' if rows.any? { |row| row[:status] == 'running' }
 
-        files = ProjectRelocationFiles.new(project, directory, rows)
+        files = ProjectRelocationFiles.new(project, directory, rows, name: name)
         files.prepare
         validate_destinations(files, rows)
+        return files.plan if preview
+
         files.copy
         rows.each do |row|
           @database[:jobs].where(id: row[:id]).update(

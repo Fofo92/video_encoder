@@ -81,21 +81,40 @@ class TrimExportQueueController:
         project = job.get("input_path") if job is not None else None
         if not project:
             project, _filter = QtWidgets.QFileDialog.getOpenFileName(
-                self.parent, "Projet à déplacer", "/videos", "Projet JSON (*.json)")
+                self.parent, "Projet à déplacer ou renommer", "/videos", "Projet JSON (*.json)")
         if not project:
             return
         directory = QtWidgets.QFileDialog.getExistingDirectory(
-            self.parent, "Déplacer le projet et sa vidéo vers…", str(Path(project).parent))
+            self.parent, "Dossier cible — conserver le dossier actuel pour renommer", str(Path(project).parent))
         if not directory:
             return
+        name, accepted = QtWidgets.QInputDialog.getText(
+            self.parent, "Nom du projet et de sa vidéo",
+            "Nom commun, sans extension :", text=Path(project).stem)
+        if not accepted:
+            return
+        name = name if name != Path(project).stem else None
         try:
-            destination = self.client.move_project(project, directory)
+            plan = self.client.move_project(project, directory, name=name, preview=True)
+            changes = "\n\n".join(f"{item['source']}\n→ {item['destination']}" for item in plan["files"])
+            outputs = "\n".join(plan["outputs"])
+            answer = QtWidgets.QMessageBox.question(
+                self.parent, "Confirmer le déplacement ou renommage",
+                f"Fichiers concernés :\n\n{changes}\n\nSorties prévues :\n{outputs}\n\n"
+                "Les chemins de la file et des reçus seront actualisés.\n"
+                "Les captures sources et les bornes de découpage seront conservées.\n"
+                "Les liens de vidéothèque vidb seront à rapprocher après cette opération.",
+                QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
+                QtWidgets.QMessageBox.StandardButton.No)
+            if answer != QtWidgets.QMessageBox.StandardButton.Yes:
+                return
+            destination = self.client.move_project(project, directory, name=name)
         except TrimExportQueueError as error:
-            QtWidgets.QMessageBox.warning(self.parent, "Déplacement impossible", str(error))
+            QtWidgets.QMessageBox.warning(self.parent, "Déplacement ou renommage impossible", str(error))
             return
         if self.dialog is not None:
             self.refresh(self.dialog)
-        QtWidgets.QMessageBox.information(self.parent, "Projet déplacé", destination)
+        QtWidgets.QMessageBox.information(self.parent, "Projet déplacé ou renommé", destination)
 
     def refresh(self, dialog):
         try:

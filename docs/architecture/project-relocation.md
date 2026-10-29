@@ -1,9 +1,12 @@
-# Déplacement d’un projet et de sa vidéo
+# Déplacement ou renommage d’un projet et de sa vidéo
 
-Depuis l’accueil, choisir **Projets → Déplacer un projet et sa vidéo…**.
+Depuis l’accueil, choisir **Projets → Déplacer ou renommer un projet et sa vidéo…**.
 Le travail sélectionné fournit le projet ; sans sélection, un sélecteur permet
-de choisir un JSON qui n’a pas encore de tâche. Choisir ensuite le dossier cible.
-Les noms des fichiers restent inchangés.
+de choisir un JSON qui n’a pas encore de tâche. Choisir ensuite le dossier cible
+puis le nom commun sans extension. Conserver le dossier actuel pour renommer
+seulement ; conserver le nom proposé pour déplacer seulement. Une prévisualisation
+liste les fichiers et les sorties de la file avant confirmation (Non par défaut).
+L’annulation ne modifie rien. L’exécution refait les contrôles après confirmation.
 
 Fermer l’éditeur avant cette opération. Les projets employés par un encodage en
 cours, les liens symboliques et les destinations déjà présentes sont refusés.
@@ -16,6 +19,18 @@ Le moteur Ruby déplace :
 - ses sorties connues dans les tâches, si elles existent ;
 - les vidéos de même nom MKV, M4V ou MP4, sauf si elles sont des sources du projet ;
 - les reçus video_encoder-export.json associés, lorsqu’ils existent.
+
+Le JSON est le projet de découpage : les bornes et les sources y sont stockées.
+Il n’y a pas de fichier de découpage permanent supplémentaire à renommer.
+Les fichiers MLT dans le workspace sont temporaires et seront régénérés ; un
+workspace encore présent bloque l’opération, comme avant. Les fichiers annexes
+créés manuellement ne sont pas renommés automatiquement.
+
+Lors d’un renommage, chaque sortie conserve son extension (MKV, M4V ou MP4)
+et prend le nouveau nom commun. Si plusieurs sorties distinctes de la file
+aboutiraient au même chemin, l’opération est refusée. Les accents, espaces,
+apostrophes, deux-points et esperluettes sont acceptés sans interprétation shell.
+Les noms vides, chemins et caractères de contrôle sont refusés.
 
 Les sources de montage restent à leur emplacement. Leurs références absolues
 restent identiques ; les références relatives sont figées dans le référentiel
@@ -51,6 +66,8 @@ réconciliation. Le reçu déplacé reste disponible à côté de la vidéo.
 
 ```sh
 bin/video_encoder move-project /videos/mon_projet.json --directory /videos/autre-dossier
+bin/video_encoder move-project /videos/mon_projet.json --directory /videos --name 'Nouveau nom' --preview
+bin/video_encoder move-project /videos/mon_projet.json --directory /videos --name 'Nouveau nom'
 ```
 
 ## Quarantaine d’une source

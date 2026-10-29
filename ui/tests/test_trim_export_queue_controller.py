@@ -22,6 +22,43 @@ if QtWidgets is not None:
 class TrimExportQueueControllerTest(
     unittest.TestCase
 ):
+    def relocation_controller(self):
+        client = Mock()
+        client.move_project.side_effect = [
+            {"files": [{"source": "/old/Film.json", "destination": "/old/Nouveau.json"}],
+             "outputs": ["/old/Nouveau.mkv"]}, "/old/Nouveau.json"]
+        return TrimExportQueueController(client, Mock(is_running=False), Mock())
+
+    def test_previews_and_confirms_before_renaming(self):
+        controller = self.relocation_controller()
+        with patch.object(QtWidgets.QFileDialog, "getOpenFileName", return_value=("/old/Film.json", "")), \
+             patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value="/old"), \
+             patch.object(QtWidgets.QInputDialog, "getText", return_value=("Nouveau", True)), \
+             patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.StandardButton.Yes), \
+             patch.object(QtWidgets.QMessageBox, "information"):
+            controller.relocate_project()
+        self.assertEqual(controller.client.move_project.call_count, 2)
+        self.assertEqual(controller.client.move_project.call_args_list[0].kwargs,
+                         {"name": "Nouveau", "preview": True})
+        self.assertEqual(controller.client.move_project.call_args_list[1].kwargs, {"name": "Nouveau"})
+
+    def test_declining_the_preview_does_not_rename(self):
+        controller = self.relocation_controller()
+        with patch.object(QtWidgets.QFileDialog, "getOpenFileName", return_value=("/old/Film.json", "")), \
+             patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value="/old"), \
+             patch.object(QtWidgets.QInputDialog, "getText", return_value=("Nouveau", True)), \
+             patch.object(QtWidgets.QMessageBox, "question", return_value=QtWidgets.QMessageBox.StandardButton.No):
+            controller.relocate_project()
+        controller.client.move_project.assert_called_once_with("/old/Film.json", "/old", name="Nouveau", preview=True)
+
+    def test_cancelling_the_name_does_not_even_preview(self):
+        controller = self.relocation_controller()
+        with patch.object(QtWidgets.QFileDialog, "getOpenFileName", return_value=("/old/Film.json", "")), \
+             patch.object(QtWidgets.QFileDialog, "getExistingDirectory", return_value="/old"), \
+             patch.object(QtWidgets.QInputDialog, "getText", return_value=("", False)):
+            controller.relocate_project()
+        controller.client.move_project.assert_not_called()
+
     def test_lists_and_displays_the_queue(self):
         jobs = [
             {

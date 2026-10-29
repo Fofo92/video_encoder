@@ -10,10 +10,11 @@ module VideoEncoder
   class ProjectRelocationFiles
     attr_reader :project_destination, :destinations, :sources
 
-    def initialize(project, directory, rows)
+    def initialize(project, directory, rows, name: nil)
       @project = project
       @directory = File.realpath(directory)
       @rows = rows
+      @name = name
       @created = []
       @entries = []
       @committed = false
@@ -21,12 +22,14 @@ module VideoEncoder
 
     def prepare
       validate_directory
-      @project_destination = File.join(@directory, File.basename(@project))
+      validate_name
+      @project_destination = File.join(@directory, @name ? "#{@name}.json" : File.basename(@project))
       @project_signature = signature(File.stat(@project))
       @original_project_bytes = File.binread(@project)
       document = ProjectRelocationDocument.new(@project, bytes: @original_project_bytes)
       @project_bytes = document.bytes
       outputs = output_paths - document.sources
+      validate_output_names
       @destinations = [@project_destination] + outputs.map { |path| output_destination(path) }
       add(@project, @project_destination, @project_bytes)
       unless signature(File.stat(@project)) == @project_signature
@@ -39,7 +42,13 @@ module VideoEncoder
     end
 
     def output_destination(path)
-      File.join(@directory, File.basename(path))
+      File.join(@directory, @name ? "#{@name}#{File.extname(path)}" : File.basename(path))
+    end
+
+    def plan
+      { format: 'video_encoder.project_relocation', version: 1, project_path: @project_destination,
+        files: @entries.map { |entry| entry.slice(:source, :destination) },
+        outputs: @destinations.drop(1) }
     end
 
     def copy
@@ -70,10 +79,28 @@ module VideoEncoder
 
     private
 
+    def validate_output_names
+      outputs = @rows.map { |row| File.expand_path(row[:output_path]) }.uniq
+      return if outputs.map { |path| output_destination(path) }.uniq.size == outputs.size
+
+      raise ProjectRelocationError, 'Plusieurs sorties distinctes auraient le même nom : sépare leurs projets.'
+    end
+
+    def validate_name
+      return if @name.nil?
+      return if @name.is_a?(String) && !@name.strip.empty? && @name == @name.strip &&
+                !@name.match?(%r{[/\\\x00-\x1f\x7f]}) && !%w[. ..].include?(@name) &&
+                !@name.end_with?('.json', '.mkv', '.mp4', '.m4v')
+
+      raise ProjectRelocationError, 'Choisis un nom sans extension, sans séparateur de chemin ni caractère de contrôle.'
+    end
+
     def validate_directory
       raise ProjectRelocationError, 'La destination doit être un dossier.' unless File.directory?(@directory)
 
-      raise ProjectRelocationError, 'Destination identique au dossier actuel.' if @directory == File.dirname(@project)
+      if @directory == File.dirname(@project) && (@name.nil? || @name == File.basename(@project, '.json'))
+        raise ProjectRelocationError, 'Le dossier et le nom sont identiques aux valeurs actuelles.'
+      end
 
       workspace = File.join(File.dirname(@project), "video_encoder_#{File.basename(@project, '.json')}_workspace")
       return unless File.exist?(workspace)
@@ -83,7 +110,8 @@ module VideoEncoder
 
     def output_paths
       paths = @rows.map { |row| File.expand_path(row[:output_path]) }
-      paths.concat(%w[.mkv .m4v .mp4].map { |extension| @project.sub(/\.json\z/i, extension) })
+      siblings = %w[.mkv .m4v .mp4].map { |extension| @project.sub(/\.json\z/i, extension) }
+      paths.concat(siblings.select { |path| File.exist?(path) || File.symlink?(path) })
       paths.uniq
     end
 
