@@ -69,7 +69,7 @@ class SourceCompletionPlan:
             return None
         try:
             identity = file_identity(source)
-            outputs = tuple((job["output_path"], file_identity(job["output_path"])) for job in jobs)
+            outputs = tuple(sorted((job["output_path"], file_identity(job["output_path"])) for job in jobs))
         except (OSError, KeyError, TypeError, SourceCompletionError):
             return None
         return CompletedSource(source, identity, tuple(jobs), outputs)

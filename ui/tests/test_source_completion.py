@@ -241,10 +241,49 @@ class SourceCompletionTest(unittest.TestCase):
         self.assertIsNotNone(self.controller.dialog)
         self.assertEqual(self.source, self.controller.case.source)
 
-    def test_backend_refusal_keeps_the_question_and_source(self):
+    def test_backend_refusal_closes_the_question_and_preserves_the_source(self):
         self.controller.poll()
         self.quarantine.quarantine.side_effect = SourceQuarantineError("source encore utilisée")
         with patch.object(QtWidgets.QMessageBox, "warning"):
             self.controller.confirm()
-        self.assertIsNotNone(self.controller.dialog)
+        self.assertIsNone(self.controller.dialog)
         self.assertTrue(self.source.exists())
+
+    def test_job_order_changes_do_not_invalidate_the_same_files(self):
+        second = self.job('second')
+        case = self.plan.collect([self.first, second])[0]
+        current = self.plan.validate(case, [second, self.first])
+        self.assertEqual(case.outputs, current.outputs)
+
+    def test_stale_confirmation_closes_before_warning_and_cannot_repeat_or_reenter(self):
+        self.controller.poll()
+        Path(self.first['output_path']).write_bytes(b'replaced output')
+
+        def warning(*_args):
+            self.assertIsNone(self.controller.dialog)
+            self.controller.confirm()
+            self.controller.poll(inspect_all=True)
+            self.assertIsNone(self.controller.dialog)
+
+        with patch.object(QtWidgets.QMessageBox, 'warning', side_effect=warning) as message:
+            self.controller.confirm()
+            self.controller.confirm()
+        message.assert_called_once()
+        self.quarantine.quarantine.assert_not_called()
+        self.controller.poll()
+        self.assertIsNone(self.controller.dialog)
+        self.assertTrue(self.source.exists())
+        self.controller.poll(inspect_all=True)
+        self.assertIsNotNone(self.controller.dialog)
+        self.assertEqual(self.plan.collect([self.first])[0].outputs, self.controller.case.outputs)
+
+    def test_reordered_jobs_can_be_confirmed_without_a_false_change_warning(self):
+        second = self.job('second')
+        self.queue.list_jobs.return_value = [self.first, second]
+        self.controller.poll()
+        self.queue.list_jobs.return_value = [second, self.first]
+        with patch.object(QtWidgets.QMessageBox, 'warning') as warning:
+            self.controller.confirm()
+        warning.assert_not_called()
+        self.quarantine.quarantine.assert_called_once_with(self.source)
+        self.assertIsNone(self.controller.dialog)

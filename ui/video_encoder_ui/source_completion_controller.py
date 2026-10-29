@@ -22,6 +22,7 @@ class SourceCompletionController(QtCore.QObject):
         self.direct_jobs = []
         self.dialog = None
         self.case = None
+        self.reporting_error = False
         self.timer = QtCore.QTimer(self)
         self.timer.setInterval(10_000)
         self.timer.timeout.connect(self.poll)
@@ -42,7 +43,7 @@ class SourceCompletionController(QtCore.QObject):
         return self.queue_client.list_jobs() + self.direct_jobs
 
     def poll(self, inspect_all=False):
-        if self.dialog is not None:
+        if self.dialog is not None or self.reporting_error:
             return
         try:
             jobs = self.jobs()
@@ -110,13 +111,21 @@ class SourceCompletionController(QtCore.QObject):
         dialog.show()
 
     def confirm(self):
-        if self.case is None:
+        if self.case is None or self.reporting_error:
             return
         try:
             self.plan.validate(self.case, self.jobs())
             self.quarantine_client.quarantine(self.case.source)
         except (SourceCompletionError, SourceQuarantineError, TrimExportQueueError, OSError) as error:
-            QtWidgets.QMessageBox.warning(self.dialog, "Source conservée", str(error))
+            self.reporting_error = True
+            try:
+                self.dialog.reject()
+                QtWidgets.QMessageBox.warning(
+                    self.parent_window, "Source conservée",
+                    f"{error}\n\nLa confirmation a été fermée. Pour réexaminer la situation, "
+                    "utilise Sources → Examiner les sources encodées…")
+            finally:
+                self.reporting_error = False
             return
         self.dialog.accept()
 
