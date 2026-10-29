@@ -49,21 +49,24 @@ class StartWindow(TrimExportQueueDialog):
         }
         for button, (name, fallback) in names.items():
             self.set_action_icon(button, name, fallback)
-        for box in self.findChildren(QtWidgets.QDialogButtonBox):
-            toolbar = QtWidgets.QToolBar(self)
+        for box in (self.queue_buttons, self.job_buttons):
+            group = box.parentWidget()
+            toolbar = QtWidgets.QToolBar(group)
             toolbar.setIconSize(QtCore.QSize(22, 22))
+            toolbar.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
             for button in box.buttons():
-                if box.standardButton(button) == QtWidgets.QDialogButtonBox.StandardButton.Close:
-                    button.setText("Quitter")
-                    self.set_action_icon(button, "application-exit", QtWidgets.QStyle.StandardPixmap.SP_DialogCloseButton)
                 action = toolbar.addAction(button.icon(), button.text())
                 action.setToolTip(button.toolTip() or button.text())
                 action.triggered.connect(button.click)
                 button.installEventFilter(self)
                 button.setProperty("home_action", action)
                 action.setEnabled(button.isEnabled())
-            self.layout().insertWidget(self.layout().indexOf(box), toolbar)
+            group.layout().insertWidget(0, toolbar)
             box.hide()
+        for box in self.findChildren(QtWidgets.QDialogButtonBox):
+            close = box.button(QtWidgets.QDialogButtonBox.StandardButton.Close)
+            if close is not None:
+                close.setText("Quitter")
         place_initial_window(self)
         header = self.jobs_table.horizontalHeader()
         header.setMinimumSectionSize(35)
@@ -81,6 +84,26 @@ class StartWindow(TrimExportQueueDialog):
             action.setShortcut(QtGui.QKeySequence(shortcut))
         action.triggered.connect(lambda checked=False: signal.emit())
         return action
+
+    def sync_action_labels(self):
+        for button in (self.start_button, self.finish_current_button, self.defer_button):
+            for name in ("home_action", "home_menu_action"):
+                action = button.property(name)
+                if action is not None:
+                    action.setText(button.text())
+                    action.setToolTip(button.toolTip() or button.text())
+
+    def update_start_button(self):
+        super().update_start_button()
+        self.sync_action_labels()
+
+    def update_finish_current_button(self):
+        super().update_finish_current_button()
+        self.sync_action_labels()
+
+    def update_remove_button(self):
+        super().update_remove_button()
+        self.sync_action_labels()
 
     def eventFilter(self, watched, event):
         if event.type() == QtCore.QEvent.Type.EnabledChange:

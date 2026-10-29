@@ -1,4 +1,5 @@
 import time
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
@@ -73,6 +74,8 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.resize(1_500, 760)
 
         self.jobs = []
+        self.search_index = {}
+        self.source_labels = {}
         self.displayed_jobs = []
         self.running = False
         self.finishing_current = False
@@ -135,7 +138,11 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             self.search_changed
         )
         search_layout.addWidget(self.search_field, 1)
-        self.search_widget.hide()
+        self.search_field.setToolTip(
+            "Recherche sans distinction de casse ni d’accents. Plusieurs mots peuvent viser des colonnes différentes. "
+            "Depuis Récents, la recherche porte sur tout l’historique ; les autres onglets gardent leur filtre d’état.")
+        self.search_count = QtWidgets.QLabel(self)
+        search_layout.addWidget(self.search_count)
         layout.addWidget(self.search_widget)
 
         self.jobs_table = QtWidgets.QTableWidget(
@@ -181,11 +188,8 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
         layout.addWidget(self.jobs_table, 1)
 
-        error_label = QtWidgets.QLabel(
-            "Erreur du travail sélectionné",
-            self,
-        )
-        layout.addWidget(error_label)
+        self.error_group = QtWidgets.QGroupBox("Détail de l’erreur", self)
+        error_layout = QtWidgets.QVBoxLayout(self.error_group)
 
         self.error_details = QtWidgets.QPlainTextEdit(
             self
@@ -196,7 +200,9 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             "interrompu pour afficher le détail."
         )
         self.error_details.setMaximumHeight(110)
-        layout.addWidget(self.error_details)
+        error_layout.addWidget(self.error_details)
+        self.error_group.hide()
+        layout.addWidget(self.error_group)
 
         self.jobs_table.itemSelectionChanged.connect(
             self.update_error_details
@@ -208,23 +214,34 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             self.update_remove_button
         )
 
-        job_buttons = QtWidgets.QDialogButtonBox(parent=self)
-        layout.addWidget(job_buttons)
+        self.queue_actions_group = QtWidgets.QGroupBox("File d’attente — toutes les tâches", self)
+        self.task_actions_group = QtWidgets.QGroupBox("Tâche sélectionnée", self)
+        queue_layout = QtWidgets.QVBoxLayout(self.queue_actions_group)
+        task_layout = QtWidgets.QVBoxLayout(self.task_actions_group)
+        self.queue_buttons = QtWidgets.QDialogButtonBox(parent=self.queue_actions_group)
+        self.job_buttons = QtWidgets.QDialogButtonBox(parent=self.task_actions_group)
+        queue_layout.addWidget(self.queue_buttons)
+        task_layout.addWidget(self.job_buttons)
+        job_buttons = self.job_buttons
+        layout.insertWidget(1, self.queue_actions_group)
+        layout.insertWidget(2, self.task_actions_group)
 
         buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.StandardButton.Close,
             parent=self,
         )
 
-        self.start_button = buttons.addButton(
+        self.start_button = self.queue_buttons.addButton(
             "Lancer la file",
             QtWidgets.QDialogButtonBox.ButtonRole.ActionRole,
         )
         self.start_button.clicked.connect(
             self.start_requested
         )
+        self.start_button.setToolTip(
+            "Lancer toutes les tâches en attente, y compris celles masquées par la recherche.")
 
-        self.stop_button = buttons.addButton(
+        self.stop_button = self.queue_buttons.addButton(
             "Interrompre la file",
             QtWidgets.QDialogButtonBox.ButtonRole.ActionRole,
         )
@@ -233,7 +250,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             self.stop_requested
         )
 
-        self.finish_current_button = buttons.addButton(
+        self.finish_current_button = self.queue_buttons.addButton(
             "Arrêter après le montage en cours",
             QtWidgets.QDialogButtonBox.ButtonRole.ActionRole,
         )
@@ -283,7 +300,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.delete_project_button.setToolTip("Supprimer aussi le projet JSON après confirmation ; conserver les sources et la vidéo")
         self.delete_project_button.clicked.connect(self.request_selected_project_deletion)
 
-        self.refresh_button = buttons.addButton(
+        self.refresh_button = self.queue_buttons.addButton(
             "Actualiser",
             QtWidgets.QDialogButtonBox.ButtonRole.ActionRole,
         )
@@ -319,6 +336,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         )
 
         self.jobs = list(jobs)
+        self.build_search_index()
         self.update_start_button()
 
         running_job = next(
@@ -358,9 +376,6 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         )
 
     def change_tab(self, _index):
-        self.search_widget.setVisible(
-            self.current_tab_status() == "all"
-        )
         selected_job = self.selected_job()
         selected_job_id = (
             selected_job.get("id")
@@ -373,12 +388,11 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         )
 
     def search_changed(self, _text):
-        if self.current_tab_status() == "all":
-            self.refresh_displayed_jobs(
-                displayed_error=(
-                    self.error_details.toPlainText()
-                ),
-            )
+        selected = self.selected_job()
+        self.refresh_displayed_jobs(
+            selected_job_id=selected.get("id") if selected is not None else None,
+            displayed_error=self.error_details.toPlainText(),
+        )
 
     def current_tab_status(self):
         return self.TAB_FILTERS[
@@ -391,6 +405,9 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         displayed_error="",
     ):
         self.displayed_jobs = self.jobs_for_current_tab()
+        count = len(self.displayed_jobs)
+        label = "tâche affichée" if count == 1 else "tâches affichées"
+        self.search_count.setText(f"{count} {label} sur {len(self.jobs)}")
 
         table_blocker = QtCore.QSignalBlocker(
             self.jobs_table
@@ -425,48 +442,17 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.update_retry_button()
         self.update_remove_button()
 
-        refreshed_job = self.selected_job()
-        refreshed_error = (
-            refreshed_job.get("error") or ""
-            if refreshed_job is not None
-            else ""
-        )
-
-        if (
-            refreshed_job is None
-            or refreshed_error != displayed_error
-        ):
-            self.update_error_details()
+        self.update_error_details()
 
     def jobs_for_current_tab(self):
         status = self.current_tab_status()
-
-        if status == "all":
-            jobs = self.sorted_jobs(self.jobs)
-            query = self.search_field.text().strip().casefold()
-
-            if query:
-                jobs = [
-                    job
-                    for job in jobs
-                    if self.job_matches_search(job, query)
-                ]
-
-            return jobs
-
-        if status is not None:
-            return self.sorted_jobs(
-                job
-                for job in self.jobs
-                if job.get("status") == status
-            )
-
-        recent_jobs = sorted(
-            self.jobs,
-            key=self.job_activity_timestamp,
-            reverse=True,
-        )[:self.RECENT_JOB_LIMIT]
-        return self.sorted_jobs(recent_jobs)
+        query = self.normalize_search(self.search_field.text()).strip()
+        jobs = self.sorted_jobs(self.jobs)
+        if status not in (None, "all"):
+            jobs = [job for job in jobs if job.get("status") == status]
+        elif status is None and not query:
+            jobs = jobs[:self.RECENT_JOB_LIMIT]
+        return [job for job in jobs if self.job_matches_search(job, query)] if query else jobs
 
     @classmethod
     def sorted_jobs(cls, jobs):
@@ -476,20 +462,26 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
             reverse=True,
         )
 
+    @staticmethod
+    def normalize_search(text):
+        return "".join(character for character in unicodedata.normalize("NFKD", str(text).casefold())
+                       if not unicodedata.combining(character))
+
+    def build_search_index(self):
+        self.search_index = {}
+        self.source_labels = {}
+        for job in self.jobs:
+            path = job.get("input_path") or ""
+            label = self.source_names(path)
+            self.source_labels[id(job)] = label
+            sources = self.source_names.search_text(path) if isinstance(self.source_names, TrimProjectSourceNames) else label
+            status = job.get("status") or ""
+            values = (path, label, sources, job.get("output_path") or "", status, self.STATUS_LABELS.get(status, status))
+            self.search_index[id(job)] = self.normalize_search("\n".join(str(value) for value in values))
+
     def job_matches_search(self, job, query):
-        project_path = job.get("input_path") or ""
-        status = job.get("status") or ""
-        values = (
-            project_path,
-            self.source_names(project_path),
-            job.get("output_path") or "",
-            status,
-            self.STATUS_LABELS.get(status, status),
-        )
-        return any(
-            query in str(value).casefold()
-            for value in values
-        )
+        text = self.search_index.get(id(job), "")
+        return all(word in text for word in query.split())
 
     @staticmethod
     def job_activity_timestamp(job):
@@ -853,14 +845,10 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
     def update_error_details(self):
         job = self.selected_job()
-
-        if job is None:
-            self.error_details.clear()
-            return
-
-        self.error_details.setPlainText(
-            job.get("error") or ""
-        )
+        error = (job.get("error") or "") if job is not None and job.get("status") in ("failed", "interrupted") else ""
+        self.error_group.setVisible(bool(error.strip()))
+        if error != self.error_details.toPlainText():
+            self.error_details.setPlainText(error)
 
     def add_job(self, job):
         row = self.jobs_table.rowCount()
@@ -902,7 +890,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
         values = (
             Path(project_path).name,
-            self.source_names(project_path),
+            self.source_labels.get(id(job), TrimProjectSourceNames.UNAVAILABLE),
             output_path,
             status_text,
             str(attempts),

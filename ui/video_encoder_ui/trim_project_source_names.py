@@ -18,14 +18,23 @@ class TrimProjectSourceNames:
         self.cache = {}
 
     def __call__(self, project_path):
+        return self.cached_sources(project_path)[0]
+
+    def search_text(self, project_path):
+        return self.cached_sources(project_path)[1]
+
+    def cached_sources(self, project_path):
         project_path = Path(project_path)
 
         try:
             stat = project_path.stat()
         except OSError:
-            return self.UNAVAILABLE
+            self.cache.pop(project_path, None)
+            return self.UNAVAILABLE, ""
 
         signature = (
+            stat.st_dev,
+            stat.st_ino,
             stat.st_mtime_ns,
             stat.st_size,
         )
@@ -37,7 +46,7 @@ class TrimProjectSourceNames:
         ):
             return cached[1]
 
-        names = self.load_names(project_path)
+        names = self.load_sources(project_path)
         self.cache[project_path] = (
             signature,
             names,
@@ -45,7 +54,7 @@ class TrimProjectSourceNames:
 
         return names
 
-    def load_names(self, project_path):
+    def load_sources(self, project_path):
         try:
             session = self.reader.load(
                 project_path
@@ -56,11 +65,11 @@ class TrimProjectSourceNames:
             KeyError,
             TypeError,
         ):
-            return self.UNAVAILABLE
+            return self.UNAVAILABLE, ""
 
         names = " · ".join(
             source.path.name
             for source in session.sources
         )
 
-        return names or self.EMPTY
+        return names or self.EMPTY, "\n".join(str(source.path) for source in session.sources)

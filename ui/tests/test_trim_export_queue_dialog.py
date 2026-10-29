@@ -1050,7 +1050,7 @@ class TrimExportQueueDialogTest(unittest.TestCase):
             "movie-00.json",
         )
 
-    def test_searches_only_the_all_history_tab(self):
+    def test_search_remains_visible_and_applies_when_changing_tabs(self):
         source_names = Mock(
             side_effect=lambda path: {
                 "alpha.json": "source-one.m2t",
@@ -1081,7 +1081,7 @@ class TrimExportQueueDialogTest(unittest.TestCase):
             source_names=source_names,
         )
 
-        self.assertFalse(dialog.search_widget.isVisible())
+        self.assertFalse(dialog.search_widget.isHidden())
         dialog.tabs.setCurrentIndex(6)
         self.assertFalse(dialog.search_widget.isHidden())
 
@@ -1094,7 +1094,9 @@ class TrimExportQueueDialogTest(unittest.TestCase):
         )
 
         dialog.tabs.setCurrentIndex(5)
-        self.assertTrue(dialog.search_widget.isHidden())
+        self.assertFalse(dialog.search_widget.isHidden())
+        self.assertEqual(dialog.jobs_table.rowCount(), 0)
+        dialog.search_field.clear()
         self.assertEqual(dialog.jobs_table.rowCount(), 1)
         self.assertEqual(
             dialog.jobs_table.item(0, 0).text(),
