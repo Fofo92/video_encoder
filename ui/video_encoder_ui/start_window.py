@@ -18,6 +18,11 @@ class StartWindow(TrimExportQueueDialog):
         self.setWindowModality(QtCore.Qt.WindowModality.NonModal)
         self.menu_bar = QtWidgets.QMenuBar(self)
         self.layout().setMenuBar(self.menu_bar)
+        self.exit_menu_bar = QtWidgets.QMenuBar(self.menu_bar)
+        self.exit_action = QtGui.QAction("Quitter", self)
+        self.exit_action.triggered.connect(self.reject)
+        self.exit_menu_bar.addAction(self.exit_action)
+        self.menu_bar.setCornerWidget(self.exit_menu_bar, QtCore.Qt.Corner.TopRightCorner)
         sources = QtWidgets.QMenu("&Sources", self.menu_bar)
         projects = QtWidgets.QMenu("&Projets", self.menu_bar)
         montages = QtWidgets.QMenu("&Montage", self.menu_bar)
@@ -52,21 +57,32 @@ class StartWindow(TrimExportQueueDialog):
         for box in (self.queue_buttons, self.job_buttons):
             group = box.parentWidget()
             toolbar = QtWidgets.QToolBar(group)
-            toolbar.setIconSize(QtCore.QSize(22, 22))
+            toolbar.setIconSize(QtCore.QSize(16, 16))
+            toolbar.setContentsMargins(0, 0, 0, 0)
+            row_height = self.jobs_table.verticalHeader().defaultSectionSize()
+            group.setFixedHeight(row_height)
+            toolbar.setFixedHeight(max(16, row_height - 2))
+            toolbar.setStyleSheet(
+                "QToolBar { padding: 0px; margin: 0px; spacing: 2px; } "
+                "QToolButton { padding: 1px 3px; margin: 0px; }")
             toolbar.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
             for button in box.buttons():
-                action = toolbar.addAction(button.icon(), button.text())
+                action = toolbar.addAction(button.icon(), self.toolbar_label(button))
                 action.setToolTip(button.toolTip() or button.text())
                 action.triggered.connect(button.click)
                 button.installEventFilter(self)
                 button.setProperty("home_action", action)
                 action.setEnabled(button.isEnabled())
-            group.layout().insertWidget(0, toolbar)
+            group.layout().insertWidget(1, toolbar, 1)
             box.hide()
         for box in self.findChildren(QtWidgets.QDialogButtonBox):
             close = box.button(QtWidgets.QDialogButtonBox.StandardButton.Close)
             if close is not None:
-                close.setText("Quitter")
+                box.hide()
+        self.status_bar = QtWidgets.QStatusBar(self)
+        self.status_bar.setSizeGripEnabled(False)
+        self.layout().addWidget(self.status_bar)
+        self.update_status_bar()
         place_initial_window(self)
         header = self.jobs_table.horizontalHeader()
         header.setMinimumSectionSize(35)
@@ -90,8 +106,22 @@ class StartWindow(TrimExportQueueDialog):
             for name in ("home_action", "home_menu_action"):
                 action = button.property(name)
                 if action is not None:
-                    action.setText(button.text())
+                    action.setText(self.toolbar_label(button) if name == "home_action" else button.text())
                     action.setToolTip(button.toolTip() or button.text())
+
+    @staticmethod
+    def toolbar_label(button):
+        return {
+            "Lancer la file": "Lancer",
+            "File en cours…": "Lancer",
+            "Lancer uniquement la sélection": "Lancer",
+            "Relancer le travail": "Relancer",
+            "Interrompre la file": "Interrompre",
+            "Supprimer la tâche": "Supprimer",
+            "Destination…": "Modifier…",
+            "Enchaîner après le montage en cours": "Enchaîner",
+            "Suite programmée": "Enchaîner",
+        }.get(button.text(), button.text())
 
     def update_start_button(self):
         super().update_start_button()
@@ -123,8 +153,22 @@ class StartWindow(TrimExportQueueDialog):
 
     def set_running(self, running):
         super().set_running(running)
+        self.update_status_bar()
         if self.isVisible():
             self.refresh_timer.start()
+
+    def set_jobs(self, jobs):
+        super().set_jobs(jobs)
+        self.update_status_bar()
+
+    def update_status_bar(self):
+        if getattr(self, "status_bar", None) is None:
+            return
+        encoding = self.running or any(job.get("status") == "running" for job in self.jobs)
+        count = sum(job.get("status") == "queued" for job in self.jobs)
+        state = "Encodage en cours" if encoding else "Aucun encodage en cours"
+        pending = "tâche en attente" if count == 1 else "tâches en attente"
+        self.status_bar.showMessage(f"{state} — {count} {pending}")
 
     def reject(self):
         if self.running:

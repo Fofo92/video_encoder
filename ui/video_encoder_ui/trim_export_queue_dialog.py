@@ -104,14 +104,13 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         )
 
         layout = QtWidgets.QVBoxLayout(self)
+        layout.setSpacing(2)
 
         self.refresh_status_label = QtWidgets.QLabel(
             "État chargé à l’ouverture",
             self,
         )
-        layout.addWidget(
-            self.refresh_status_label
-        )
+        self.refresh_status_label.hide()
 
         self.tabs = QtWidgets.QTabBar(self)
         for label, _status in self.TAB_FILTERS:
@@ -213,18 +212,31 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.jobs_table.itemSelectionChanged.connect(
             self.update_remove_button
         )
+        self.jobs_table.itemSelectionChanged.connect(self.update_task_actions_visibility)
 
-        self.queue_actions_group = QtWidgets.QGroupBox("File d’attente — toutes les tâches", self)
-        self.task_actions_group = QtWidgets.QGroupBox("Tâche sélectionnée", self)
-        queue_layout = QtWidgets.QVBoxLayout(self.queue_actions_group)
-        task_layout = QtWidgets.QVBoxLayout(self.task_actions_group)
+        self.queue_actions_group = QtWidgets.QFrame(self)
+        self.task_actions_group = QtWidgets.QFrame(self)
+        for name, bar in (("queue_actions_bar", self.queue_actions_group), ("task_actions_bar", self.task_actions_group)):
+            bar.setObjectName(name)
+            bar.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
+            bar.setStyleSheet(f"QFrame#{name} {{ border: 1px solid palette(mid); border-radius: 2px; }}")
+        queue_layout = QtWidgets.QHBoxLayout(self.queue_actions_group)
+        task_layout = QtWidgets.QHBoxLayout(self.task_actions_group)
+        self.queue_actions_title = QtWidgets.QLabel("File d’attente", self.queue_actions_group)
+        self.task_actions_title = QtWidgets.QLabel("Tâche", self.task_actions_group)
+        title_width = self.fontMetrics().horizontalAdvance("File d’attente") + 4
+        for row, title in ((queue_layout, self.queue_actions_title), (task_layout, self.task_actions_title)):
+            row.setContentsMargins(4, 0, 4, 0)
+            row.setSpacing(8)
+            title.setFixedWidth(title_width)
+            row.addWidget(title)
         self.queue_buttons = QtWidgets.QDialogButtonBox(parent=self.queue_actions_group)
         self.job_buttons = QtWidgets.QDialogButtonBox(parent=self.task_actions_group)
-        queue_layout.addWidget(self.queue_buttons)
-        task_layout.addWidget(self.job_buttons)
+        queue_layout.addWidget(self.queue_buttons, 1)
+        task_layout.addWidget(self.job_buttons, 1)
         job_buttons = self.job_buttons
-        layout.insertWidget(1, self.queue_actions_group)
-        layout.insertWidget(2, self.task_actions_group)
+        layout.insertWidget(0, self.queue_actions_group)
+        layout.insertWidget(1, self.task_actions_group)
 
         buttons = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.StandardButton.Close,
@@ -317,6 +329,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.refresh_status_label.setText(
             f"Dernière actualisation : {time_text}"
         )
+        self.setWindowTitle(f"video_encoder — Montages — dernière actualisation : {time_text}")
 
     def set_action_icon(self, button, name, fallback):
         icon = QtGui.QIcon.fromTheme(name)
@@ -439,6 +452,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
         del table_blocker
 
+        self.update_task_actions_visibility()
         self.update_retry_button()
         self.update_remove_button()
 
@@ -849,6 +863,9 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.error_group.setVisible(bool(error.strip()))
         if error != self.error_details.toPlainText():
             self.error_details.setPlainText(error)
+
+    def update_task_actions_visibility(self):
+        self.task_actions_group.setVisible(self.selected_job() is not None)
 
     def add_job(self, job):
         row = self.jobs_table.rowCount()
