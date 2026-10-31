@@ -1,6 +1,9 @@
 from pathlib import Path
 
-from .vidb_montage_review import review_montage_identification
+def review_montage_identification(*args, **kwargs):
+    # Keep metadata/duration checks usable without loading the graphical browser.
+    from .vidb_montage_review import review_montage_identification as review
+    return review(*args, **kwargs)
 
 
 def can_review_proposal(monitor):
