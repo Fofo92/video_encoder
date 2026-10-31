@@ -36,6 +36,8 @@ class QuarantineTimerInstallerTest(unittest.TestCase):
             service = (root / 'config/systemd/user/video-encoder-quarantine.service').read_text()
             self.assertIn('PATH=/opt/ruby/bin:/usr/bin:/bin', service)
             self.assertIn('script/quarantine-maintenance', service)
+            self.assertIn(f'WorkingDirectory={root / 'encoder'}\n', service)
+            self.assertNotIn('WorkingDirectory="', service)
             timer = (root / 'config/systemd/user/video-encoder-quarantine.timer').read_text()
             self.assertIn('03:30:00', timer)
             self.assertIn('Persistent=true', timer)

@@ -22,7 +22,7 @@ def main():
             environment.append(f"Environment={quoted(name + '=' + os.environ[name])}")
     service = "\n".join([
         "[Unit]", "Description=video_encoder — suppression des captures vérifiées après 30 jours",
-        "", "[Service]", "Type=oneshot", f"WorkingDirectory={quoted(str(root))}",
+        "", "[Service]", "Type=oneshot", "WorkingDirectory=" + str(root).replace("%", "%%"),
         *environment,
         f"ExecStart=/bin/bash {quoted(str(root / 'script/quarantine-maintenance'))}",
         "Nice=10", "IOSchedulingClass=idle", "TimeoutStartSec=15min", "",
