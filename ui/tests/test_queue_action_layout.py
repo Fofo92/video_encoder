@@ -47,7 +47,10 @@ class QueueActionLayoutTest(unittest.TestCase):
             self.assertIsInstance(group.layout().itemAt(0).widget(), QtWidgets.QLabel)
             self.assertIs(toolbars[0], group.layout().itemAt(1).widget())
             self.assertEqual(dialog.jobs_table.verticalHeader().defaultSectionSize(), group.height())
-        self.assertEqual(2, len(dialog.findChildren(QtWidgets.QToolBar)))
+        self.assertEqual(3, len(dialog.findChildren(QtWidgets.QToolBar)))
+        self.assertIs(dialog.main_toolbar.parentWidget(), dialog)
+        self.assertNotIn(dialog.main_toolbar, dialog.queue_actions_group.findChildren(QtWidgets.QToolBar))
+        self.assertNotIn(dialog.main_toolbar, dialog.task_actions_group.findChildren(QtWidgets.QToolBar))
 
     def test_error_panel_only_appears_for_failed_or_interrupted_tasks_with_details(self):
         dialog = self.dialog()
@@ -96,8 +99,9 @@ class QueueActionLayoutTest(unittest.TestCase):
         self.assertEqual('video_encoder — Montages — dernière actualisation : 09:42:17', dialog.windowTitle())
         self.assertTrue(dialog.refresh_status_label.isHidden())
         self.assertEqual(-1, dialog.layout().indexOf(dialog.refresh_status_label))
-        self.assertEqual(0, dialog.layout().indexOf(dialog.queue_actions_group))
-        self.assertEqual(1, dialog.layout().indexOf(dialog.task_actions_group))
+        self.assertEqual(0, dialog.layout().indexOf(dialog.main_toolbar))
+        self.assertEqual(1, dialog.layout().indexOf(dialog.queue_actions_group))
+        self.assertEqual(2, dialog.layout().indexOf(dialog.task_actions_group))
 
     def test_task_bar_is_only_shown_for_a_visible_selection(self):
         dialog = self.dialog(StartWindow)

@@ -102,6 +102,12 @@ class VidbProjectLink:
                 if urlparse(review_url).netloc != urlparse(config["url"]).netloc or urlparse(review_url).scheme != "https":
                     raise ValueError("lien de complément hors de vidb")
                 result["review_url"] = review_url
+            selection_url = response.get("selection_url")
+            if selection_url:
+                if (urlparse(selection_url).netloc != urlparse(config["url"]).netloc
+                        or urlparse(selection_url).scheme != "https"):
+                    raise ValueError("lien de révision hors de vidb")
+                result["selection_url"] = selection_url
             return result
         if status not in {"needs_review", "unmatched"}:
             raise ValueError("réponse vidb invalide")
@@ -120,3 +126,4 @@ class VidbProjectLink:
         except (ValueError, TypeError, AttributeError):
             pass
         return str(uuid.uuid4())
+

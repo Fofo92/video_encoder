@@ -78,7 +78,7 @@ class SourceCompletionController(QtCore.QObject):
     def install_menu_bar(self, menu_bar):
         for action in menu_bar.actions():
             if action.text().replace("&", "") == "Sources" and action.menu() is not None:
-                item = action.menu().addAction("Examiner les sources encodées…")
+                item = action.menu().addAction("Vérifier les sources avant quarantaine…")
                 item.triggered.connect(lambda checked=False: self.poll(inspect_all=True))
                 return
 
@@ -123,7 +123,7 @@ class SourceCompletionController(QtCore.QObject):
                 QtWidgets.QMessageBox.warning(
                     self.parent_window, "Source conservée",
                     f"{error}\n\nLa confirmation a été fermée. Pour réexaminer la situation, "
-                    "utilise Sources → Examiner les sources encodées…")
+                    "utilise Sources → Vérifier les sources avant quarantaine…")
             finally:
                 self.reporting_error = False
             return
@@ -138,3 +138,4 @@ class SourceCompletionController(QtCore.QObject):
         self.case = None
         dialog.deleteLater()
         QtCore.QTimer.singleShot(0, self.poll)
+

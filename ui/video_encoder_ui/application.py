@@ -1103,9 +1103,17 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
             lambda: self.schedule_wheel_move(1)
         )
 
-        sources_menu = self.menuBar().addMenu("&Sources")
+        self.editor_menu_bar = self.menuBar()
+        self.editor_menu_bar.setNativeMenuBar(False)
+        self.sources_menu = QtWidgets.QMenu("&Sources", self.editor_menu_bar)
+        self.projects_menu = QtWidgets.QMenu("&Projets", self.editor_menu_bar)
+        self.montage_menu = QtWidgets.QMenu("&Montage", self.editor_menu_bar)
+        self.editor_menus = (self.sources_menu, self.projects_menu, self.montage_menu)
+        for menu in self.editor_menus:
+            self.editor_menu_bar.addMenu(menu)
+        sources_menu = self.sources_menu
         sources_menu.addAction(self.source_information_action)
-        file_menu = self.menuBar().addMenu("&Projets")
+        file_menu = self.projects_menu
         file_menu.addAction(
             self.save_project_action
         )
@@ -1125,9 +1133,7 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
             self.cancel_export_action
         )
 
-        montage_menu = self.menuBar().addMenu(
-            "&Montage"
-        )
+        montage_menu = self.montage_menu
         self.new_montage_action = QtGui.QAction("Nouveau montage…", self)
         self.new_montage_action.setIcon(themed_icon("document-new", QtWidgets.QStyle.StandardPixmap.SP_FileIcon))
         self.new_montage_action.setShortcut(QtGui.QKeySequence("Ctrl+N"))
@@ -1141,67 +1147,23 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
             action.triggered.connect(lambda checked=False, mode=index: self.nudge_marker_selector.setCurrentIndex(mode))
         montage_menu.addAction(self.clear_all_segments_action)
         self.identify_vidb_action = QtGui.QAction("Identifier l’œuvre dans vidb", self)
+        self.identify_vidb_action.setIcon(themed_icon(
+            "edit-find", QtWidgets.QStyle.StandardPixmap.SP_FileDialogContentsView))
         self.identify_vidb_action.triggered.connect(self.review_vidb_project)
         self.identify_vidb_action.setEnabled(self.save_project_action.isEnabled())
         self.save_project_action.changed.connect(
             lambda: self.identify_vidb_action.setEnabled(self.save_project_action.isEnabled()))
-        montage_menu.addAction(self.identify_vidb_action)
-
-        main_toolbar = self.addToolBar(
-            "Actions principales"
-        )
-        main_toolbar.setObjectName(
-            "main_toolbar"
-        )
-        main_toolbar.setMovable(False)
-        main_toolbar.setToolButtonStyle(
-            QtCore.Qt.ToolButtonStyle.ToolButtonIconOnly
-        )
-        main_toolbar.setIconSize(
-            QtCore.QSize(24, 24)
-        )
-
-        main_toolbar.addAction(
-            self.save_project_action
-        )
-        main_toolbar.addAction(
-            self.source_information_action
-        )
-        main_toolbar.addSeparator()
-        main_toolbar.addAction(
-            self.export_project_action
-        )
-        main_toolbar.addAction(
-            self.queue_export_action
-        )
+        montage_menu.insertAction(self.export_project_action, self.save_project_action)
+        montage_menu.insertAction(self.export_project_action, self.identify_vidb_action)
+        montage_menu.insertAction(self.export_project_action, self.queue_export_action)
+        montage_menu.insertAction(self.export_project_action, self.show_export_queue_action)
+        montage_menu.insertAction(next(action for action in montage_menu.actions() if action.isSeparator()),
+                                  self.cancel_export_action)
 
 
-        main_toolbar.addSeparator()
-        main_toolbar.addAction(
-            self.cancel_export_action
-        )
+        from .montage_toolbar import install_montage_toolbar
 
-        for action in (
-            self.save_project_action,
-            self.source_information_action,
-            self.export_project_action,
-            self.queue_export_action,
-            self.cancel_export_action
-        ):
-            tool_button = main_toolbar.widgetForAction(
-                action
-            )
-
-            if tool_button is None:
-                continue
-
-            tool_button.setToolTip(
-                action.toolTip()
-            )
-            tool_button.setAttribute(
-                QtCore.Qt.WidgetAttribute.WA_AlwaysShowToolTips,
-                True
-            )
+        self.main_toolbar = install_montage_toolbar(self)
 
         self.shuttle_reader = None
 
@@ -2086,6 +2048,9 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
     def save_project(self):
         if self.export_status in {"running", "preflight", "confirming"}:
             return None
+        if getattr(self, "_proposal_revised", False) and self.project_path is not None:
+            self._proposal_revised = False
+            return self.save_project_as()
 
         if self.project_path is None:
             suggested_path = (
@@ -2097,12 +2062,9 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
                 suggested_path, getattr(self, "trim_project_writer", None))
             if suggested_path is None:
                 return None
-            selected_path, _ = QtWidgets.QFileDialog.getSaveFileName(
-                self,
-                "Enregistrer le projet",
-                str(suggested_path.with_suffix(".json")),
-                "Projet video_encoder (*.json);;Tous les fichiers (*)",
-            )
+            from .proposal_revision import choose_project_json
+
+            selected_path = choose_project_json(self, "Enregistrer le projet", suggested_path.with_suffix(".json"))
             if not selected_path:
                 return None
             return self.write_project(selected_path)
@@ -2131,12 +2093,9 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
             return None
         suggested_path = suggested_path.with_suffix(".json")
 
-        selected_path, _selected_filter = QtWidgets.QFileDialog.getSaveFileName(
-            self,
-            "Enregistrer sous…",
-            str(suggested_path),
-            "Projet video_encoder (*.json);;Tous les fichiers (*)",
-        )
+        from .proposal_revision import choose_project_json
+
+        selected_path = choose_project_json(self, "Enregistrer sous…", suggested_path)
         if not selected_path:
             return None
 
@@ -2192,6 +2151,7 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
             return None
 
         self.project_path = destination
+        self._proposal_revised = False
         self.set_project_modified(False)
         self.statusBar().showMessage(
             f"Projet enregistré : {destination}",
@@ -3470,6 +3430,17 @@ def main():
     queue_controller.attach(start_window)
     queue_controller.refresh(start_window)
     start_window.relocate_requested.connect(queue_controller.relocate_project)
+    from .project_removal_dialog import remove_project
+
+    start_window.delete_project_requested.connect(lambda: remove_project(start_window, queue_client))
+    from .project_trash_dialog import ProjectTrashDialog
+
+    def show_project_trash():
+        dialog = ProjectTrashDialog(start_window, queue_client)
+        dialog.exec()
+        dialog.deleteLater()
+
+    start_window.project_trash_requested.connect(show_project_trash)
 
     source_completion = SourceCompletionController(start_window, queue_client, SourceQuarantineClient())
     source_completion.install_menu_bar(start_window.menu_bar)
@@ -3493,7 +3464,9 @@ def main():
             window.queue_owned_by_home = True
             window.new_montage_action.triggered.disconnect()
             window.new_montage_action.triggered.connect(application_controller.new_project)
-            source_completion.install_menu_bar(window.menuBar())
+            source_completion.install_menu_bar(window.editor_menu_bar)
+            window.projects_menu.addAction(start_window.delete_project_action)
+            window.projects_menu.addAction(start_window.project_trash_action)
             window.trim_project_exporter.succeeded.connect(
                 lambda output, editor=window: source_completion.record_export(editor.project_path, output))
         return window

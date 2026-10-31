@@ -65,6 +65,20 @@ def choose_project_output(parent, suggested):
             path.setText(str(Path(selected) / current.name))
 
     browse.clicked.connect(browse_directory)
+    from .proposal_revision import can_review_proposal, review_proposal, revised_destination
+
+    if can_review_proposal(parent):
+        review = QtWidgets.QPushButton("Revoir la proposition vidb…")
+        review.setAutoDefault(False)
+
+        def review_current_proposal():
+            if review_proposal(parent):
+                destination = revised_destination(parent, Path(path.text()).expanduser())
+                path.setText(str(destination.with_suffix(Path(suggested).suffix)))
+
+        review.clicked.connect(review_current_proposal)
+        layout.addWidget(review)
+
     buttons = QtWidgets.QDialogButtonBox(
         QtWidgets.QDialogButtonBox.StandardButton.Save | QtWidgets.QDialogButtonBox.StandardButton.Cancel)
     buttons.accepted.connect(dialog.accept)
@@ -72,3 +86,4 @@ def choose_project_output(parent, suggested):
     layout.addWidget(buttons)
     accepted = dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted
     return (path.text().strip(), "") if accepted else ("", "")
+

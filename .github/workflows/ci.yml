@@ -57,4 +57,4 @@ jobs:
       - name: Run editor, project and queue unit tests
         run: |
           "$RUNNER_TEMP/manual-editor-tests/bin/python" -c "import mlt7, evdev; from PySide6 import QtWidgets"
-          "$RUNNER_TEMP/manual-editor-tests/bin/python" -m unittest discover -s ui/tests -p 'test_*.py'
+          "$RUNNER_TEMP/manual-editor-tests/bin/python" -X faulthandler ui/run_tests.py

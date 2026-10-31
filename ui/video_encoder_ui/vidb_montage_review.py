@@ -19,7 +19,7 @@ def review_montage_identification(parent, session, source, suggested, writer):
     status = result.get("status")
     if status in {"identified", "unmatched", "needs_review", "pending", "disabled"}:
         trace_vidb("bridge status=" + status)
-    url = result.get("review_url")
+    url = result.get("selection_url") or result.get("review_url")
     if not url:
         messages = {
             "disabled": "La passerelle vidb est désactivée ou sa configuration est absente.",
@@ -37,3 +37,4 @@ def review_montage_identification(parent, session, source, suggested, writer):
     if result.get("status") == "identified":
         session.vidb = {key: value for key, value in result.items() if key != "metadata"}
     return result.get("status") == "identified"
+

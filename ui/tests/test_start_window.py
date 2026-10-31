@@ -31,6 +31,29 @@ class StartWindowTest(unittest.TestCase):
         self.window.close()
         self.window.deleteLater()
 
+    def test_main_toolbar_is_available_without_a_selected_job(self):
+        self.window.resize(1130, 665)
+        self.window.show()
+        self.application.processEvents()
+        self.assertTrue(self.window.main_toolbar.isVisible())
+        self.assertFalse(self.window.menu_bar.isNativeMenuBar())
+        self.assertFalse(self.window.exit_menu_bar.isNativeMenuBar())
+        self.assertIs(self.window.layout().itemAt(0).widget(), self.window.main_toolbar)
+        for action in (self.window.new_montage_action, self.window.open_project_action,
+                       self.window.relocate_project_action, self.window.quarantine_action):
+            self.assertIn(action, self.window.main_toolbar.actions())
+            self.assertTrue(self.window.main_toolbar.widgetForAction(action).isVisible())
+            self.assertFalse(action.icon().isNull())
+
+    def test_main_toolbar_uses_the_same_actions_as_the_menus(self):
+        requested = Mock()
+        self.window.new_project_requested.connect(requested)
+        button = self.window.main_toolbar.widgetForAction(self.window.new_montage_action)
+        button.click()
+        requested.assert_called_once_with()
+        self.window.quarantine_action.setEnabled(False)
+        self.assertFalse(self.window.main_toolbar.widgetForAction(self.window.quarantine_action).isEnabled())
+
     def test_offers_the_main_startup_actions(self):
         self.assertEqual(
             self.window.windowTitle(),

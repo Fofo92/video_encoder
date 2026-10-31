@@ -118,6 +118,42 @@ class TrimExportQueueClient:
             return plan
         return "\n".join(part for part in (result.stdout.strip(), result.stderr.strip()) if part)
 
+    def project_trash(self, operation="list", *arguments):
+        output = self.manage("project-trash", operation, *arguments)
+        try:
+            result = json.loads(output)
+            if operation == "list":
+                if (not isinstance(result, dict) or result.get("format") != "video_encoder.project_trash"
+                        or result.get("version") != 1 or not isinstance(result.get("entries"), list)
+                        or not isinstance(result.get("errors"), list)):
+                    raise ValueError("Liste de corbeille invalide")
+            elif not isinstance(result, str):
+                raise ValueError("Résultat de corbeille invalide")
+            return result
+        except (ValueError, TypeError) as error:
+            raise TrimExportQueueError("Réponse de corbeille invalide.") from error
+
+    def remove_project_files(self, project_path, *, dependencies=False, token=None):
+        options = []
+        if dependencies:
+            options.append("--dependencies")
+        if token is not None:
+            options.extend(["--confirm", token])
+        output = self.manage("remove-project", project_path, *options)
+        try:
+            result = json.loads(output)
+            if token is not None:
+                if not isinstance(result, str):
+                    raise ValueError("Dossier de récupération invalide")
+            elif (not isinstance(result, dict) or result.get("format") != "video_encoder.project_removal"
+                  or result.get("version") != 1 or not isinstance(result.get("files"), list)
+                  or not all(isinstance(path, str) for path in result["files"])
+                  or not isinstance(result.get("token"), str)):
+                raise ValueError("Plan de suppression invalide")
+            return result
+        except (ValueError, TypeError) as error:
+            raise TrimExportQueueError("Réponse de suppression invalide.") from error
+
     def list_jobs(self):
         result = self.runner(
             [
@@ -177,3 +213,4 @@ class TrimExportQueueClient:
             return message
 
         return fallback
+

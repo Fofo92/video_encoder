@@ -93,6 +93,20 @@ def confirm_montage_duration(monitor):
                               "La durée du catalogue reste indicative. Aucun projet n’a encore été enregistré.")
     back = dialog.addButton("Revenir au montage", QtWidgets.QMessageBox.ButtonRole.RejectRole)
     proceed = dialog.addButton("Continuer malgré l’écart", QtWidgets.QMessageBox.ButtonRole.AcceptRole)
+    from .proposal_revision import can_review_proposal, review_proposal
+
+    review = None
+    if can_review_proposal(monitor):
+        review = dialog.addButton("Revoir la proposition vidb…", QtWidgets.QMessageBox.ButtonRole.ActionRole)
     dialog.setDefaultButton(back)
     dialog.exec()
+    if review is not None and dialog.clickedButton() is review:
+        review_proposal(monitor)
+        # The identity/runtime/destination may have changed. Never write the old
+        # destination or enqueue a job from this interrupted save attempt.
+        if hasattr(monitor, "statusBar"):
+            monitor.statusBar().showMessage(
+                "Proposition réexaminée. Relance la préparation pour vérifier la destination et la durée.", 10000)
+        return False
     return dialog.clickedButton() is proceed
+

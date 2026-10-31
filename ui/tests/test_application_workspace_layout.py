@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 try:
-    from PySide6 import QtWidgets
+    from PySide6 import QtCore, QtWidgets
 except ModuleNotFoundError:
     QtWidgets = None
 
@@ -27,6 +27,22 @@ class ApplicationWorkspaceLayoutTest(unittest.TestCase):
         self.assertEqual(window.height(), area.height() // 2)
         self.assertEqual(window.pos(), area.topLeft())
         window.close()
+
+    def test_home_keeps_screen_fraction_after_show_and_job_refresh(self):
+        area = QtCore.QRect(100, 50, 1920, 1080)
+        screen = SimpleNamespace(availableGeometry=lambda: area)
+        with patch("video_encoder_ui.window_placement.QtGui.QGuiApplication.screenAt", return_value=screen):
+            window = StartWindow()
+        self.addCleanup(window.deleteLater)
+        self.addCleanup(window.close)
+        window.show()
+        self.app.processEvents()
+        self.assertEqual(QtCore.QSize(640, 540), window.size())
+        window.set_jobs([{'id': str(i), 'input_path': f'/film{i}.json', 'status': 'queued'}
+                         for i in range(100)])
+        self.app.processEvents()
+        self.assertEqual(QtCore.QSize(640, 540), window.size())
+        self.assertEqual(QtWidgets.QLayout.SizeConstraint.SetNoConstraint, window.layout().sizeConstraint())
 
     def test_home_keeps_queue_controls_and_menus(self):
         window = StartWindow()
@@ -56,7 +72,9 @@ class ApplicationWorkspaceLayoutTest(unittest.TestCase):
             self.assertEqual([action.text() for action in window.menuBar().actions()],
                              ["&Sources", "&Projets", "&Montage"])
             toolbar = window.findChild(QtWidgets.QToolBar, "main_toolbar")
-            self.assertNotIn(window.show_export_queue_action, toolbar.actions())
+            self.assertIn(window.show_export_queue_action, toolbar.actions())
+            self.assertIn(window.queue_export_action, toolbar.actions())
+            self.assertEqual(QtCore.Qt.ToolButtonStyle.ToolButtonIconOnly, toolbar.toolButtonStyle())
             buttons = [window.backward_button, window.pause_button,
                        window.forward_button, window.boundary_start_button,
                        window.boundary_end_button, window.in_button,
