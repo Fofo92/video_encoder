@@ -14,6 +14,9 @@ require_relative 'cli/inspect_media_command'
 require_relative 'cli/manage_trim_job_command'
 require_relative 'project_relocation'
 require_relative 'cli/move_project_command'
+require_relative 'cli/remove_project_command'
+require_relative 'cli/project_trash_command'
+require_relative 'cli/quarantine_command'
 
 module VideoEncoder
   # CLI handles command-line interface for VideoEncoder.
@@ -21,6 +24,9 @@ module VideoEncoder
   COMMANDS = {
     'version' => :print_version,
     'move-project' => :move_project,
+    'remove-project' => :remove_project_files,
+    'project-trash' => :project_trash,
+    'quarantine' => :manage_quarantine,
     'enqueue-trim-export' => :enqueue_trim_export,
     'remove-job' => :remove_job,
     'defer-job' => :defer_job,
@@ -42,6 +48,9 @@ module VideoEncoder
   CLI_USAGE = <<~TEXT
     Usage:
       video_encoder version
+      video_encoder quarantine [list | enroll FILE [--project JSON] | sweep [--apply]]
+      video_encoder project-trash [list | register ROOT | restore DIRECTORY TOKEN | purge DIRECTORY TOKEN]
+      video_encoder remove-project <project.json> [--dependencies] [--confirm TOKEN]
       video_encoder move-project <project.json> --directory <folder> [--name NAME] [--preview]
       video_encoder run-trim-exports [--once | --job JOB_ID]
       video_encoder enqueue-trim-export <project.json> --output <movie.mkv>
@@ -108,6 +117,18 @@ module VideoEncoder
         dependency_checker: @dependency_checker,
         command_probe: command_probe
       ).run
+    end
+
+    def project_trash
+      ProjectTrashCommand.new(argv: @argv, database: database).run
+    end
+
+    def manage_quarantine
+      QuarantineCommand.new(argv: @argv, database: database, root: config.directories.quarantine).run
+    end
+
+    def remove_project_files
+      RemoveProjectCommand.new(argv: @argv, database: database).run
     end
 
     def move_project

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../quarantine_ledger'
+
 module VideoEncoder
   class CLI
     # Moves an explicitly confirmed source into quarantine.
@@ -19,6 +21,10 @@ module VideoEncoder
 
         quarantine = QuarantineSource.new(
           check: check,
+          journal: QuarantineLedger.new(
+            database: Persistence::Database.connect(config.database),
+            root: config.directories.quarantine
+          ),
           quarantine_directory:
             config.directories.quarantine
         )

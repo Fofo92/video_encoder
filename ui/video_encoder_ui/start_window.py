@@ -11,6 +11,8 @@ class StartWindow(TrimExportQueueDialog):
     queue_requested = QtCore.Signal()
     quarantine_requested = QtCore.Signal()
     relocate_requested = QtCore.Signal()
+    delete_project_requested = QtCore.Signal()
+    project_trash_requested = QtCore.Signal()
 
     def __init__(self):
         super().__init__(jobs=[])
@@ -33,10 +35,19 @@ class StartWindow(TrimExportQueueDialog):
             sources, "Ouvrir une source…", "document-new", self.new_project_requested)
         self.quarantine_action = self.add_home_action(
             sources, "Mettre des sources en quarantaine…", "folder-move", self.quarantine_requested)
+        self.quarantine_policy_action = QtGui.QAction("Suivi de la quarantaine…", self)
+        sources.addAction(self.quarantine_policy_action)
+        self.quarantine_policy_action.triggered.connect(self.show_quarantine_policy)
         self.open_project_action = self.add_home_action(
             projects, "Ouvrir un projet…", "document-open", self.open_project_requested, "Ctrl+O")
         self.relocate_project_action = self.add_home_action(
             projects, "Déplacer ou renommer un projet et sa vidéo…", "folder-move", self.relocate_requested)
+        # One entry point for starting a montage; keep the shared action owned by the window.
+        sources.removeAction(self.new_project_action)
+        self.delete_project_action = self.add_home_action(
+            projects, "Supprimer un projet…", "edit-delete", self.delete_project_requested)
+        self.project_trash_action = self.add_home_action(
+            projects, "Corbeille des projets…", "user-trash", self.project_trash_requested)
         self.new_montage_action = self.add_home_action(
             montages, "Nouveau montage…", "document-new", self.new_project_requested, "Ctrl+N")
         for button in (self.start_button, self.stop_button, self.finish_current_button):
@@ -79,16 +90,51 @@ class StartWindow(TrimExportQueueDialog):
             close = box.button(QtWidgets.QDialogButtonBox.StandardButton.Close)
             if close is not None:
                 box.hide()
+        self.install_main_actions_toolbar()
         self.status_bar = QtWidgets.QStatusBar(self)
         self.status_bar.setSizeGripEnabled(False)
         self.layout().addWidget(self.status_bar)
         self.update_status_bar()
+        # Toolbars and the table must not enlarge the requested screen fraction.
+        self.layout().setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetNoConstraint)
+        self.setMinimumSize(0, 0)
         place_initial_window(self)
         header = self.jobs_table.horizontalHeader()
         header.setMinimumSectionSize(35)
         width = max(200, self.width() - 36)
         for column, fraction in enumerate((0.25, 0.20, 0.25, 0.22, 0.08)):
             header.resizeSection(column, max(35, int(width * fraction)))
+
+    def install_main_actions_toolbar(self):
+        # Keep application actions local even when Plasma exports native menus.
+        self.menu_bar.setNativeMenuBar(False)
+        self.exit_menu_bar.setNativeMenuBar(False)
+        self.main_toolbar = QtWidgets.QToolBar("Actions principales", self)
+        self.main_toolbar.setObjectName("home_main_toolbar")
+        self.main_toolbar.setMovable(False)
+        self.main_toolbar.setContentsMargins(0, 0, 0, 0)
+        self.main_toolbar.setStyleSheet("QToolBar { padding: 0px; margin: 0px; }")
+        self.main_toolbar.setIconSize(QtCore.QSize(24, 24))
+        self.main_toolbar.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        for action in (self.new_montage_action, self.open_project_action):
+            self.main_toolbar.addAction(action)
+        self.main_toolbar.addSeparator()
+        for action in (self.relocate_project_action, self.quarantine_action):
+            self.main_toolbar.addAction(action)
+        labels = ((self.new_montage_action, "Nouveau montage…"),
+                  (self.open_project_action, "Ouvrir un projet…"),
+                  (self.relocate_project_action, "Déplacer / renommer…"),
+                  (self.quarantine_action, "Quarantaine…"))
+        for action, label in labels:
+            button = self.main_toolbar.widgetForAction(action)
+            button.setText(label)
+            button.setToolTip(action.text())
+        self.layout().setContentsMargins(0, 0, 0, 0)
+        self.layout().insertWidget(0, self.main_toolbar)
+
+    def show_quarantine_policy(self):
+        from .quarantine_policy_dialog import show_quarantine_policy
+        show_quarantine_policy(self)
 
     def add_home_action(self, menu, text, icon_name, signal, shortcut=None):
         icon = QtGui.QIcon.fromTheme(icon_name)

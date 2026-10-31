@@ -13,15 +13,25 @@ module VideoEncoder
     def initialize(
       check:,
       quarantine_directory:,
-      file: File
+      file: File,
+      journal: nil
     )
       @check = check
       @quarantine_directory =
         Pathname(quarantine_directory)
       @file = file
+      @journal = journal
     end
 
     def call(source)
+      return @journal.synchronize { move_source(source) } if @journal
+
+      move_source(source)
+    end
+
+    private
+
+    def move_source(source)
       result = check.call(source)
 
       unless result.eligible?
@@ -51,12 +61,18 @@ module VideoEncoder
         result.source,
         destination
       )
+      record_entry(result.source, destination)
       file.unlink(result.source)
 
       destination
     end
 
-    private
+    def record_entry(source, destination)
+      @journal&.record(source, destination)
+    rescue StandardError => e
+      file.unlink(destination)
+      raise Error, "Quarantaine non enregistrée, source conservée : #{e.message}"
+    end
 
     attr_reader :check,
                 :quarantine_directory,

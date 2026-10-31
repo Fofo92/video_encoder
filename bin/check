@@ -22,7 +22,8 @@ run_step() {
 check_shell_syntax() {
   bash -n \
     bin/check \
-    bin/build_ccextractor_image
+    bin/build_ccextractor_image \
+    script/quarantine-maintenance
 
   sh -n \
     bin/video_encoder_ccextractor \
@@ -30,6 +31,7 @@ check_shell_syntax() {
 }
 
 check_python_syntax() {
+  python3 -m py_compile bin/install-quarantine-timer
   python3 -m compileall \
     -q \
     ui/video_encoder_ui

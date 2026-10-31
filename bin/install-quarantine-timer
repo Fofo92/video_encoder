@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""Install the per-user quarantine timer, using this checkout and Ruby environment."""
+import os
+import json
+from pathlib import Path
+import subprocess
+
+
+def quoted(value):
+    if any(character in value for character in "\n\r\x00"):
+        raise ValueError("Chemin ou environnement multiligne refusé")
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%") + '"'
+
+
+def main():
+    root = Path(__file__).resolve().parents[1]
+    config = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))) / "systemd/user"
+    config.mkdir(parents=True, exist_ok=True)
+    environment = [f"Environment={quoted('PATH=' + os.environ['PATH'])}"]
+    for name in ("GEM_HOME", "GEM_PATH", "BUNDLE_PATH"):
+        if name in os.environ:
+            environment.append(f"Environment={quoted(name + '=' + os.environ[name])}")
+    service = "\n".join([
+        "[Unit]", "Description=video_encoder — suppression des captures vérifiées après 30 jours",
+        "", "[Service]", "Type=oneshot", f"WorkingDirectory={quoted(str(root))}",
+        *environment,
+        f"ExecStart=/bin/bash {quoted(str(root / 'script/quarantine-maintenance'))}",
+        "Nice=10", "IOSchedulingClass=idle", "TimeoutStartSec=15min", "",
+    ])
+    timer = "\n".join([
+        "[Unit]", "Description=video_encoder — contrôle quotidien de la quarantaine",
+        "", "[Timer]", "OnCalendar=*-*-* 03:30:00", "Persistent=true", "AccuracySec=1min",
+        "", "[Install]", "WantedBy=timers.target", "",
+    ])
+    # Verify the executable/environment and show the preview before enabling anything.
+    preview = subprocess.run(["bundle", "exec", "ruby", "bin/video_encoder", "quarantine", "sweep"],
+                             cwd=root, check=True, capture_output=True, text=True)
+    document = json.loads(preview.stdout)
+    if document.get("format") != "video_encoder.quarantine" or document.get("errors"):
+        raise RuntimeError("Aperçu de quarantaine invalide ou indisponible : " + preview.stdout)
+    due = [entry for entry in document["entries"] if entry["state"] == "due"]
+    print(f"Aperçu : {len(document['entries'])} source(s), {len(due)} suppression(s) déjà échue(s) et vérifiée(s).")
+    for entry in due[:20]:
+        print(f"  {entry['path']} — à partir du {entry['delete_after']}")
+    if len(due) > 20:
+        print("  Liste complète : Sources → Suivi de la quarantaine.")
+    print("Les anciens fichiers vérifiables démarreront un délai neuf de 30 jours au premier passage.")
+    (config / "video-encoder-quarantine.service").write_text(service)
+    (config / "video-encoder-quarantine.timer").write_text(timer)
+    subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
+    subprocess.run(["systemctl", "--user", "enable", "--now", "video-encoder-quarantine.timer"], check=True)
+    subprocess.run(["systemctl", "--user", "list-timers", "video-encoder-quarantine.timer", "--no-pager"], check=True)
+
+
+if __name__ == "__main__":
+    main()
