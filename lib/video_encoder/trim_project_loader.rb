@@ -23,7 +23,8 @@ module VideoEncoder
                   raise_unsupported_version(document)
                 end
       selection = document['track_selection']
-      if selection.is_a?(Hash) && %w[french_only original_with_subtitles].include?(selection['mode'])
+      modes = %w[french_only original_with_subtitles original_without_subtitles]
+      if selection.is_a?(Hash) && modes.include?(selection['mode'])
         validate_track_selection!(selection, document)
         project.track_selection = selection
       end

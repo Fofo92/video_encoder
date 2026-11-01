@@ -17,6 +17,10 @@ def proposed_mode(result):
     if not isinstance(result, dict) or result.get("status") != "identified":
         return None
     metadata = result.get("metadata") or {}
+    version = metadata.get("language_version")
+    modes = {"VF": "french_only", "VM": "original_without_subtitles", "VMST": "original_with_subtitles"}
+    if version in modes:
+        return modes[version]
     evidence = metadata.get("original_language_evidence") or {}
     if evidence.get("provider") != "tmdb":
         return None
@@ -64,7 +68,7 @@ def prepare_track_selection(monitor, project_path, choose=None):
         scope = selection_scope(document)
         previous = document.get("track_selection")
         if (isinstance(previous, dict) and previous.get("scope") == scope
-                and previous.get("mode") in {"french_only", "original_with_subtitles"}):
+                and previous.get("mode") in {"french_only", "original_with_subtitles", "original_without_subtitles"}):
             monitor.trim_session.track_selection = previous
             return True
 
@@ -84,11 +88,13 @@ def prepare_track_selection(monitor, project_path, choose=None):
             return False
         selection = {"mode": mode, "scope": scope, "confirmed_by": "external" if automatic else "user"}
         if automatic:
-            selection["evidence"] = result["metadata"]["original_language_evidence"]
+            selection["evidence"] = {"language_version": result["metadata"].get("language_version"),
+                                     "original_language_evidence": result["metadata"].get("original_language_evidence")}
         document["track_selection"] = selection
         TrimProjectFileWriter.write_atomic(path, json.dumps(document, ensure_ascii=False, indent=2) + "\n")
         monitor.trim_session.track_selection = selection
-        label = "Audio français seul, sous-titres forcés uniquement" if mode == "french_only" else "VO et sous-titres français"
+        label = "Audio français seul, sous-titres forcés uniquement" if mode == "french_only" else ("Audio français et VO, sans sous-titres complets"
+                if mode == "original_without_subtitles" else "VO et sous-titres français")
         monitor.statusBar().showMessage(label, 8_000)
         return True
     except (OSError, ValueError, TypeError) as error:

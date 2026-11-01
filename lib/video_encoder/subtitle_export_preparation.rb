@@ -5,7 +5,8 @@ module VideoEncoder
   class SubtitleExportPreparation
     def self.skip?(trim_project, subtitle_tracks_by_source)
       selection = trim_project.track_selection if trim_project.respond_to?(:track_selection)
-      selection.is_a?(Hash) && selection['mode'] == 'french_only' && subtitle_tracks_by_source.empty?
+      modes = %w[french_only original_without_subtitles]
+      selection.is_a?(Hash) && modes.include?(selection['mode']) && subtitle_tracks_by_source.empty?
     end
 
     def initialize(exporter:, progress_reporter:)
@@ -38,7 +39,7 @@ module VideoEncoder
 
       [
         subtitle_path,
-        retained_audio_tracks(audio_output_tracks, subtitle_path)
+        retained_audio_tracks(audio_output_tracks, subtitle_path, trim_project)
       ]
     end
 
@@ -100,7 +101,10 @@ module VideoEncoder
       fallback_tracks if replacement_found
     end
 
-    def retained_audio_tracks(audio_tracks, subtitle_path)
+    def retained_audio_tracks(audio_tracks, subtitle_path, project)
+      selection = project.track_selection if project.respond_to?(:track_selection)
+      return audio_tracks if selection&.fetch('mode', nil) == 'original_without_subtitles'
+
       return audio_tracks if subtitle_path
 
       retained = audio_tracks.reject { |track| track.role == :original }

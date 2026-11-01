@@ -46,7 +46,9 @@ def proposed_series_directory(metadata, root):
     year = metadata.get('series_year')
     if not french or not isinstance(year, int) or not 1800 <= year <= 2200:
         return None
-    name = f'{french} ({original}) ({year})' if original else f'{french} ({year})'
+    title = title_with_original({"french_title": french, "original_title": original,
+                                 "countries": metadata.get("series_countries", metadata.get("countries", []))})
+    name = f'{title} ({year})'
     name = re.sub(r'[/\\\x00-\x1f]', '_', name).strip(' .')
     name = name.encode('utf-8')[:220].decode('utf-8', errors='ignore')
     return Path(root) / name if name else None
@@ -63,6 +65,11 @@ def episode_title(metadata):
 
 
 def suggested_episode_output(metadata, suggested, root=Path("/videos/Séries TV")):
+    default_root = Path("/videos/Séries TV")
+    if Path(root) == default_root and any(
+            isinstance(genre, str) and key(genre) in {"documentaire", "documentary"}
+            for genre in metadata.get("series_genres", metadata.get("genres", []))):
+        root = Path("/videos/Documentaires")
     try:
         season, episode = int(metadata["season_number"]), int(metadata["episode_number"])
         if not 0 <= season <= 99 or not 1 <= episode <= 999:
@@ -76,7 +83,7 @@ def suggested_episode_output(metadata, suggested, root=Path("/videos/Séries TV"
         return Path(suggested)
     matches = series_directories(metadata.get("series_titles", []), Path(root))
     directory = matches[0] if len(matches) == 1 else None
-    if not matches and Path(suggested).parent in {Path('/videos'), Path(root)}:
+    if not matches and Path(suggested).parent in {Path('/videos'), default_root, Path(root)}:
         directory = proposed_series_directory(metadata, root)
     season_folder = None
     if directory:

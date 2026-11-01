@@ -1,12 +1,14 @@
 # frozen_string_literal: true
 
 module VideoEncoder
+  # Selects audio and subtitles according to the validated project version.
   class TrackSelector
     FRENCH_CODES = %w[fra fre].freeze
     ORIGINAL_VERSION_CODES = %w[qaa].freeze
 
-    def initialize(french_only: false)
+    def initialize(french_only: false, forced_only: false)
       @french_only = french_only
+      @forced_only = forced_only
     end
 
     def select(media)
@@ -77,7 +79,7 @@ module VideoEncoder
     end
 
     def select_subtitles(media)
-      return forced_subtitles(media) if @french_only
+      return forced_subtitles(media) if @french_only || @forced_only
 
       original_audio = select_audio(media.audio_tracks).find { |track| !french?(track) }
 

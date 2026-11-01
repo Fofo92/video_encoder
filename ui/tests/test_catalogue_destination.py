@@ -86,8 +86,15 @@ class CatalogueDestinationTest(unittest.TestCase):
 
     def test_keeps_a_distinct_original_title_and_never_uses_slashes_in_a_filename(self):
         result = destination.suggested_film_output(
-            self.metadata(french_title='Titre / français', original_title='Original'), self.proposed, self.root)
+            self.metadata(french_title='Titre / français', original_title='Original', countries=['États-Unis']),
+            self.proposed, self.root)
         self.assertEqual('Titre _ français (Original).mkv', result.name)
+
+    def test_french_coproduction_omits_original_title_and_sanitizes_slashes(self):
+        result = destination.suggested_film_output(
+            self.metadata(french_title='Titre / français', original_title='Original',
+                          countries=['Belgique', 'France']), self.proposed, self.root)
+        self.assertEqual('Titre _ français.mkv', result.name)
 
     def test_external_genres_cannot_select_a_parent_directory(self):
         result = destination.suggested_film_output(self.metadata(genres=['..']), self.proposed, self.root)

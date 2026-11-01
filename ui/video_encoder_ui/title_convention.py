@@ -9,9 +9,9 @@ def title_with_original(metadata):
     if not original:
         return french
     countries = metadata.get("countries", [])
-    french_work = (isinstance(countries, list) and bool(countries)
-                   and all(isinstance(country, str) and country.strip().casefold() == "france"
-                           for country in countries))
-    duplicate = french.casefold() == original.casefold() and french_work
+    french_work = (isinstance(countries, list) and any(
+        isinstance(country, str) and country.strip().casefold() == "france" for country in countries))
+    if french_work:
+        return french
     already_present = french.casefold().endswith(f" ({original.casefold()})")
-    return french if duplicate or already_present else f"{french} ({original})"
+    return french if already_present else f"{french} ({original})"

@@ -45,6 +45,26 @@ class OriginalLanguageReviewTest(unittest.TestCase):
         self.assertEqual("external", selection["confirmed_by"])
         self.assertEqual(selection_scope(self.document), selection["scope"])
 
+    def test_validated_vf_overrides_foreign_evidence_and_is_saved_without_question(self):
+        self.writer.vidb_result = self.result("en", "foreign")
+        self.writer.vidb_result["metadata"]["language_version"] = "VF"
+        choose = Mock(side_effect=AssertionError("validated choice must be reused"))
+        self.assertTrue(prepare_track_selection(self.monitor, self.path, choose))
+        saved = json.loads(self.path.read_text())["track_selection"]
+        self.assertEqual("french_only", saved["mode"])
+        self.assertEqual("VF", saved["evidence"]["language_version"])
+
+    def test_existing_selection_has_priority_over_a_new_catalogue_version(self):
+        self.document["track_selection"] = {"scope": selection_scope(self.document),
+                                            "mode": "original_with_subtitles"}
+        self.save_document()
+        before = self.path.read_bytes()
+        self.writer.vidb_result = self.result()
+        self.writer.vidb_result["metadata"]["language_version"] = "VF"
+        self.assertTrue(prepare_track_selection(self.monitor, self.path, Mock()))
+        self.assertEqual(before, self.path.read_bytes())
+        self.assertEqual("original_with_subtitles", self.session.track_selection["mode"])
+
     def test_foreign_keeps_original_route(self):
         self.writer.vidb_result = self.result("en", "foreign")
         self.assertTrue(prepare_track_selection(self.monitor, self.path, Mock()))

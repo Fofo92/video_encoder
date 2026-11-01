@@ -13,6 +13,8 @@ module VideoEncoder
       selection = trim_project.track_selection if trim_project.respond_to?(:track_selection)
       selector = if selection&.fetch('mode', nil) == 'french_only'
                    TrackSelector.new(french_only: true)
+                 elsif selection&.fetch('mode', nil) == 'original_without_subtitles'
+                   TrackSelector.new(forced_only: true)
                  else
                    @selector
                  end
