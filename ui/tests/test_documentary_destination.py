@@ -81,3 +81,20 @@ class DocumentaryDestinationTest(unittest.TestCase):
                     None, session, source, Path("/videos/Les glaces.json"), writer)
             self.assertEqual(result, Path("/videos/Documentaires/Les glaces.mkv"))
             self.assertEqual(session.vidb["record_id"], 123)
+
+    def test_documentary_never_combines_genres_even_with_legacy_mixed_metadata(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'Guerre, Histoire').mkdir()
+            result = destination.suggested_film_output(
+                {'french_title': 'Film', 'genres': ['Documentaire', 'Histoire', 'Guerre']},
+                Path('/videos/ancien/Film.json'), documentary_root=root)
+            self.assertEqual(root / 'Film.mkv', result)
+
+    def test_documentary_proposal_does_not_reuse_a_previous_genre_subfolder(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            result = destination.suggested_film_output(
+                {'french_title': 'Film', 'genres': ['Documentaire']},
+                root / 'Histoire' / 'Film.json', documentary_root=root)
+            self.assertEqual(root / 'Film.mkv', result)

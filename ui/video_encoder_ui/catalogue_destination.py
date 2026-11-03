@@ -11,7 +11,8 @@ from .vidb_export_review import await_vidb_identification
 from .vidb_modal_browser import open_vidb_modal
 
 
-def suggested_film_output(metadata, suggested, film_root=Path("/videos/Films")):
+def suggested_film_output(metadata, suggested, film_root=Path("/videos/Films"),
+                          documentary_root=Path("/videos/Documentaires")):
     from .title_convention import title_with_original
 
     title = title_with_original(metadata)
@@ -22,11 +23,12 @@ def suggested_film_output(metadata, suggested, film_root=Path("/videos/Films")):
     documentary = any(genre_key(value) == "documentaire" for value in metadata.get("genres", [])
                       if isinstance(value, str))
     if documentary:
-        documentary_root = Path("/videos/Documentaires")
-        directory = Path(suggested).parent if Path(suggested).is_relative_to(documentary_root) else documentary_root
+        directory = Path(documentary_root)
     else:
         directory = genre_directory(metadata.get("genres", []), film_root) or Path(suggested).parent
-    return directory / f"{basename}.mkv"
+    from .collection_destination import container_directory
+
+    return container_directory(metadata, directory) / f"{basename}.mkv"
 
 
 def genre_key(value):
@@ -35,8 +37,9 @@ def genre_key(value):
 
 
 def genre_directory(genres, film_root):
-    if (not isinstance(genres, list) or not 1 <= len(genres) <= 2
+    if (not isinstance(genres, list) or not genres
             or any(not isinstance(genre, str) or genre in {".", ".."}
+                   or any(ord(char) < 32 for char in genre)
                    or "/" in genre or "\\" in genre or "," in genre for genre in genres)):
         return None
     expected = {genre_key(genre) for genre in genres}
@@ -45,9 +48,15 @@ def genre_directory(genres, film_root):
     try:
         matches = [folder for folder in Path(film_root).iterdir()
                    if folder.is_dir() and {genre_key(part.strip()) for part in folder.name.split(",")} == expected]
+    except FileNotFoundError:
+        matches = []
     except OSError:
         return None
-    return matches[0] if len(matches) == 1 else None
+    if len(matches) > 1:
+        return None
+    if matches:
+        return matches[0]
+    return Path(film_root) / ", ".join(genre.strip() for genre in genres)
 
 
 def documentary_fallback(suggested, source=None):

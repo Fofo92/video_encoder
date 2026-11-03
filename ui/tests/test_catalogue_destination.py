@@ -69,10 +69,11 @@ class CatalogueDestinationTest(unittest.TestCase):
             self.metadata(genres=['Science fiction', 'Thriller']), self.proposed, self.root)
         self.assertEqual(self.root / 'Science-Fiction, Thriller', result.parent)
 
-    def test_no_genre_is_silently_dropped_when_the_combination_is_missing(self):
+    def test_missing_combination_is_proposed_without_dropping_a_genre(self):
         (self.root / 'Drame').mkdir()
         result = destination.suggested_film_output(self.metadata(), self.proposed, self.root)
-        self.assertEqual(self.proposed.parent, result.parent)
+        self.assertEqual(self.root / "Comédie, Drame", result.parent)
+        self.assertFalse(result.parent.exists())
 
     def test_ambiguous_duplicate_combination_directories_require_manual_choice(self):
         (self.root / 'Comédie, Drame').mkdir()
@@ -153,3 +154,22 @@ class CatalogueDestinationTest(unittest.TestCase):
         self.assertEqual(123, saved['vidb']['record_id'])
         self.assertNotIn('metadata', saved['vidb'])
         self.assertEqual(1962, writer.vidb_result['metadata']['year'])
+
+    def test_1917_uses_all_existing_record_genres(self):
+        (self.root / 'Guerre, Histoire').mkdir()
+        result = destination.suggested_film_output(
+            self.metadata(french_title='1917', original_title='1917',
+                          genres=['Histoire', 'Guerre'], countries=['Royaume-Uni']),
+            self.proposed, self.root)
+        self.assertEqual(self.root / 'Guerre, Histoire' / '1917 (1917).mkv', result)
+
+    def test_more_than_two_record_genres_are_kept(self):
+        result = destination.suggested_film_output(
+            self.metadata(genres=['Guerre', 'Histoire', 'Drame']), self.proposed, self.root)
+        self.assertEqual(self.root / 'Guerre, Histoire, Drame', result.parent)
+
+    def test_an_unavailable_root_is_only_proposed_and_not_created(self):
+        root = self.root / 'Films'
+        result = destination.suggested_film_output(self.metadata(), self.proposed, root)
+        self.assertEqual(root / 'Comédie, Drame', result.parent)
+        self.assertFalse(root.exists())
