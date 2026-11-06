@@ -8,8 +8,8 @@ from video_encoder_ui.title_convention import title_with_original
 
 
 class ValidatedCatalogueChoicesTest(unittest.TestCase):
-    def test_french_coproduction_uses_only_the_french_title_even_when_titles_differ(self):
-        self.assertEqual('Le départ', title_with_original({
+    def test_french_coproduction_keeps_original_title_when_titles_differ(self):
+        self.assertEqual('Le départ (Departure)', title_with_original({
             'french_title': 'Le départ', 'original_title': 'Departure', 'countries': ['Belgique', 'France']}))
 
     def test_foreign_identical_titles_remain_bilingual(self):
