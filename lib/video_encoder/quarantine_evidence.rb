@@ -61,7 +61,9 @@ module VideoEncoder
       @database[:jobs].order(:id).all.filter_map do |row|
         [row, QuarantineFiles.sources(row[:project_path])]
       rescue StandardError => e
-        raise QuarantinePolicyError, "Projet actif invérifiable : #{e.message}" if ACTIVE.include?(row[:status])
+        if ACTIVE.include?(row[:status])
+          raise QuarantinePolicyError, "Projet actif invérifiable (#{row[:project_path]}) : #{e.message}"
+        end
 
         nil
       end

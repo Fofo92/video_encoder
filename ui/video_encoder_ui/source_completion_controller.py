@@ -4,6 +4,7 @@ from PySide6 import QtCore, QtWidgets
 
 from .source_completion_plan import SourceCompletionError, SourceCompletionPlan
 from .source_quarantine_client import SourceQuarantineError
+from .source_quarantine_dialogs import report_quarantine_batch
 from .trim_export_queue_client import TrimExportQueueError
 
 
@@ -51,6 +52,9 @@ class SourceCompletionController(QtCore.QObject):
             self.pending_ids.update(key for key, value in done.items() if self.known_done.get(key) != value)
             self.known_done = done
             cases = self.plan.collect(jobs)
+            if inspect_all and len(cases) > 1:
+                self.show_batch_confirmation(cases)
+                return
             for case in cases:
                 if inspect_all or self.needs_confirmation(case):
                     self.show_confirmation(case)
@@ -110,12 +114,80 @@ class SourceCompletionController(QtCore.QObject):
         dialog.resize(650, 300)
         dialog.show()
 
+    def show_batch_confirmation(self, cases):
+        dialog = QtWidgets.QDialog(self.parent_window)
+        self.dialog = dialog
+        dialog.setWindowTitle("Vérifier les sources avant quarantaine")
+        layout = QtWidgets.QVBoxLayout(dialog)
+        label = QtWidgets.QLabel(
+            "Décoche les sources qu’il faut conserver. Confirme uniquement si tous les programmes "
+            "utiles des sources cochées ont été encodés."
+        )
+        label.setWordWrap(True)
+        layout.addWidget(label)
+        tree = QtWidgets.QTreeWidget()
+        tree.setHeaderLabel("Sources et sorties présentes")
+        layout.addWidget(tree)
+        rows = []
+        for case in sorted(cases, key=lambda item: item.source):
+            row = QtWidgets.QTreeWidgetItem(tree, [str(case.source)])
+            for path, _identity in case.outputs:
+                QtWidgets.QTreeWidgetItem(row, [str(path)])
+            row.setCheckState(0, QtCore.Qt.CheckState.Checked)
+            row.setExpanded(True)
+            rows.append((case, row))
+        tree.header().setStretchLastSection(False)
+        tree.header().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
+
+        buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Cancel)
+        keep = buttons.button(QtWidgets.QDialogButtonBox.StandardButton.Cancel)
+        keep.setText("Conserver toutes les sources")
+        keep.setDefault(True)
+        buttons.rejected.connect(dialog.reject)
+        move = buttons.addButton("", QtWidgets.QDialogButtonBox.ButtonRole.ActionRole)
+        move.setAutoDefault(False)
+        layout.addWidget(buttons)
+
+        def selected_cases():
+            return [case for case, row in rows if row.checkState(0) == QtCore.Qt.CheckState.Checked]
+
+        def update_button():
+            count = len(selected_cases())
+            move.setEnabled(count > 0)
+            move.setText(f"Mettre en quarantaine les sources cochées ({count})")
+
+        tree.itemChanged.connect(update_button)
+        move.clicked.connect(lambda: self.confirm_batch(selected_cases()))
+        dialog.finished.connect(lambda result: self.close_review(cases))
+        update_button()
+        dialog.resize(800, 420)
+        dialog.show()
+
+    def confirm_batch(self, cases):
+        moved, failed = [], []
+        self.reporting_error = True
+        try:
+            for case in cases:
+                try:
+                    self.quarantine_case(case)
+                except (SourceCompletionError, SourceQuarantineError, TrimExportQueueError, OSError) as error:
+                    failed.append((case.source, str(error)))
+                else:
+                    moved.append(case.source)
+            self.dialog.accept()
+            report_quarantine_batch(self.parent_window, moved, failed)
+        finally:
+            self.reporting_error = False
+
+    def quarantine_case(self, case):
+        self.plan.validate(case, self.jobs())
+        self.quarantine_client.quarantine(case.source)
+
     def confirm(self):
         if self.case is None or self.reporting_error:
             return
         try:
-            self.plan.validate(self.case, self.jobs())
-            self.quarantine_client.quarantine(self.case.source)
+            self.quarantine_case(self.case)
         except (SourceCompletionError, SourceQuarantineError, TrimExportQueueError, OSError) as error:
             self.reporting_error = True
             try:
@@ -130,9 +202,13 @@ class SourceCompletionController(QtCore.QObject):
         self.dialog.accept()
 
     def closed(self, _result):
+        self.close_review([self.case])
+
+    def close_review(self, cases):
         # One completed job can reference several sources. A decision concerns
         # only this source, never the other sources of those same jobs.
-        self.reviewed_sources[self.case.source] = self.completed_keys(self.case.jobs)
+        for case in cases:
+            self.reviewed_sources[case.source] = self.completed_keys(case.jobs)
         dialog = self.dialog
         self.dialog = None
         self.case = None

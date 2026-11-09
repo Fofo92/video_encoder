@@ -35,8 +35,8 @@ RSpec.describe VideoEncoder::QuarantinePolicy do # rubocop:disable Metrics/Block
     end
   end
 
-  def project(path, output, status: 'done', sources: [@original])
-    File.write(path, JSON.generate(format: 'video_encoder.trim_project', version: 2,
+  def project(path, output, status: 'done', sources: [@original], format: 'video_encoder.trim_project')
+    File.write(path, JSON.generate(format: format, version: 2,
                                    sources: sources.map { |source| { path: source } }, timeline: []))
     File.write(output, 'encoded film')
     @db[:jobs].insert(project_path: path, output_path: output, status: status)
@@ -149,6 +149,26 @@ RSpec.describe VideoEncoder::QuarantinePolicy do # rubocop:disable Metrics/Block
     end
   end
 
+  it 'quarantines a completed TV capture while an unrelated DVD export is queued' do
+    project(
+      File.join(@root, 'DVD.json'), File.join(@root, 'DVD.mkv'),
+      status: 'queued', sources: [File.join(@root, 'titre-01.mkv')], format: 'video_encoder.dvd_project'
+    )
+    expect(move.to_s).to eq(@path)
+    expect(entry[:state]).to eq('scheduled')
+  end
+
+  it 'keeps a quarantined source referenced by an active DVD project' do
+    move
+    project(
+      File.join(@root, 'DVD.json'), File.join(@root, 'DVD.mkv'),
+      status: 'deferred', sources: [@path], format: 'video_encoder.dvd_project'
+    )
+    expire
+    expect(@policy.sweep(apply: true)[:deleted]).to be_empty
+    expect(entry[:reason]).to include('tâche active')
+  end
+
   it 'protects a source used via another hard link' do
     move
     alias_path = File.join(@root, 'alias.m2t')
@@ -163,7 +183,7 @@ RSpec.describe VideoEncoder::QuarantinePolicy do # rubocop:disable Metrics/Block
     @db[:jobs].insert(project_path: File.join(@root, 'missing.json'), output_path: @output, status: 'running')
     expire
     expect(@policy.sweep(apply: true)[:deleted]).to be_empty
-    expect(entry[:reason]).to include('actif invérifiable')
+    expect(entry[:reason]).to include('actif invérifiable', File.join(@root, 'missing.json'))
   end
 
   it 'retains a modified project rather than accepting a stale done job' do

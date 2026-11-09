@@ -39,7 +39,9 @@ module VideoEncoder
 
     def sources(path)
       data = document(path)
-      raise QuarantinePolicyError, 'Projet non reconnu.' unless data['format'] == 'video_encoder.trim_project'
+      recognized = data['format'] == 'video_encoder.trim_project' ||
+                   (data['format'] == 'video_encoder.dvd_project' && data['version'] == 2)
+      raise QuarantinePolicyError, 'Projet non reconnu.' unless recognized
 
       source_items(data).map do |source|
         raise QuarantinePolicyError, 'Chemin source non absolu.' unless source.is_a?(String) && source.start_with?('/')
@@ -53,10 +55,19 @@ module VideoEncoder
       when 1
         data.fetch('timeline').select { |item| item.fetch('type') == 'segment' }.map { |item| item.fetch('source') }
       when 2
-        data.fetch('sources').map { |item| item.fetch('path') }
+        version_two_sources(data)
       else
         raise QuarantinePolicyError, 'Version de projet inconnue.'
       end
+    end
+
+    def version_two_sources(data)
+      sources = data.fetch('sources')
+      if data['format'] == 'video_encoder.dvd_project' && !(sources.is_a?(Array) && sources.one?)
+        raise QuarantinePolicyError, 'Un projet DVD doit référencer exactement une source.'
+      end
+
+      sources.map { |item| item.fetch('path') }
     end
   end
 end

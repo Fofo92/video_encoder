@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 try:
-    from PySide6 import QtWidgets
+    from PySide6 import QtCore, QtWidgets
 except ModuleNotFoundError as error:
     if error.name != "PySide6":
         raise
@@ -201,6 +201,62 @@ class SourceCompletionTest(unittest.TestCase):
         self.assertIsNone(self.controller.dialog)
         self.assertEqual([self.source, second],
                          [call.args[0] for call in self.quarantine.quarantine.call_args_list])
+
+    def test_manual_batch_quarantines_only_checked_sources(self):
+        job, second = self.multisource_job()
+        third = self.root / "troisième.m2t"
+        third.write_bytes(b"third capture")
+        self.queue.list_jobs.return_value = [job, self.job("third", source=third)]
+        self.quarantine.quarantine.side_effect = lambda source: source.unlink()
+
+        self.controller.poll(inspect_all=True)
+        dialog = self.controller.dialog
+        tree = dialog.findChild(QtWidgets.QTreeWidget)
+        self.assertEqual(3, tree.topLevelItemCount())
+        row = tree.findItems(str(second), QtCore.Qt.MatchFlag.MatchExactly)[0]
+        self.assertEqual(job["output_path"], row.child(0).text(0))
+        row.setCheckState(0, QtCore.Qt.CheckState.Unchecked)
+        move = next(button for button in dialog.findChildren(QtWidgets.QPushButton)
+                    if button.text().endswith("(2)"))
+        self.quarantine.quarantine.assert_not_called()
+        with patch("video_encoder_ui.source_completion_controller.report_quarantine_batch") as report:
+            move.click()
+
+        report.assert_called_once_with(None, [self.source, third], [])
+        self.assertTrue(second.exists())
+        self.assertFalse(self.source.exists())
+        self.assertFalse(third.exists())
+        self.controller.poll()
+        self.assertIsNone(self.controller.dialog)
+
+    def test_manual_batch_revalidates_each_source_and_reports_partial_results(self):
+        _job, second = self.multisource_job()
+        self.controller.poll(inspect_all=True)
+        self.source.write_bytes(b"capture replaced after review")
+        move = next(button for button in self.controller.dialog.findChildren(QtWidgets.QPushButton)
+                    if button.text().endswith("(2)"))
+
+        with patch("video_encoder_ui.source_completion_controller.report_quarantine_batch") as report:
+            move.click()
+
+        self.quarantine.quarantine.assert_called_once_with(second)
+        _, moved, failed = report.call_args.args
+        self.assertEqual([second], moved)
+        self.assertEqual(self.source, failed[0][0])
+        self.assertIn("ont changé", failed[0][1])
+        self.assertTrue(self.source.exists())
+
+    def test_canceling_manual_batch_keeps_all_sources(self):
+        _job, second = self.multisource_job()
+        self.controller.poll(inspect_all=True)
+        buttons = self.controller.dialog.findChild(QtWidgets.QDialogButtonBox)
+        buttons.button(QtWidgets.QDialogButtonBox.StandardButton.Cancel).click()
+
+        self.quarantine.quarantine.assert_not_called()
+        self.assertTrue(self.source.exists())
+        self.assertTrue(second.exists())
+        self.controller.poll()
+        self.assertIsNone(self.controller.dialog)
 
     def test_declining_first_source_does_not_decline_second_even_for_version_one(self):
         _job, second = self.multisource_job(version=1)
