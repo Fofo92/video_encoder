@@ -116,6 +116,34 @@ class CatalogueDestinationTest(unittest.TestCase):
         self.assertEqual(self.session.project_id, self.session.vidb['project_id'])
         self.assertEqual(1962, confirm.call_args.args[1]['year'])
 
+    def test_film_completion_refreshes_the_same_record_before_proposing_a_directory(self):
+        def response(_config, payload):
+            project_id = payload['project']['project_id']
+            return {
+                'status': 'identified', 'binding': {'project_id': project_id, 'record_id': 123,
+                                                    'binding_token': 'signed'},
+                'metadata': self.metadata(genres=['Documentaire'] if completed else [], abstract='Résumé'),
+                'review_url': 'https://vidb.test/encoder_projects/catalogue',
+            }
+
+        def review(_parent, _result, refresh):
+            nonlocal completed
+            completed = True
+            return refresh()
+
+        def confirm(_parent, metadata, suggested, enrich=None):
+            return enrich() if enrich else destination.suggested_film_output(metadata, suggested)
+
+        completed = False
+        writer = SimpleNamespace(vidb_link=VidbProjectLink(self.config, transport=response))
+        with patch.object(destination, 'confirm_destination', side_effect=confirm), \
+             patch.object(destination, 'await_vidb_identification', side_effect=review):
+            result = destination.prepare_catalogue_destination(
+                None, self.session, self.session.sources[0].path, self.proposed, writer, continue_export=True)
+        self.assertEqual(Path('/videos/Documentaires/Adieu Philippine.mkv'), result)
+        self.assertEqual(['Documentaire'], writer.vidb_result['metadata']['genres'])
+        self.assertEqual(123, self.session.vidb['record_id'])
+
     def test_missing_film_opens_creation_without_discarding_the_montage(self):
         transport = Mock(return_value={'status': 'unmatched', 'review_url': 'https://vidb.test/encoder_projects/catalogue'})
         writer = SimpleNamespace(vidb_link=VidbProjectLink(self.config, transport=transport))

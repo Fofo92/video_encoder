@@ -77,15 +77,17 @@ def prepare_catalogue_destination(parent, session, source, suggested, writer, co
     if not any(Path(source).absolute().is_relative_to(Path(root)) for root in ("/commun", "/videos")):
         return Path(suggested)
     document, provisional = project_identification_context(session, source, suggested)
-    result = link.identify(document, provisional, refresh=True)
+    def refresh():
+        return link.identify(document, provisional, refresh=True)
+
+    result = refresh()
     writer.vidb_result = result
     if result.get("status") == "disabled":
         return Path(suggested)
     if result.get("status") != "identified":
         if not continue_export:
             return review_before_destination(parent, result, suggested)
-        result = await_vidb_identification(
-            parent, result, lambda: link.identify(document, provisional, refresh=True))
+        result = await_vidb_identification(parent, result, refresh)
         if result is None:
             return None
         writer.vidb_result = result
@@ -104,6 +106,27 @@ def prepare_catalogue_destination(parent, session, source, suggested, writer, co
         return Path(suggested)
     if continue_export and complete:
         return suggested_film_output(metadata, suggested)
+    if not complete and result.get("review_url"):
+        def enrich():
+            updated = await_vidb_identification(parent, result, refresh)
+            if updated is None:
+                return None
+            if updated.get("status") != "identified" or updated.get("record_id") != result["record_id"]:
+                QtWidgets.QMessageBox.warning(
+                    parent, "Association vidb modifiée",
+                    "Reprends la préparation du montage pour vérifier la fiche associée.")
+                return None
+            updated_metadata = updated.get("metadata")
+            if not isinstance(updated_metadata, dict) or updated_metadata.get("record_kind") != "standalone_video":
+                QtWidgets.QMessageBox.warning(
+                    parent, "Fiche vidb indisponible",
+                    "Les données de la fiche n’ont pas pu être relues. Reprends la préparation du montage.")
+                return None
+            writer.vidb_result = updated
+            session.vidb = {key: value for key, value in updated.items() if key != "metadata"}
+            return confirm_destination(parent, updated_metadata, suggested)
+
+        return confirm_destination(parent, metadata, suggested, enrich=enrich)
     return confirm_destination(parent, metadata, suggested)
 
 
@@ -126,7 +149,7 @@ def review_before_destination(parent, result, suggested):
     return Path(suggested) if dialog.clickedButton() is manual else None
 
 
-def confirm_destination(parent, metadata, suggested):
+def confirm_destination(parent, metadata, suggested, enrich=None):
     proposed = suggested_film_output(metadata, suggested)
     dialog = QtWidgets.QMessageBox(parent)
     dialog.setWindowTitle("Film identifié dans vidb")
@@ -140,11 +163,17 @@ def confirm_destination(parent, metadata, suggested):
         explanation += "\nAucun dossier unique correspondant à tous les genres : vérifie le répertoire choisi."
     dialog.setInformativeText(explanation)
     dialog.setDetailedText(metadata.get("abstract", ""))
+    complement = None
+    if enrich is not None:
+        complement = dialog.addButton("Compléter la fiche avec les sources externes",
+                                      QtWidgets.QMessageBox.ButtonRole.ActionRole)
     use = dialog.addButton("Utiliser cette proposition", QtWidgets.QMessageBox.ButtonRole.AcceptRole)
-    dialog.setDefaultButton(use)
+    dialog.setDefaultButton(complement or use)
     manual = dialog.addButton("Choisir moi-même", QtWidgets.QMessageBox.ButtonRole.ActionRole)
     dialog.addButton("Revenir au montage", QtWidgets.QMessageBox.ButtonRole.RejectRole)
     dialog.exec()
+    if complement is not None and dialog.clickedButton() is complement:
+        return enrich()
     if dialog.clickedButton() is use:
         return proposed
     return proposed if dialog.clickedButton() is manual else None
