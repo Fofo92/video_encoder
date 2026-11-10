@@ -130,7 +130,7 @@ class VidbExportReview(QtWidgets.QDialog):
         self.executor.shutdown(wait=False, cancel_futures=True)
 
 
-def await_vidb_identification(parent, result, refresh):
+def await_vidb_identification(parent, result, refresh, *, verify_replacement=False):
     dialog = VidbExportReview(parent, result, refresh)
     outcome = dialog.exec()
     # WebEngine may interrupt the nested modal loop while the dialog is
@@ -145,6 +145,13 @@ def await_vidb_identification(parent, result, refresh):
             outcome = dialog.result()
         finally:
             dialog.finished.disconnect(loop.quit)
-    if outcome == QtWidgets.QDialog.DialogCode.Accepted:
-        return dialog.result_data
-    return None
+    if outcome != QtWidgets.QDialog.DialogCode.Accepted:
+        return None
+    record_id = dialog.result_data.get("record_id")
+    if (verify_replacement and record_id != result.get("record_id")
+            and (record_id is None or record_id != dialog.confirmed_record_id)):
+        QtWidgets.QMessageBox.warning(
+            parent, "Association vidb modifiée",
+            "Reprends la préparation du montage pour vérifier la nouvelle fiche associée.")
+        return None
+    return dialog.result_data

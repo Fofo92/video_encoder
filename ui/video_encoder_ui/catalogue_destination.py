@@ -108,13 +108,8 @@ def prepare_catalogue_destination(parent, session, source, suggested, writer, co
         return suggested_film_output(metadata, suggested)
     if not complete and result.get("review_url"):
         def enrich():
-            updated = await_vidb_identification(parent, result, refresh)
-            if updated is None:
-                return None
-            if updated.get("status") != "identified" or updated.get("record_id") != result["record_id"]:
-                QtWidgets.QMessageBox.warning(
-                    parent, "Association vidb modifiée",
-                    "Reprends la préparation du montage pour vérifier la fiche associée.")
+            updated = await_vidb_identification(parent, result, refresh, verify_replacement=True)
+            if updated is None or updated.get("status") != "identified":
                 return None
             updated_metadata = updated.get("metadata")
             if not isinstance(updated_metadata, dict) or updated_metadata.get("record_kind") != "standalone_video":

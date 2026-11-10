@@ -126,7 +126,8 @@ class CatalogueDestinationTest(unittest.TestCase):
                 'review_url': 'https://vidb.test/encoder_projects/catalogue',
             }
 
-        def review(_parent, _result, refresh):
+        def review(_parent, _result, refresh, *, verify_replacement):
+            self.assertTrue(verify_replacement)
             nonlocal completed
             completed = True
             return refresh()
