@@ -24,6 +24,20 @@ class CatalogueDestinationTest(unittest.TestCase):
         self.root = Path(self.directory.name)
         self.config = self.root / "vidb.json"
         self.config.write_text(json.dumps({"url": "https://vidb.test", "token": "a" * 64}), encoding="utf-8")
+
+        self.inspector = Mock()
+        self.inspector.inspect.return_value = {"inspection": {
+            "audio_tracks": [{"language": "fra"}], "subtitle_tracks": []}}
+        unexpected_wait = patch.object(
+            destination, 'await_vidb_identification',
+            side_effect=AssertionError("Unexpected interactive wait in a destination unit test"))
+        unexpected_wait.start()
+        self.addCleanup(unexpected_wait.stop)
+        unexpected_review = patch.object(
+            destination, 'review_before_destination',
+            side_effect=AssertionError("Unexpected interactive review in a destination unit test"))
+        unexpected_review.start()
+        self.addCleanup(unexpected_review.stop)
         self.session = SimpleNamespace(sources=[SimpleNamespace(path=Path('/commun/to_be_cut/Adieu Philippine.m2t'))])
         self.proposed = Path('/videos/Adieu Philippine.mkv')
 
@@ -38,13 +52,14 @@ class CatalogueDestinationTest(unittest.TestCase):
                 'project_id': payload['project']['project_id'], 'record_id': 123, 'binding_token': 'signed'},
                 'metadata': {'record_kind': 'episode', 'language_version': 'IND'}}
 
-        writer = SimpleNamespace(vidb_link=VidbProjectLink(self.config, transport=transport))
+        writer = SimpleNamespace(vidb_link=VidbProjectLink(self.config, transport=transport, inspector=self.inspector))
         expected = Path('/videos/episode.mkv')
         with patch.object(destination, 'confirm_episode_destination') as confirmation, \
              patch.object(destination, 'suggested_episode_output', return_value=expected):
             result = destination.prepare_catalogue_destination(
                 None, self.session, self.session.sources[0].path, self.proposed, writer, continue_export=True)
         self.assertEqual(expected, result)
+        self.inspector.inspect.assert_called_once_with(str(self.session.sources[0].path))
         confirmation.assert_not_called()
 
     def test_proposes_the_combined_directory_for_both_film_genres(self):
@@ -106,7 +121,7 @@ class CatalogueDestinationTest(unittest.TestCase):
             project = payload['project']
             return {'status': 'identified', 'binding': {'project_id': project['project_id'],
                     'record_id': 123, 'binding_token': 'signed'}, 'metadata': self.metadata()}
-        link = VidbProjectLink(self.config, transport=transport)
+        link = VidbProjectLink(self.config, transport=transport, inspector=self.inspector)
         writer = SimpleNamespace(vidb_link=link)
         with patch.object(destination, 'confirm_destination', return_value=self.proposed) as confirm:
             result = destination.prepare_catalogue_destination(
@@ -136,7 +151,7 @@ class CatalogueDestinationTest(unittest.TestCase):
             return enrich() if enrich else destination.suggested_film_output(metadata, suggested)
 
         completed = False
-        writer = SimpleNamespace(vidb_link=VidbProjectLink(self.config, transport=response))
+        writer = SimpleNamespace(vidb_link=VidbProjectLink(self.config, transport=response, inspector=self.inspector))
         with patch.object(destination, 'confirm_destination', side_effect=confirm), \
              patch.object(destination, 'await_vidb_identification', side_effect=review):
             result = destination.prepare_catalogue_destination(
@@ -147,7 +162,7 @@ class CatalogueDestinationTest(unittest.TestCase):
 
     def test_missing_film_opens_creation_without_discarding_the_montage(self):
         transport = Mock(return_value={'status': 'unmatched', 'review_url': 'https://vidb.test/encoder_projects/catalogue'})
-        writer = SimpleNamespace(vidb_link=VidbProjectLink(self.config, transport=transport))
+        writer = SimpleNamespace(vidb_link=VidbProjectLink(self.config, transport=transport, inspector=self.inspector))
         with patch.object(destination, 'review_before_destination', return_value=None):
             result = destination.prepare_catalogue_destination(
                 None, self.session, self.session.sources[0].path, self.proposed, writer)

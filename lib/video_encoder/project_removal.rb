@@ -79,7 +79,7 @@ module VideoEncoder
 
       document = JSON.parse(File.read(path))
       raise ProjectRemovalError, 'Projet video_encoder non reconnu.' unless
-        document.is_a?(Hash) && document['format'] == 'video_encoder.trim_project' &&
+        document.is_a?(Hash) && %w[video_encoder.trim_project video_encoder.dvd_project].include?(document['format']) &&
         [1, 2].include?(document['version'])
 
       document

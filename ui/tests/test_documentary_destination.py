@@ -69,7 +69,10 @@ class DocumentaryDestinationTest(unittest.TestCase):
                         "record_id": 123, "binding_token": "signed"},
                         "metadata": {"french_title": "Les glaces", "record_kind": "standalone_video",
                                      "genres": ["Documentaire"], "year": None, "abstract": ""}}
-            writer = SimpleNamespace(vidb_link=VidbProjectLink(config, transport=transport))
+            inspector = Mock()
+            inspector.inspect.return_value = {"inspection": {
+                "audio_tracks": [{"language": "fra"}], "subtitle_tracks": []}}
+            writer = SimpleNamespace(vidb_link=VidbProjectLink(config, transport=transport, inspector=inspector))
             source = Path("/commun/to_be_cut/Les glaces.m2t")
             session = SimpleNamespace(sources=[SimpleNamespace(path=source)])
             dialog = Mock()
@@ -81,6 +84,7 @@ class DocumentaryDestinationTest(unittest.TestCase):
                     None, session, source, Path("/videos/Les glaces.json"), writer)
             self.assertEqual(result, Path("/videos/Documentaires/Les glaces.mkv"))
             self.assertEqual(session.vidb["record_id"], 123)
+            inspector.inspect.assert_called_once_with(str(source))
 
     def test_documentary_never_combines_genres_even_with_legacy_mixed_metadata(self):
         with tempfile.TemporaryDirectory() as directory:

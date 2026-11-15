@@ -277,3 +277,140 @@ RSpec.describe VideoEncoder::ProjectRelocation, 'renaming' do
     expect(@db[:jobs].select_map(:project_path).uniq).to eq([@project])
   end
 end
+
+RSpec.describe VideoEncoder::ProjectRelocation, 'reusing a removed project name' do
+  include_context 'project relocation files'
+
+  def removed_job(status: 'done')
+    project = File.join(@old, 'Nouveau.json')
+    output = File.join(@old, 'Nouveau.mkv')
+    directory = File.join(@old, '.video_encoder_trash', 'removed')
+    FileUtils.mkdir_p(directory)
+    archived_project = File.join(directory, '0-Nouveau.json')
+    archived_output = File.join(directory, '1-Nouveau.mkv')
+    File.write(archived_project, '{}')
+    File.write(archived_output, 'old VF')
+    File.write(File.join(directory, 'manifest.json'),
+               JSON.generate(project => archived_project, output => archived_output))
+    id = @db[:jobs].insert(project_path: project, output_path: output, status: status)
+    [id, archived_project, archived_output]
+  end
+
+  def rename_project(preview: false)
+    described_class.new(@db).call(@project, @old, name: 'Nouveau', preview: preview)
+  end
+
+  it 'reuses a removed VF name and keeps its job pointing to the recoverable VF files' do
+    id, archived_project, archived_output = removed_job
+    File.write(@output, 'new VMST')
+    count = @db[:jobs].count
+    destination = rename_project
+    expect(File.read(destination.sub(/\.json\z/, '.mkv'))).to eq('new VMST')
+    expect(@db[:jobs].where(id: id).first).to include(
+      project_path: archived_project, output_path: archived_output, status: 'done'
+    )
+    expect(File.read(archived_output)).to eq('old VF')
+    expect(@db[:jobs].count).to eq(count)
+  end
+
+  it 'does not change history or files while previewing the rename' do
+    removed_job
+    before = @db[:jobs].all
+    rename_project(preview: true)
+    expect(@db[:jobs].all).to eq(before)
+    expect(File.file?(@project)).to be(true)
+    expect(File.exist?(File.join(@old, 'Nouveau.json'))).to be(false)
+  end
+
+  it 'keeps reservations for running queued and deferred jobs even with a removal manifest' do
+    %w[running queued deferred].each do |status|
+      id, = removed_job(status: status)
+      expect { rename_project }.to raise_error(VideoEncoder::ProjectRelocationError, /référencée/)
+      @db[:jobs].where(id: id).delete
+    end
+    expect(File.file?(@project)).to be(true)
+  end
+
+  it 'does not consider an inactive job obsolete just because its files are missing' do
+    @db[:jobs].insert(project_path: File.join(@old, 'Nouveau.json'),
+                      output_path: File.join(@old, 'Nouveau.mkv'), status: 'done')
+    expect { rename_project }.to raise_error(VideoEncoder::ProjectRelocationError, /référencée/)
+  end
+
+  it 'keeps the reservation if a recovery manifest is incomplete or invalid' do
+    _id, archived_project, = removed_job
+    manifest = File.join(File.dirname(archived_project), 'manifest.json')
+    File.write(manifest, JSON.generate(File.join(@old, 'Nouveau.json') => archived_project))
+    expect { rename_project }.to raise_error(VideoEncoder::ProjectRelocationError, /référencée/)
+    File.write(manifest, '{invalid')
+    expect { rename_project }.to raise_error(VideoEncoder::ProjectRelocationError, /référencée/)
+  end
+
+  def receipt_only_removed_job
+    id, project, output = removed_job
+    File.unlink(output)
+    receipt = "#{output}.video_encoder-export.json"
+    original = File.join(@old, 'Nouveau')
+    File.write(receipt, JSON.generate(format: 'video_encoder.completed_export', version: 1,
+                                      project_path: "#{original}.json", output_path: "#{original}.mkv"))
+    manifest = File.join(File.dirname(project), 'manifest.json')
+    File.write(manifest, JSON.generate("#{original}.json" => project,
+                                       "#{original}.mkv.video_encoder-export.json" => receipt))
+    [id, project, receipt]
+  end
+
+  it 'reuses a removed name when only its project and export receipt were retained' do
+    id, project, receipt = receipt_only_removed_job
+    File.write(@output, 'new VMST')
+    receipt_before = File.read(receipt)
+    rename_project
+    historical_output = receipt.delete_suffix('.video_encoder-export.json')
+    expect(@db[:jobs].where(id: id).first).to include(
+      project_path: project, output_path: historical_output, status: 'done'
+    )
+    expect(File.exist?(historical_output)).to be(false)
+    expect(File.read(receipt)).to eq(receipt_before)
+    expect(File.read(File.join(@old, 'Nouveau.mkv'))).to eq('new VMST')
+  end
+
+  it 'does not change historical references when previewing a receipt-only removal' do
+    receipt_only_removed_job
+    before = @db[:jobs].all
+    rename_project(preview: true)
+    expect(@db[:jobs].all).to eq(before)
+  end
+
+  it 'rejects a retained receipt for a different output or project' do
+    _id, _project, receipt = receipt_only_removed_job
+    document = JSON.parse(File.read(receipt))
+    %w[project_path output_path].each do |key|
+      File.write(receipt, JSON.generate(document.merge(key => '/different/file')))
+      expect { rename_project }.to raise_error(VideoEncoder::ProjectRelocationError, /référencée/)
+    end
+  end
+
+  it 'rejects a missing or invalid retained receipt' do
+    _id, _project, receipt = receipt_only_removed_job
+    File.write(receipt, '{invalid')
+    expect { rename_project }.to raise_error(VideoEncoder::ProjectRelocationError, /référencée/)
+    File.unlink(receipt)
+    expect { rename_project }.to raise_error(VideoEncoder::ProjectRelocationError, /référencée/)
+  end
+
+  it 'keeps an active task reservation even with a valid retained export receipt' do
+    id, = receipt_only_removed_job
+    @db[:jobs].where(id: id).update(status: 'queued')
+    expect { rename_project }.to raise_error(VideoEncoder::ProjectRelocationError, /référencée/)
+  end
+
+  it 'rolls back both historical and current paths if the queue update fails' do
+    removed_job
+    before = @db[:jobs].all
+    File.write(@output, 'new VMST')
+    @db.run("CREATE TRIGGER reject_move BEFORE UPDATE ON jobs BEGIN SELECT RAISE(ABORT, 'database failure'); END")
+    expect { rename_project }.to raise_error(Sequel::DatabaseError)
+    expect(@db[:jobs].all).to eq(before)
+    expect(File.read(@output)).to eq('new VMST')
+    expect(File.exist?(File.join(@old, 'Nouveau.json'))).to be(false)
+  end
+end

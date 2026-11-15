@@ -12,10 +12,16 @@ module VideoEncoder
     module_function
 
     def regular(path)
-      raise QuarantinePolicyError, "Fichier absent ou lien symbolique : #{path}" unless
-        path.is_a?(String) && path.start_with?('/') && File.file?(path) && !File.symlink?(path)
+      raise QuarantinePolicyError, "Chemin de fichier invalide : #{path}" unless
+        path.is_a?(String) && path.start_with?('/')
+
+      info = File.lstat(path)
+      raise QuarantinePolicyError, "Lien symbolique : #{path}" if info.symlink?
+      raise QuarantinePolicyError, "Fichier non régulier : #{path}" unless info.file?
 
       File.realpath(path)
+    rescue Errno::ENOENT, Errno::ENOTDIR
+      raise QuarantinePolicyError, "Fichier absent : #{path}"
     end
 
     def signature(path)

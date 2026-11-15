@@ -18,12 +18,13 @@ module VideoEncoder
       duration:,
       output_path:
     )
+      # Seek on input so DVB timestamp discontinuities before the cut do not shift the segment.
       runner.run(
         'ffmpeg',
         '-y',
         '-loglevel', 'warning',
-        '-i', source_path.to_s,
         '-ss', format_time(start_time),
+        '-i', source_path.to_s,
         '-t', format_time(duration + trailing_padding),
         '-map', "0:#{video_track.index}",
         '-map', "0:#{subtitle_track.index}",

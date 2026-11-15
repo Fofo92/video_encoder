@@ -22,9 +22,9 @@ class VidbProjectLinkTest(unittest.TestCase):
                          "project_id": self.project_id,
                          "sources": [{"id": "source", "path": "/commun/capture.m2t"}], "timeline": []}
 
-    def client(self, response=None, error=None):
+    def client(self, response=None, error=None, inspector=None):
         transport = Mock(return_value=response, side_effect=error)
-        return VidbProjectLink(config_path=self.config, transport=transport), transport
+        return VidbProjectLink(config_path=self.config, transport=transport, inspector=inspector), transport
 
     def test_planned_project_does_not_send_any_availability_or_viewing_flag(self):
         binding = {"project_id": self.project_id, "record_id": 123, "binding_token": "signed"}
@@ -34,6 +34,78 @@ class VidbProjectLinkTest(unittest.TestCase):
         payload = transport.call_args.args[1]["project"]
         self.assertEqual(set(payload), {"project_id", "project_path", "output_path", "source_paths"})
         self.assertEqual(payload["output_path"], "/videos/Films/Film.mkv")
+
+    def montage(self):
+        self.document["timeline"] = [
+            {"type": "segment", "source_id": "source", "start_frame": 0, "end_frame": 100}]
+
+    def inspector(self, subtitles=True):
+        inspector = Mock()
+        inspector.inspect.return_value = {"inspection": {
+            "audio_tracks": [{"language": "fre"}, {"language": "qaa"}],
+            "subtitle_tracks": [{"language": "fra", "hearing_impaired": False}] if subtitles else []}}
+        return inspector
+
+    def test_initial_review_contains_vmst_hint_even_before_the_project_has_cached_inspections(self):
+        self.montage()
+        inspector = self.inspector()
+        client, transport = self.client(
+            {"status": "needs_review", "review_url": "https://vidb.test/encoder_projects/episode"},
+            inspector=inspector)
+        result = client.identify(self.document, "/videos/Film.json")
+        self.assertEqual('needs_review', result['status'])
+        self.assertEqual('VMST', transport.call_args.args[1]['project']['language_hint'])
+        inspector.inspect.assert_called_once_with('/commun/capture.m2t')
+        self.assertNotIn('inspection', self.document['sources'][0])
+
+    def test_real_provisional_path_only_context_is_inspected_before_the_first_review(self):
+        from video_encoder_ui.vidb_project_context import project_identification_context
+        source = Path('/commun/to_be_cut/Adieu Philippine.m2t')
+        session = SimpleNamespace(sources=[SimpleNamespace(path=source)])
+        document, path = project_identification_context(session, source, Path('/videos/Film.mkv'))
+        self.assertNotIn('timeline', document)
+        self.assertNotIn('id', document['sources'][0])
+        inspector = self.inspector()
+        client, transport = self.client(
+            {"status": "needs_review", "review_url": "https://vidb.test/encoder_projects/episode"},
+            inspector=inspector)
+        result = client.identify(document, path, refresh=True)
+        self.assertEqual('needs_review', result['status'])
+        self.assertEqual('VMST', transport.call_args.args[1]['project']['language_hint'])
+        inspector.inspect.assert_called_once_with(str(source))
+        self.assertNotIn('timeline', document)
+
+    def test_sources_without_subtitles_propose_vm_when_both_audio_tracks_exist(self):
+        self.montage()
+        client, transport = self.client(
+            {"status": "needs_review", "review_url": "https://vidb.test/encoder_projects/episode"},
+            inspector=self.inspector(subtitles=False))
+        client.identify(self.document, "/videos/Film.json")
+        self.assertEqual('VM', transport.call_args.args[1]['project']['language_hint'])
+
+    def test_a_scoped_explicit_vf_selection_is_sent_unchanged_without_probing(self):
+        from video_encoder_ui.original_language_review import selection_scope
+        self.montage()
+        self.document['track_selection'] = {
+            'mode': 'french_only', 'confirmed_by': 'user', 'scope': selection_scope(self.document)}
+        inspector = Mock()
+        client, transport = self.client(
+            {"status": "needs_review", "review_url": "https://vidb.test/encoder_projects/episode"},
+            inspector=inspector)
+        client.identify(self.document, "/videos/Film.json")
+        self.assertEqual('VF', transport.call_args.args[1]['project']['language_hint'])
+        inspector.inspect.assert_not_called()
+
+    def test_inspection_failure_is_reported_instead_of_sending_a_form_without_track_information(self):
+        from video_encoder_ui.media_inspection_client import MediaInspectionError
+        self.montage()
+        inspector = Mock()
+        inspector.inspect.side_effect = MediaInspectionError('source unreadable')
+        client, transport = self.client(inspector=inspector)
+        result = client.identify(self.document, "/videos/Film.json")
+        self.assertEqual('pending', result['status'])
+        self.assertIn('Inspection des pistes', result['reason'])
+        transport.assert_not_called()
 
     def test_confirmed_identity_survives_project_relocation_without_network(self):
         self.document["vidb"] = {"status": "identified", "project_id": self.project_id,

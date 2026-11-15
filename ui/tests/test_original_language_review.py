@@ -70,6 +70,26 @@ class OriginalLanguageReviewTest(unittest.TestCase):
         self.assertTrue(prepare_track_selection(self.monitor, self.path, Mock()))
         self.assertEqual("original_with_subtitles", self.session.track_selection["mode"])
 
+    def test_uncertain_language_prefers_vmst_if_the_used_source_really_has_the_tracks(self):
+        self.monitor.media_inspection_client = Mock()
+        self.monitor.media_inspection_client.inspect.return_value = {"inspection": {
+            "audio_tracks": [{"language": "fra"}, {"language": "qaa"}],
+            "subtitle_tracks": [{"language": "fra"}]}}
+        choose = Mock(side_effect=AssertionError("VMST should be preferred without dropping available tracks"))
+        self.assertTrue(prepare_track_selection(self.monitor, self.path, choose))
+        self.assertEqual("original_with_subtitles", self.session.track_selection["mode"])
+        self.assertEqual("source_default", self.session.track_selection["confirmed_by"])
+        self.assertEqual("prefer_vmst_when_uncertain", self.session.track_selection["evidence"]["policy"])
+
+    def test_forced_only_subtitles_do_not_silently_default_to_vmst(self):
+        self.monitor.media_inspection_client = Mock()
+        self.monitor.media_inspection_client.inspect.return_value = {"inspection": {
+            "audio_tracks": [{"language": "fra"}, {"language": "qaa"}],
+            "subtitle_tracks": [{"language": "fra", "forced": True}]}}
+        choose = Mock(return_value=None)
+        self.assertFalse(prepare_track_selection(self.monitor, self.path, choose))
+        choose.assert_called_once()
+
     def test_unknown_requires_and_saves_user_decision(self):
         choose = Mock(return_value="french_only")
         self.assertTrue(prepare_track_selection(self.monitor, self.path, choose))

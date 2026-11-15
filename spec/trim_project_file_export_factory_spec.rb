@@ -20,7 +20,7 @@ RSpec.describe VideoEncoder::TrimProjectFileExportFactory do
         workspace_directory: '/tmp/video_encoder_workspace'
       )
 
-      expect(service).to be_a(VideoEncoder::ExportTrimProjectFile)
+      expect(service).to be_a(VideoEncoder::DvdProjectFileExport)
     end
   end
 end

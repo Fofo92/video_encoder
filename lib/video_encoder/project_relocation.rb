@@ -3,6 +3,7 @@
 require 'json'
 require 'pathname'
 require_relative 'project_relocation_files'
+require_relative 'removed_project_reference'
 
 module VideoEncoder
   # Moves the project and its outputs while an immediate SQLite transaction
@@ -23,16 +24,11 @@ module VideoEncoder
 
         files = ProjectRelocationFiles.new(project, directory, rows, name: name)
         files.prepare
-        validate_destinations(files, rows)
+        retired = validate_destinations(files, rows)
         return files.plan if preview
 
         files.copy
-        rows.each do |row|
-          @database[:jobs].where(id: row[:id]).update(
-            project_path: files.project_destination,
-            output_path: files.output_destination(row[:output_path])
-          )
-        end
+        update_job_paths(files, rows, retired)
       end
       files.finish
       files.project_destination
@@ -42,6 +38,16 @@ module VideoEncoder
     end
 
     private
+
+    def update_job_paths(files, rows, retired)
+      retired.each { |id, reference| @database[:jobs].where(id: id).update(reference) }
+      rows.each do |row|
+        @database[:jobs].where(id: row[:id]).update(
+          project_path: files.project_destination,
+          output_path: files.output_destination(row[:output_path])
+        )
+      end
+    end
 
     def rollback_files(files)
       return if files.nil? || files.committed?
@@ -66,14 +72,21 @@ module VideoEncoder
       expanded
     end
 
+    def destination_conflict?(files, row)
+      canonical_path(row[:project_path]) == files.project_destination ||
+        files.destinations.include?(canonical_path(row[:output_path])) ||
+        files.sources.include?(canonical_path(row[:output_path]))
+    end
+
     def validate_destinations(files, rows)
       own_ids = rows.map { |row| row[:id] }
-      @database[:jobs].exclude(id: own_ids).each do |row|
-        next unless canonical_path(row[:project_path]) == files.project_destination ||
-                    files.destinations.include?(canonical_path(row[:output_path])) ||
-                    files.sources.include?(canonical_path(row[:output_path]))
+      @database[:jobs].exclude(id: own_ids).filter_map do |row|
+        next unless destination_conflict?(files, row)
 
-        raise ProjectRelocationError, 'La destination est déjà référencée par une autre tâche.'
+        reference = RemovedProjectReference.new.call(row)
+        raise ProjectRelocationError, 'La destination est déjà référencée par une autre tâche.' unless reference
+
+        [row[:id], reference]
       end
     end
   end

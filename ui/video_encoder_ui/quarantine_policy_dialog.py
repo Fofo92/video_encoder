@@ -5,7 +5,23 @@ from pathlib import Path
 
 from PySide6 import QtWidgets
 
+from .quarantine_forecast import quarantine_forecast
 from .trim_export_queue_client import TrimExportQueueClient, TrimExportQueueError
+
+
+def absent_capture_rows(root, entries):
+    if not root:
+        return set()
+    root = Path(root)
+    try:
+        present = set(root.iterdir())
+    except OSError:
+        return set()
+    return {
+        row for row, entry in enumerate(entries)
+        if entry["state"] == "blocked"
+        and (path := Path(entry["path"])).parent == root and path not in present
+    }
 
 
 class QuarantinePolicyClient:
@@ -30,6 +46,7 @@ class QuarantinePolicyDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self.client = client or QuarantinePolicyClient()
         self.entries = []
+        self.absent_rows = set()
         self.setWindowTitle("Quarantaine — échéances de suppression")
         self.resize(1100, 480)
         layout = QtWidgets.QVBoxLayout(self)
@@ -41,6 +58,10 @@ class QuarantinePolicyDialog(QtWidgets.QDialog):
         layout.addWidget(description)
         self.timer_label = QtWidgets.QLabel(self.timer_status())
         layout.addWidget(self.timer_label)
+        self.hide_absent = QtWidgets.QCheckBox("Masquer les captures absentes")
+        self.hide_absent.setChecked(True)
+        self.hide_absent.toggled.connect(self.apply_absent_filter)
+        layout.addWidget(self.hide_absent)
         self.table = QtWidgets.QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(["Source", "Entrée / suivi", "Suppression à partir du", "État", "Motif"])
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
@@ -54,9 +75,11 @@ class QuarantinePolicyDialog(QtWidgets.QDialog):
         buttons = QtWidgets.QHBoxLayout()
         self.enroll_button = QtWidgets.QPushButton("Activer le suivi de la sélection (30 jours)")
         self.preview_button = QtWidgets.QPushButton("Aperçu des suppressions échues")
+        forecast_button = QtWidgets.QPushButton("Échéancier estimatif…")
         self.refresh_button = QtWidgets.QPushButton("Actualiser")
         self.associate_button = QtWidgets.QPushButton("Associer un projet…")
-        for button in (self.enroll_button, self.associate_button, self.preview_button, self.refresh_button):
+        for button in (self.enroll_button, self.associate_button, self.preview_button, forecast_button,
+                       self.refresh_button):
             button.setAutoDefault(False)
             buttons.addWidget(button)
         layout.addLayout(buttons)
@@ -65,6 +88,7 @@ class QuarantinePolicyDialog(QtWidgets.QDialog):
         layout.addWidget(close)
         self.refresh_button.clicked.connect(self.refresh)
         self.preview_button.clicked.connect(self.preview)
+        forecast_button.clicked.connect(self.show_forecast)
         self.enroll_button.clicked.connect(self.enroll)
         self.associate_button.clicked.connect(self.associate_project)
         self.table.itemSelectionChanged.connect(self.update_buttons)
@@ -90,21 +114,31 @@ class QuarantinePolicyDialog(QtWidgets.QDialog):
         try:
             result = self.client.request()
             self.entries = result["entries"]
+            self.absent_rows = absent_capture_rows(result.get("root"), self.entries)
             self.message.setText("\n".join(result["errors"]))
         except (TrimExportQueueError, OSError) as error:
             self.entries = []
+            self.absent_rows = set()
             self.message.setText(str(error))
         self.table.setRowCount(len(self.entries))
         names = {"untracked": "Sans date", "scheduled": "Programmée", "due": "Échue", "blocked": "Conservée"}
         for row, entry in enumerate(self.entries):
+            state = "Absente" if row in self.absent_rows else names.get(entry["state"], entry["state"])
             values = (Path(entry["path"]).name, self.date_label(entry.get("entered_at")),
-                      self.date_label(entry.get("delete_after")), names.get(entry["state"], entry["state"]),
+                      self.date_label(entry.get("delete_after")), state,
                       entry.get("reason", ""))
             for column, value in enumerate(values):
                 item = QtWidgets.QTableWidgetItem(value)
-                item.setToolTip(entry["path"])
+                item.setToolTip(value if column == 4 else entry["path"])
                 self.table.setItem(row, column, item)
+        self.apply_absent_filter()
         self.update_buttons()
+
+    def apply_absent_filter(self):
+        self.hide_absent.setText(f"Masquer les captures absentes ({len(self.absent_rows)})")
+        hide = self.hide_absent.isChecked()
+        for row in range(self.table.rowCount()):
+            self.table.setRowHidden(row, hide and row in self.absent_rows)
 
     def update_buttons(self):
         row = self.table.currentRow()
@@ -140,6 +174,56 @@ class QuarantinePolicyDialog(QtWidgets.QDialog):
         QtWidgets.QMessageBox.information(
             self, "Aperçu — aucune suppression effectuée",
             "\n".join(due) if due else "Aucune suppression éligible à cet instant.")
+
+    def show_forecast(self):
+        try:
+            report = self.client.request()
+            if report["errors"]:
+                raise ValueError("\n".join(report["errors"]))
+            if not report.get("root"):
+                raise ValueError("Le dossier de quarantaine est absent de la réponse. Mets à jour video_encoder.")
+            total, disk, rows = quarantine_forecast(report, datetime.now())
+        except (TrimExportQueueError, OSError, ValueError) as error:
+            QtWidgets.QMessageBox.warning(self, "Échéancier indisponible", str(error))
+            return
+
+        def go(size):
+            return f"{size / 1e9:.1f}".replace(".", ",") + " Go"
+
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Échéancier estimatif de la quarantaine")
+        layout = QtWidgets.QVBoxLayout(dialog)
+        layout.addWidget(QtWidgets.QLabel(
+            f"Disque de la quarantaine : {go(disk.total)} · Libre : {go(disk.free)} · Quarantaine : {go(total)}"
+        ))
+        note = QtWidgets.QLabel(
+            self.timer_status() + "\n"
+            "Projection après le passage quotidien de 03 h 30, si les contrôles restent valides et sans nouvel ajout. "
+            "Les captures sans échéance ou bloquées restent dans le volume projeté. "
+            "Le gain sur le disque dépend des blocs réellement libérés."
+        )
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        if rows:
+            table = QtWidgets.QTableWidget(len(rows), 5)
+            table.setHorizontalHeaderLabels(
+                ["Date", "Captures", "Volume supprimable", "Quarantaine restante", "Libre estimé sur le disque"]
+            )
+            table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
+            table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Stretch)
+            for row, (date, count, removed, remaining, free) in enumerate(rows):
+                for column, value in enumerate((date.strftime("%d/%m/%Y"), str(count), go(removed),
+                                                go(remaining), go(free))):
+                    table.setItem(row, column, QtWidgets.QTableWidgetItem(value))
+            layout.addWidget(table)
+        else:
+            layout.addWidget(QtWidgets.QLabel("Aucune suppression prévisible avec les échéances actuelles."))
+        close = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Close)
+        close.rejected.connect(dialog.reject)
+        layout.addWidget(close)
+        dialog.resize(950, 460)
+        dialog.exec()
+        dialog.deleteLater()
 
 
 def show_quarantine_policy(parent):

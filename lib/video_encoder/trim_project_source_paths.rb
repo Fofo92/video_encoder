@@ -41,7 +41,7 @@ module VideoEncoder
     def validate_format(document)
       format = document.fetch('format')
 
-      return if format == TrimProjectDocument::FORMAT
+      return if [TrimProjectDocument::FORMAT, 'video_encoder.dvd_project'].include?(format)
 
       raise ArgumentError,
             "unsupported document format: #{format}"

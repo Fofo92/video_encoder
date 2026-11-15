@@ -17,7 +17,8 @@ module VideoEncoder
     def bytes
       text = @text
       document = JSON.parse(text)
-      unless document['format'] == 'video_encoder.trim_project' && [1, 2].include?(document['version'])
+      formats = %w[video_encoder.trim_project video_encoder.dvd_project]
+      unless formats.include?(document['format']) && [1, 2].include?(document['version'])
         raise ProjectRelocationError, 'Le fichier doit être un projet de montage reconnu.'
       end
 

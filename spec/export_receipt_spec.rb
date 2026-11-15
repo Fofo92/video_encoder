@@ -27,6 +27,23 @@ RSpec.describe VideoEncoder::ExportReceipt do
     end
   end
 
+  it 'keeps a DVD binding and explicit language roles without a TV trim timeline' do
+    Dir.mktmpdir do |directory|
+      output = File.join(directory, 'DVD.mkv')
+      File.write(output, 'video')
+      writer = described_class.new
+      allow(writer).to receive(:probe).and_return('streams' => [])
+      json = JSON.generate(format: 'video_encoder.dvd_project', version: 2, project_id: 'project',
+                           vidb: { record_id: 42, binding_token: 'binding', metadata: { private: 'ignored' } })
+      result = writer.call(project_path: 'dvd.json', project_json: json, trim_project: nil,
+                           output_path: output, audio_roles: %w[french original])
+      receipt = JSON.parse(File.read(result))
+      expect(receipt['roles']).to eq(%w[french original])
+      expect(receipt['vidb']).to eq('record_id' => 42, 'binding_token' => 'binding')
+      expect(receipt['project_id']).to eq('project')
+    end
+  end
+
   it 'preserves export success when receipt inspection fails' do
     writer = described_class.new
     allow(writer).to receive(:warn)

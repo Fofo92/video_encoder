@@ -3,4 +3,7 @@ set -euo pipefail
 
 PROJECT_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd -- "$PROJECT_ROOT"
-exec bundle exec ruby bin/video_encoder quarantine sweep --apply
+status=0
+bundle exec ruby bin/video_encoder quarantine sweep --apply || status=$?
+bundle exec ruby bin/video_encoder project-trash sweep --apply || status=$?
+exit "$status"

@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from .trim_project_file_reader import (
@@ -56,6 +57,10 @@ class TrimProjectSourceNames:
 
     def load_sources(self, project_path):
         try:
+            document = json.loads(Path(project_path).read_text(encoding="utf-8"))
+            if document.get("format") == "video_encoder.dvd_project":
+                paths = [Path(source["path"]) for source in document["sources"]]
+                return " · ".join(path.name for path in paths), "\n".join(map(str, paths))
             session = self.reader.load(
                 project_path
             )

@@ -17,14 +17,18 @@ bornées et le résultat est mis en cache dix minutes.
   marqués forcés et français restent conservés. Si une source n’a pas de piste
   française, le contrôle échoue explicitement plutôt que de substituer `qaa`.
 - VO étrangère : parcours existant français + VO et sous-titres français.
-- Langue incertaine : choix « Oui, VO française », « Non, VO étrangère » ou
-  « Revenir au montage », qui est le choix par défaut. Aucun contrôle audio,
-  OCR ou encodage ne démarre si la boîte est fermée ou annulée.
+- Langue incertaine sans décision enregistrée : préférer VMST si toutes les
+  sources utilisées possèdent français, `qaa` et sous-titres français ordinaires.
+  Il s’agit d’une préférence de conservation des pistes, pas d’une déduction de
+  langue originale à partir de `qaa`. Sinon, demander le choix sans inventer de
+  piste ; aucun contrôle audio, OCR ou encodage ne démarre après annulation.
 
 Le choix et la provenance de la décision sont stockés dans `track_selection`
 dans le JSON du projet, avec son identité, la fiche et les chemins des sources.
 Il est conservé à la réouverture et à la sauvegarde, et redemandé si la fiche ou
-les sources changent. Le moteur Ruby respecte ce choix au contrôle audio et à
+les sources changent. « Montage → Réencoder en file d’attente… » permet
+de revoir explicitement ce choix, y compris après un premier export terminé,
+en conservant l’ancien projet et l’ancienne sortie. Le moteur Ruby respecte ce choix au contrôle audio et à
 l’export. Les projets sans ce champ gardent le comportement existant : rouvrir
 et remettre en file un ancien projet pour bénéficier du nouveau filtrage.
 

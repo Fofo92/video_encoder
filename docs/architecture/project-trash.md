@@ -4,7 +4,8 @@ Projets → Corbeille des projets présente une ligne par suppression : projet,
 date, taille logique des fichiers regroupés, emplacement initial. La sélection
 multiple permet de restaurer ou de supprimer définitivement plusieurs projets.
 Vider la corbeille concerne toutes les lignes connues et accessibles, avec
-confirmation négative par défaut. Aucune purge automatique n'est programmée.
+confirmation négative par défaut. Le service quotidien de quarantaine purge aussi
+les entrées vérifiées âgées de 30 jours.
 
 Les racines `.video_encoder_trash` sont mémorisées dans la table
 `project_trash_roots` de la base de la file d'encodage. Cette petite table est
@@ -50,3 +51,30 @@ video_encoder project-trash purge /dossier/.video_encoder_trash/UUID TOKEN
 Les jetons proviennent de `list` ; les commandes mutantes ne peuvent pas agir
 sur un dossier non enregistré. L'historique des tâches est conservé et aucun
 enregistrement n'est reprogrammé lors d'une restauration.
+
+## Rétention automatique
+
+Le même service utilisateur `video-encoder-quarantine.service`, déclenché à 03 h 30,
+traite successivement les captures et les corbeilles de projets. Un échec du premier
+traitement ne saute pas le second ; le service rapporte néanmoins un échec.
+
+Le délai est de 30 jours depuis la création du dossier de récupération. Si le
+système ne fournit pas cette date, la date du manifeste créé lors de la suppression
+sert de référence. Les anciennes entrées enregistrées sont concernées avec cette
+date, sans recommencer le délai au déploiement. Une modification de la vidéo ne
+réinitialise pas le délai. Aucun parcours récursif de `/videos` n’est effectué.
+Les racines anciennes non enregistrées restent ajoutables dans la corbeille.
+
+```sh
+bin/video_encoder project-trash sweep          # aperçu, aucune suppression
+bin/video_encoder project-trash sweep --apply  # purge des seules entrées échues et vérifiées
+bin/install-quarantine-timer                   # aperçu puis mise à jour du même service/minuteur
+```
+
+L’aperçu affiche `created_at`, `delete_after` et un état `scheduled`, `due` ou
+`blocked`. Les dossiers invalides restent conservés. Avant chaque purge, le service
+recharge les fichiers, contrôle leur jeton, revalide l’âge et les tâches actives
+sous le verrou SQLite commun. Les fichiers inattendus, liens symboliques et
+références actives empêchent la purge. Les tâches historiques restent conservées.
+La suppression porte uniquement sur les fichiers du manifeste, puis le manifeste
+et son dossier vide ; elle n’utilise pas de suppression récursive.

@@ -6,6 +6,7 @@ from .window_placement import place_initial_window
 
 class StartWindow(TrimExportQueueDialog):
     """The queue is the application's home, including source/project actions."""
+    dvd_requested = QtCore.Signal()
     new_project_requested = QtCore.Signal()
     open_project_requested = QtCore.Signal()
     queue_requested = QtCore.Signal()
@@ -33,6 +34,8 @@ class StartWindow(TrimExportQueueDialog):
             self.menu_bar.addMenu(menu)
         self.new_project_action = self.add_home_action(
             sources, "Ouvrir une source…", "document-new", self.new_project_requested)
+        self.dvd_action = self.add_home_action(
+            sources, "Préparer un DVD…", "media-optical", self.dvd_requested)
         self.quarantine_action = self.add_home_action(
             sources, "Mettre des sources en quarantaine…", "folder-move", self.quarantine_requested)
         self.quarantine_policy_action = QtGui.QAction("Suivi de la quarantaine…", self)
@@ -116,7 +119,7 @@ class StartWindow(TrimExportQueueDialog):
         self.main_toolbar.setStyleSheet("QToolBar { padding: 0px; margin: 0px; }")
         self.main_toolbar.setIconSize(QtCore.QSize(24, 24))
         self.main_toolbar.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        for action in (self.new_montage_action, self.open_project_action):
+        for action in (self.new_montage_action, self.dvd_action, self.open_project_action):
             self.main_toolbar.addAction(action)
         self.main_toolbar.addSeparator()
         for action in (self.relocate_project_action, self.quarantine_action):

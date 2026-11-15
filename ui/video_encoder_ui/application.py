@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import json
 import sys
 import tempfile
 from pathlib import Path
@@ -1155,6 +1156,12 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
             lambda: self.identify_vidb_action.setEnabled(self.save_project_action.isEnabled()))
         montage_menu.insertAction(self.export_project_action, self.save_project_action)
         montage_menu.insertAction(self.export_project_action, self.identify_vidb_action)
+        self.reencode_project_action = QtGui.QAction("Réencoder en file d’attente…", self)
+        self.reencode_project_action.triggered.connect(self.reencode_project)
+        self.reencode_project_action.setEnabled(self.save_project_action.isEnabled())
+        self.save_project_action.changed.connect(
+            lambda: self.reencode_project_action.setEnabled(self.save_project_action.isEnabled()))
+        montage_menu.insertAction(self.export_project_action, self.reencode_project_action)
         montage_menu.insertAction(self.export_project_action, self.queue_export_action)
         montage_menu.insertAction(self.export_project_action, self.show_export_queue_action)
         montage_menu.insertAction(next(action for action in montage_menu.actions() if action.isSeparator()),
@@ -2221,6 +2228,29 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
                 return None
             selected = select_project_output(self, suggested, self.project_path)
         return selected
+
+    def reencode_project(self):
+        if (self.trim_project_exporter.is_running or self.audio_preflight_runner.is_running
+                or self.pending_export is not None):
+            return
+        from .reencode_project import prepare_reencode
+        prepared = prepare_reencode(self)
+        if prepared is None:
+            return
+        self.trim_session = prepared.session
+        self.project_path = prepared.project_path
+        self.set_project_modified(False)
+        if not offer_vidb_review(self, self.trim_project_writer, before_encoding=True):
+            return
+        self.pending_export_mode = "queued"
+        self.pending_export = (prepared.project_path, prepared.output_path)
+        try:
+            self.audio_preflight_runner.start(prepared.project_path)
+        except RuntimeError as error:
+            self.pending_export = None
+            self.pending_export_mode = None
+            self.export_status_changed("failed")
+            QtWidgets.QMessageBox.warning(self, "Contrôle audio indisponible", str(error))
 
     def export_project(self, queued=False, identified_review=False):
         trace_vidb(f"export requested; queued={queued}; identified_review={identified_review}")
@@ -3429,6 +3459,15 @@ def main():
 
     queue_controller.attach(start_window)
     queue_controller.refresh(start_window)
+    from .dvd_import_dialog import DvdImportDialog, reopen_dvd_project
+
+    def prepare_dvd():
+        dialog = DvdImportDialog(start_window, queue_client)
+        dialog.exec()
+        dialog.deleteLater()
+        queue_controller.refresh(start_window)
+
+    start_window.dvd_requested.connect(prepare_dvd)
     start_window.relocate_requested.connect(queue_controller.relocate_project)
     from .project_removal_dialog import remove_project
 
@@ -3452,6 +3491,17 @@ def main():
     def build_editor(selected_path):
         nonlocal mlt_initialized
 
+        if Path(selected_path).suffix.lower() == ".json":
+            try:
+                document = json.loads(Path(selected_path).read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                document = {}
+            if document.get("format") == "video_encoder.dvd_project":
+                reopen_dvd_project(start_window, selected_path, queue_client)
+                queue_controller.refresh(start_window)
+                start_window.show()
+                return None
+
         if not mlt_initialized:
             mlt_factory.init()
             mlt_initialized = True
@@ -3465,6 +3515,7 @@ def main():
             window.new_montage_action.triggered.disconnect()
             window.new_montage_action.triggered.connect(application_controller.new_project)
             source_completion.install_menu_bar(window.editor_menu_bar)
+            window.sources_menu.addAction(start_window.dvd_action)
             window.projects_menu.addAction(start_window.delete_project_action)
             window.projects_menu.addAction(start_window.project_trash_action)
             window.trim_project_exporter.succeeded.connect(
@@ -3499,6 +3550,7 @@ def main():
             if (
                 editor_controller.editor_window
                 is None
+                and not start_window.isVisible()
             ):
                 return 2
         else:

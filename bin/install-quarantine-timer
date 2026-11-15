@@ -12,6 +12,19 @@ def quoted(value):
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%") + '"'
 
 
+def preview_project_trash(root):
+    preview = subprocess.run(
+        ["bundle", "exec", "ruby", "bin/video_encoder", "project-trash", "sweep"],
+        cwd=root, check=True, capture_output=True, text=True)
+    document = json.loads(preview.stdout)
+    if document.get("format") != "video_encoder.project_trash_retention" or document.get("errors"):
+        raise RuntimeError("Aperçu de corbeille invalide ou indisponible : " + preview.stdout)
+    due = [entry for entry in document["entries"] if entry["state"] == "due"]
+    print(f"Corbeilles de projets : {len(document['entries'])} entrée(s), {len(due)} suppression(s) échue(s).")
+    for entry in due[:20]:
+        print(f"  {entry['directory']} — à partir du {entry['delete_after']}")
+
+
 def main():
     root = Path(__file__).resolve().parents[1]
     config = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))) / "systemd/user"
@@ -21,14 +34,14 @@ def main():
         if name in os.environ:
             environment.append(f"Environment={quoted(name + '=' + os.environ[name])}")
     service = "\n".join([
-        "[Unit]", "Description=video_encoder — suppression des captures vérifiées après 30 jours",
+        "[Unit]", "Description=video_encoder — suppression des captures et corbeilles de projets après 30 jours",
         "", "[Service]", "Type=oneshot", "WorkingDirectory=" + str(root).replace("%", "%%"),
         *environment,
         f"ExecStart=/bin/bash {quoted(str(root / 'script/quarantine-maintenance'))}",
         "Nice=10", "IOSchedulingClass=idle", "TimeoutStartSec=15min", "",
     ])
     timer = "\n".join([
-        "[Unit]", "Description=video_encoder — contrôle quotidien de la quarantaine",
+        "[Unit]", "Description=video_encoder — contrôle quotidien de la quarantaine et des corbeilles de projets",
         "", "[Timer]", "OnCalendar=*-*-* 03:30:00", "Persistent=true", "AccuracySec=1min",
         "", "[Install]", "WantedBy=timers.target", "",
     ])
@@ -45,6 +58,7 @@ def main():
     if len(due) > 20:
         print("  Liste complète : Sources → Suivi de la quarantaine.")
     print("Les anciens fichiers vérifiables démarreront un délai neuf de 30 jours au premier passage.")
+    preview_project_trash(root)
     (config / "video-encoder-quarantine.service").write_text(service)
     (config / "video-encoder-quarantine.timer").write_text(timer)
     subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)

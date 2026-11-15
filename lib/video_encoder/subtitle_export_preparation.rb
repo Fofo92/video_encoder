@@ -3,6 +3,8 @@
 module VideoEncoder
   # Prepares subtitles and applies the original-audio retention policy.
   class SubtitleExportPreparation
+    class RequiredSubtitlesUnavailable < StandardError; end
+
     def self.skip?(trim_project, subtitle_tracks_by_source)
       selection = trim_project.track_selection if trim_project.respond_to?(:track_selection)
       modes = %w[french_only original_without_subtitles]
@@ -21,7 +23,15 @@ module VideoEncoder
       audio_output_tracks:,
       rendered_video_path:
     )
-      return [nil, audio_output_tracks] unless exporter
+      if absent_subtitles?(trim_project, video_tracks_by_source, subtitle_tracks_by_source)
+        warn_missing_tracks
+        return [nil, audio_output_tracks]
+      end
+
+      unless exporter
+        require_subtitles!(trim_project)
+        return [nil, audio_output_tracks]
+      end
       return [nil, audio_output_tracks] if self.class.skip?(trim_project, subtitle_tracks_by_source)
 
       progress_reporter&.call(
@@ -46,6 +56,26 @@ module VideoEncoder
     private
 
     attr_reader :exporter, :progress_reporter
+
+    def absent_subtitles?(project, video_tracks, subtitle_tracks)
+      return false unless vmst?(project) && subtitle_tracks.empty?
+
+      sources = video_tracks.keys
+      sources.any? && sources.all? { |source| source.subtitle_tracks.empty? }
+    end
+
+    def warn_missing_tracks
+      warn(
+        code: 'vmst_without_subtitle_tracks',
+        message: 'VMST demandée, mais aucune piste de sous-titres présente dans les sources utilisées. ' \
+                 'Les pistes audio sélectionnées sont conservées : export sans sous-titres.'
+      )
+    end
+
+    def vmst?(project)
+      selection = project.track_selection if project.respond_to?(:track_selection)
+      selection&.fetch('mode', nil) == 'original_with_subtitles'
+    end
 
     def extract_subtitles(**arguments)
       export_subtitles(**arguments)
@@ -102,10 +132,7 @@ module VideoEncoder
     end
 
     def retained_audio_tracks(audio_tracks, subtitle_path, project)
-      selection = project.track_selection if project.respond_to?(:track_selection)
-      return audio_tracks if selection&.fetch('mode', nil) == 'original_without_subtitles'
-
-      return audio_tracks if subtitle_path
+      return audio_tracks if preserve_audio?(project, subtitle_path)
 
       retained = audio_tracks.reject { |track| track.role == :original }
 
@@ -125,6 +152,27 @@ module VideoEncoder
       )
 
       retained
+    end
+
+    def preserve_audio?(project, subtitle_path)
+      selection = project.track_selection if project.respond_to?(:track_selection)
+      return true if selection&.fetch('mode', nil) == 'original_without_subtitles'
+      return true if subtitle_path
+      return false unless vmst?(project)
+
+      warn(
+        code: 'vmst_without_subtitle_text',
+        message: 'VMST demandée, mais aucun texte de sous-titres exploitable obtenu. ' \
+                 'Les pistes audio sélectionnées sont conservées : export en VM, sans sous-titres.'
+      )
+      true
+    end
+
+    def require_subtitles!(project)
+      return unless vmst?(project)
+
+      raise RequiredSubtitlesUnavailable,
+            'VMST demandée mais exporteur de sous-titres absent : vérifier la configuration.'
     end
 
     def warn(**details)

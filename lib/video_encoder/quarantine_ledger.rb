@@ -2,6 +2,7 @@
 
 require_relative 'quarantine_files'
 require_relative 'quarantine_evidence'
+require_relative 'quarantine_reentry'
 
 module VideoEncoder
   # Lives in the queue database: recording and purging share its writer lock.
@@ -43,19 +44,18 @@ module VideoEncoder
     end
 
     def record(original, destination, projects: [])
-      path = validate_path(destination)
-      raise QuarantinePolicyError, 'Cette source est déjà suivie.' if current(path)
-
-      now = @clock.call.utc
-      projects = QuarantineEvidence.new(database).associations(File.expand_path(original.to_s), path) if projects.empty?
-      begin
-        projects = QuarantineEvidence.new(database).check(File.expand_path(original.to_s), path, projects)
-      rescue StandardError
-        # Keep the known project/output pairs even if their verification is incomplete.
+      synchronize do
+        path = validate_path(destination)
+        original = File.expand_path(original.to_s)
+        checked = project_evidence(original, path, projects)
+        attributes = registration(original, path, checked)
+        entry = current(path)
+        if entry
+          QuarantineReentry.new(database).replace(entry, attributes)
+        else
+          table.insert(attributes)
+        end
       end
-      table.insert(path: path, original: File.expand_path(original.to_s), entered_at: now.iso8601(6),
-                   delete_after: (now + RETENTION).iso8601(6),
-                   signature: JSON.generate(QuarantineFiles.signature(path)), projects: JSON.generate(projects))
     end
 
     def current(path)
@@ -75,6 +75,23 @@ module VideoEncoder
     end
 
     private
+
+    def project_evidence(original, path, projects)
+      evidence = QuarantineEvidence.new(database)
+      projects = evidence.associations(original, path) if projects.empty?
+      begin
+        evidence.check(original, path, projects)
+      rescue StandardError
+        # Keep the known pairs; the deletion policy will recheck them independently.
+        projects
+      end
+    end
+
+    def registration(original, path, projects)
+      now = @clock.call.utc
+      { path: path, original: original, entered_at: now.iso8601(6), delete_after: (now + RETENTION).iso8601(6),
+        signature: JSON.generate(QuarantineFiles.signature(path)), projects: JSON.generate(projects) }
+    end
 
     def table
       database[:quarantine_sources]

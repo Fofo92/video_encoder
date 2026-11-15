@@ -24,8 +24,15 @@ module VideoEncoder
 
     def summary
       { directory: @directory, project: @entries.keys.find { |path| path.end_with?('.json') },
+        created_at: created_at.iso8601(6),
         deleted_at: File.mtime(@manifest).iso8601, bytes: @entries.values.sum { |path| File.size(path) },
         files: @entries.keys, token: token }
+    end
+
+    def created_at
+      File.birthtime(@directory).utc
+    rescue NotImplementedError
+      File.mtime(@manifest).utc
     end
 
     def token
@@ -33,7 +40,7 @@ module VideoEncoder
         stat = File.lstat(path)
         [path, stat.dev, stat.ino, stat.size, stat.mtime.to_r.to_s, stat.ctime.to_r.to_s]
       end
-      Digest::SHA256.hexdigest(@bytes + JSON.generate(signatures))
+      Digest::SHA256.hexdigest(@bytes + JSON.generate(signatures).b)
     end
 
     def restore

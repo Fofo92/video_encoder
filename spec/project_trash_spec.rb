@@ -46,6 +46,26 @@ RSpec.describe VideoEncoder::ProjectTrash do
     expect(described_class.new(@db).list[:entries].size).to eq(1)
   end
 
+  it 'lists and restores accented project paths without mixing binary and UTF-8 encodings' do
+    project = File.join(@root, 'Épisode — L’enquête.json')
+    output = project.sub(/\.json\z/, '.mkv')
+    bytes = JSON.generate(format: 'video_encoder.trim_project', version: 2,
+                          sources: [{ path: @source }], timeline: [])
+    File.write(project, bytes)
+    File.write(output, 'encoded episode')
+    removal = VideoEncoder::ProjectRemoval.new(@db)
+    plan = removal.call(project, dependencies: true)
+    directory = removal.call(project, dependencies: true, token: plan[:token])
+    listing = @trash.list
+    item = listing[:entries].find { |row| row[:directory] == directory }
+    expect(listing[:errors]).to be_empty
+    expect(item[:token]).to match(/\A[0-9a-f]{64}\z/)
+    expect(VideoEncoder::ProjectTrashEntry.new(directory).token).to eq(item[:token])
+    @trash.change('restore', directory, item[:token])
+    expect(File.binread(project)).to eq(bytes.b)
+    expect(File.read(output)).to eq('encoded episode')
+  end
+
   it 'restores a group to original paths and removes its recovery entry' do
     item = entry
     @trash.change('restore', item[:directory], item[:token])

@@ -1,5 +1,9 @@
 import json
+import shutil
+import tempfile
 import unittest
+from datetime import date, datetime
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 try:
@@ -9,6 +13,7 @@ except ModuleNotFoundError as error:
         raise
     raise unittest.SkipTest('PySide6 is unavailable') from error
 
+from video_encoder_ui.quarantine_forecast import quarantine_forecast
 from video_encoder_ui.quarantine_policy_dialog import QuarantinePolicyClient, QuarantinePolicyDialog
 from video_encoder_ui.trim_export_queue_client import TrimExportQueueError
 from video_encoder_ui.start_window import StartWindow
@@ -61,6 +66,40 @@ class QuarantinePolicyTest(unittest.TestCase):
         self.assertIn('/commun/Quarantaine/Film.m2t', message.call_args.args[2])
         self.assertTrue(all(call.args == () for call in client.request.call_args_list))
 
+    def test_forecast_projects_daily_disk_space_without_enrolling_or_purging(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scheduled = root / 'Film.m2t'
+            scheduled.write_bytes(b'a' * 4096)
+            (root / 'Ancien.m2t').write_bytes(b'b' * 1024)
+            (root / 'Bloqué.m2t').write_bytes(b'c' * 2048)
+            deadline = datetime(2026, 11, 30, 12).astimezone().isoformat()
+            entries = [
+                dict(entry('scheduled'), path=str(scheduled), delete_after=deadline),
+                dict(entry('untracked'), path=str(root / 'Ancien.m2t')),
+                dict(entry('blocked'), path=str(root / 'Bloqué.m2t'), delete_after=deadline),
+            ]
+            report = dict(response(entries), root=str(root))
+            disk = shutil.disk_usage(root)._replace(total=100_000, free=50_000)
+            with patch('video_encoder_ui.quarantine_forecast.shutil.disk_usage', return_value=disk):
+                total, observed_disk, rows = quarantine_forecast(report, datetime(2026, 11, 30, 2))
+            self.assertEqual(7168, total)
+            self.assertEqual(disk, observed_disk)
+            self.assertEqual([
+                (date(2026, 11, 30), 0, 0, 7168, disk.free),
+                (date(2026, 12, 1), 1, 4096, 3072, disk.free + scheduled.stat().st_blocks * 512),
+            ], rows)
+
+            dialog, client = self.dialog()
+            client.request.return_value = report
+            with patch.object(QtWidgets.QDialog, 'exec'), \
+                    patch.object(QuarantinePolicyDialog, 'timer_status', return_value='Minuteur actif'):
+                button = next(button for button in dialog.findChildren(QtWidgets.QPushButton)
+                              if button.text() == 'Échéancier estimatif…')
+                button.click()
+            self.assertEqual([unittest.mock.call(), unittest.mock.call()], client.request.call_args_list)
+            self.assertTrue(scheduled.exists())
+
     def test_legacy_enrollment_is_enabled_only_for_an_untracked_selection(self):
         dialog, client = self.dialog([entry()])
         dialog.table.selectRow(0)
@@ -78,6 +117,35 @@ class QuarantinePolicyTest(unittest.TestCase):
         self.assertEqual('Vérification nécessaire', dialog.table.item(0, 4).text())
         dialog.enroll()
         client.request.assert_called_once_with()
+
+    def test_filter_hides_only_missing_captures_and_can_show_them_again(self):
+        dialog, client = self.dialog()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            missing = root / 'absent.m2t'
+            present = root / 'capture.m2t'
+            present.touch()
+            link = root / 'lien.m2t'
+            link.symlink_to(missing)
+            entries = [dict(entry('blocked'), path=str(path)) for path in (missing, present, link)]
+            client.request.return_value = dict(response(entries), root=str(root))
+            with patch.object(QuarantinePolicyDialog, 'timer_status', return_value='Minuteur actif'):
+                dialog.refresh()
+                self.assertTrue(dialog.table.isRowHidden(0))
+                self.assertFalse(dialog.table.isRowHidden(1))
+                self.assertFalse(dialog.table.isRowHidden(2))
+                self.assertIn('(1)', dialog.hide_absent.text())
+                dialog.hide_absent.setChecked(False)
+                self.assertFalse(dialog.table.isRowHidden(0))
+                self.assertEqual('Absente', dialog.table.item(0, 3).text())
+                self.assertEqual('Conservée', dialog.table.item(1, 3).text())
+
+                dialog.hide_absent.setChecked(True)
+                missing.touch()
+                dialog.refresh()
+                self.assertFalse(dialog.table.isRowHidden(0))
+                self.assertIn('(0)', dialog.hide_absent.text())
+        self.assertTrue(all(call.args == () for call in client.request.call_args_list))
 
     def test_explicit_project_association_does_not_request_a_deletion(self):
         dialog, client = self.dialog([entry()])

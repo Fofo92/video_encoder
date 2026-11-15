@@ -26,7 +26,11 @@ class IdentifyThenQueueTest(unittest.TestCase):
         config = self.root / "vidb.json"
         config.write_text(json.dumps({"url": "https://vidb.test", "token": "a" * 64}))
         self.transport = Mock(return_value={"status": "unmatched", "review_url": "https://vidb.test/encoder_projects/catalogue"})
-        self.writer = SimpleNamespace(vidb_link=VidbProjectLink(config, transport=self.transport))
+        self.inspector = Mock()
+        self.inspector.inspect.return_value = {"inspection": {
+            "audio_tracks": [{"language": "fra"}], "subtitle_tracks": []}}
+        self.writer = SimpleNamespace(vidb_link=VidbProjectLink(
+            config, transport=self.transport, inspector=self.inspector))
         self.source = Path("/commun/to_be_cut/Documentaire.m2t")
         self.session = SimpleNamespace(sources=[SimpleNamespace(path=self.source)], segments=[object()])
 

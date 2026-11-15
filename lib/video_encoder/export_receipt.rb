@@ -9,7 +9,7 @@ require 'time'
 module VideoEncoder
   # Records the final output only after a completed project export.
   class ExportReceipt
-    def call(project_path:, project_json:, trim_project:, output_path:, timings: nil)
+    def call(project_path:, project_json:, trim_project:, output_path:, timings: nil, audio_roles: nil)
       path = File.expand_path(output_path.to_s)
       before = File.stat(path)
       details = probe(path)
@@ -22,7 +22,7 @@ module VideoEncoder
         project_path: File.expand_path(project_path.to_s),
         project_sha256: Digest::SHA256.hexdigest(project_json),
         output_path: path, byte_size: after.size, modified_at: after.mtime.utc.iso8601(6),
-        roles: roles(trim_project), probe: details
+        roles: audio_roles || roles(trim_project), probe: details
       }
       document[:timings] = timings if timings
       document.merge!(project_binding(project_json))

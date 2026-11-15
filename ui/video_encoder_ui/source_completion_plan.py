@@ -20,7 +20,7 @@ def project_sources(path):
     if path.stat().st_size > 2 * 1024 * 1024:
         raise SourceCompletionError(f"Projet trop volumineux : {path}")
     document = json.loads(path.read_text(encoding="utf-8"))
-    if document.get("format") != "video_encoder.trim_project":
+    if document.get("format") not in {"video_encoder.trim_project", "video_encoder.dvd_project"}:
         raise SourceCompletionError(f"Format de projet inconnu : {path}")
     if document.get("version") == 1:
         paths = [item["source"] for item in document["timeline"] if item.get("type") == "segment"]

@@ -25,13 +25,18 @@ class QuarantineTimerInstallerTest(unittest.TestCase):
             root = Path(directory)
             environment = {'PATH': '/opt/ruby/bin:/usr/bin:/bin', 'XDG_CONFIG_HOME': str(root / 'config')}
             output = {'format': 'video_encoder.quarantine', 'errors': [], 'entries': []}
+            trash = {'format': 'video_encoder.project_trash_retention', 'errors': [], 'entries': []}
+            def responses(command, **_kwargs):
+                document = trash if 'project-trash' in command else output
+                return Mock(stdout=json.dumps(document))
             with patch.object(module, '__file__', str(root / 'encoder/bin/install-quarantine-timer')), \
                     patch.dict(os.environ, environment, clear=True), \
-                    patch.object(module.subprocess, 'run', return_value=Mock(stdout=json.dumps(output))) as run:
+                    patch.object(module.subprocess, 'run', side_effect=responses) as run:
                 module.main()
             commands = [call.args[0] for call in run.call_args_list]
             self.assertEqual(['bundle', 'exec', 'ruby', 'bin/video_encoder', 'quarantine', 'sweep'], commands[0])
-            self.assertEqual(['systemctl', '--user', 'enable', '--now', 'video-encoder-quarantine.timer'], commands[2])
+            self.assertEqual(['bundle', 'exec', 'ruby', 'bin/video_encoder', 'project-trash', 'sweep'], commands[1])
+            self.assertEqual(['systemctl', '--user', 'enable', '--now', 'video-encoder-quarantine.timer'], commands[3])
             self.assertFalse(any('--apply' in command for command in commands))
             service = (root / 'config/systemd/user/video-encoder-quarantine.service').read_text()
             self.assertIn('PATH=/opt/ruby/bin:/usr/bin:/bin', service)
@@ -53,6 +58,22 @@ class QuarantineTimerInstallerTest(unittest.TestCase):
                     module.main()
             self.assertEqual(1, run.call_count)
             self.assertFalse((root / 'config/systemd/user/video-encoder-quarantine.timer').exists())
+
+    def test_failed_trash_preview_does_not_install_or_enable_a_timer(self):
+        module = installer()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = {'format': 'video_encoder.quarantine', 'errors': [], 'entries': []}
+            trash = {'format': 'video_encoder.project_trash_retention', 'errors': ['offline'], 'entries': []}
+            responses = [Mock(stdout=json.dumps(source)), Mock(stdout=json.dumps(trash))]
+            environment = {'PATH': '/usr/bin:/bin', 'XDG_CONFIG_HOME': str(root / 'config')}
+            with patch.object(module, '__file__', str(root / 'encoder/bin/install-quarantine-timer')), \
+                    patch.dict(os.environ, environment, clear=True), \
+                    patch.object(module.subprocess, 'run', side_effect=responses) as run:
+                with self.assertRaises(RuntimeError):
+                    module.main()
+            self.assertEqual(2, run.call_count)
+            self.assertFalse((root / 'config/systemd/user/video-encoder-quarantine.service').exists())
 
     def test_unit_quoting_preserves_spaces_and_percent_and_rejects_multiline_values(self):
         module = installer()

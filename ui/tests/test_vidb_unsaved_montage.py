@@ -22,6 +22,15 @@ class VidbUnsavedMontageTest(unittest.TestCase):
         self.addCleanup(self.directory.cleanup)
         self.config = Path(self.directory.name) / "vidb.json"
         self.config.write_text(json.dumps({"url": "https://vidb.test", "token": "a" * 64}))
+
+        self.inspector = Mock()
+        self.inspector.inspect.return_value = {"inspection": {
+            "audio_tracks": [{"language": "fra"}], "subtitle_tracks": []}}
+        unexpected_information = patch.object(
+            review.QtWidgets.QMessageBox, 'information',
+            side_effect=AssertionError("Unexpected interactive message in a montage unit test"))
+        unexpected_information.start()
+        self.addCleanup(unexpected_information.stop)
         self.source = Path("/commun/to_be_cut/Nouveau film.m2t")
         self.session = SimpleNamespace(sources=[SimpleNamespace(path=self.source)], segments=[object()])
         self.url = "https://vidb.test/encoder_projects/catalogue"
@@ -33,7 +42,7 @@ class VidbUnsavedMontageTest(unittest.TestCase):
                 return {"status": "unmatched", "review_url": self.url}
             return self.identified(payload["project"]["project_id"])
 
-        self.writer = SimpleNamespace(vidb_link=VidbProjectLink(self.config, transport=transport))
+        self.writer = SimpleNamespace(vidb_link=VidbProjectLink(self.config, transport=transport, inspector=self.inspector))
 
     def identified(self, project_id):
         return {"status": "identified", "binding": {"project_id": project_id, "record_id": 123,

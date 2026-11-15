@@ -60,6 +60,8 @@ def ask_mode(parent):
 
 def prepare_track_selection(monitor, project_path, choose=None):
     from .trim_project_file_writer import TrimProjectFileWriter
+    from .track_options import track_capabilities
+    from .media_inspection_client import MediaInspectionError
 
     path = Path(project_path)
     writer = monitor.trim_project_writer
@@ -81,15 +83,23 @@ def prepare_track_selection(monitor, project_path, choose=None):
             writer.vidb_result = result
             if result.get("record_id") == scope["record_id"] and result.get("project_id") == scope["project_id"]:
                 mode = proposed_mode(result)
-        automatic = mode is not None
+        origin = "external" if mode is not None else None
+        if mode is None:
+            capabilities = track_capabilities(document, getattr(monitor, "media_inspection_client", None))
+            if capabilities and capabilities["original_with_subtitles"]:
+                mode = "original_with_subtitles"
+                origin = "source_default"
         if mode is None:
             mode = (choose or ask_mode)(monitor)
         if mode is None:
             return False
-        selection = {"mode": mode, "scope": scope, "confirmed_by": "external" if automatic else "user"}
-        if automatic:
+        selection = {"mode": mode, "scope": scope, "confirmed_by": origin or "user"}
+        if origin == "external":
             selection["evidence"] = {"language_version": result["metadata"].get("language_version"),
                                      "original_language_evidence": result["metadata"].get("original_language_evidence")}
+        elif origin == "source_default":
+            selection["evidence"] = {"policy": "prefer_vmst_when_uncertain",
+                                     "inspected_sources": list(capabilities["inspections"])}
         document["track_selection"] = selection
         TrimProjectFileWriter.write_atomic(path, json.dumps(document, ensure_ascii=False, indent=2) + "\n")
         monitor.trim_session.track_selection = selection
@@ -97,7 +107,7 @@ def prepare_track_selection(monitor, project_path, choose=None):
                 if mode == "original_without_subtitles" else "VO et sous-titres français")
         monitor.statusBar().showMessage(label, 8_000)
         return True
-    except (OSError, ValueError, TypeError) as error:
+    except (OSError, ValueError, TypeError, KeyError, MediaInspectionError) as error:
         from PySide6 import QtWidgets
         QtWidgets.QMessageBox.warning(monitor, "Sélection des pistes impossible", str(error))
         return False

@@ -6,7 +6,8 @@ from urllib.error import URLError
 from urllib.parse import urlparse
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
-from .planned_language import planned_language
+from .planned_language import identification_language
+from .media_inspection_client import MediaInspectionError
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -17,11 +18,12 @@ class NoRedirect(HTTPRedirectHandler):
 class VidbProjectLink:
     """Only planned identity is sent; no availability or viewing state is transmitted."""
 
-    def __init__(self, config_path=None, transport=None):
+    def __init__(self, config_path=None, transport=None, inspector=None):
         root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
         self.config_path = Path(config_path or os.environ.get(
             "VIDEO_ENCODER_VIDB_CONFIG", root / "video_encoder" / "vidb.json"))
         self.transport = transport or self.request
+        self.inspector = inspector
 
     def identify(self, document, destination, refresh=False):
         if not Path(destination).absolute().is_relative_to(Path("/videos")):
@@ -38,11 +40,13 @@ class VidbProjectLink:
             project = {"project_id": document["project_id"], "project_path": str(Path(destination).absolute()),
                        "output_path": str(Path(destination).absolute().with_suffix(".mkv")),
                        "source_paths": self.source_paths(document)}
-            hint = planned_language(document)
+            hint = identification_language(document, self.inspector)
             if hint:
                 project["language_hint"] = hint
             response = self.transport(config, {"project": project})
             return self.checked_response(config, response, document["project_id"])
+        except MediaInspectionError as error:
+            return {"status": "pending", "reason": f"Inspection des pistes impossible : {error}"}
         except (OSError, URLError, ValueError, KeyError, TypeError, json.JSONDecodeError):
             if (isinstance(current, dict) and current.get("status") == "identified"
                     and current.get("binding_token") and current.get("project_id") == document.get("project_id")):

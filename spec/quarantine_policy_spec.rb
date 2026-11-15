@@ -215,7 +215,17 @@ RSpec.describe VideoEncoder::QuarantinePolicy do # rubocop:disable Metrics/Block
     File.symlink(@output, @path)
     expire
     expect(@policy.sweep(apply: true)[:deleted]).to be_empty
+    expect(entry[:reason]).to eq("Lien symbolique : #{@path}")
     expect(File.read(@output)).to eq('encoded film')
+  end
+
+  it 'reports the missing capture separately from a missing encoded output' do
+    move
+    File.unlink(@output)
+    expect(entry[:reason]).to eq("Fichier absent : #{@output}")
+
+    File.unlink(@path)
+    expect(entry[:reason]).to eq("Fichier absent : #{@path}")
   end
 
   it 'blocks if the source reappears at its original location' do

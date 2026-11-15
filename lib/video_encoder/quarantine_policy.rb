@@ -123,7 +123,7 @@ module VideoEncoder
     end
 
     def response(entries, errors)
-      { format: 'video_encoder.quarantine', version: 1, retention_days: 30, entries: entries,
+      { format: 'video_encoder.quarantine', version: 1, root: @ledger.root, retention_days: 30, entries: entries,
         errors: errors, deleted: [] }
     end
 

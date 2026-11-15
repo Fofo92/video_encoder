@@ -62,4 +62,9 @@ RSpec.describe VideoEncoder::TrimProjectSourcePaths do
       ]
     )
   end
+  it 'tracks the local DVD copy without referencing the optical drive' do
+    json = JSON.generate(format: 'video_encoder.dvd_project', version: 2,
+                         sources: [{ path: '/commun/to_be_cut/DVD/title.mkv' }])
+    expect(reader.call(json)).to eq([Pathname('/commun/to_be_cut/DVD/title.mkv')])
+  end
 end

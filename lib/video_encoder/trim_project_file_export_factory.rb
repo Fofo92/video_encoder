@@ -31,13 +31,15 @@ module VideoEncoder
         workspace_directory: workspace_directory
       )
 
-      ExportTrimProjectFile.new(
+      fallback = ExportTrimProjectFile.new(
         reader: reader,
         loader: TrimProjectLoader.new(media_probe: media_probe),
         exporter: exporter,
         receipt: ExportReceipt.new,
         timings: timings
       )
+      DvdProjectFileExport.new(fallback: fallback, runner: runner, reader: reader,
+                               workspace_directory: workspace_directory)
     end
 
     private
