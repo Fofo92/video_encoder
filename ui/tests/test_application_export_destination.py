@@ -22,7 +22,7 @@ class ApplicationExportDestinationTest(unittest.TestCase):
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
         self.segments = [{"start_frame": 100, "end_frame": 200}]
-        self.monitor = SimpleNamespace(
+        self.monitor = SimpleNamespace(review_copy_condition=Mock(return_value=True),
             source_path=self.root / "capture.m2t", project_path=None,
             trim_session=SimpleNamespace(segments=self.segments),
             trim_project_exporter=Mock(is_running=False),
@@ -54,6 +54,15 @@ class ApplicationExportDestinationTest(unittest.TestCase):
         self.assertEqual(saved["timeline"], self.segments)
         self.monitor.audio_preflight_runner.start.assert_called_once_with(output.with_suffix(".json"))
         self.monitor.trim_export_queue_client.enqueue.assert_not_called()
+
+    def test_cancelled_condition_review_stops_before_destination_and_project_writing(self):
+        self.monitor.review_copy_condition.return_value = False
+        with patch("video_encoder_ui.project_destination.choose_project_output") as choose:
+            MltFrameMonitor.export_project(self.monitor, queued=True)
+        choose.assert_not_called()
+        self.monitor.write_project.assert_not_called()
+        self.monitor.audio_preflight_runner.start.assert_not_called()
+        self.assertIsNone(self.monitor.pending_export)
 
     def test_cancelled_confirmation_allows_a_different_name_and_folder_without_enqueuing(self):
         first = self.root / "wrong.mkv"

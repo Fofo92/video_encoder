@@ -16,7 +16,7 @@ class ReencodeProjectUiTest(unittest.TestCase):
         self.old_session = object()
         self.prepared = SimpleNamespace(session=object(), project_path=Path('/videos/new.json'),
                                         output_path=Path('/videos/new.mkv'))
-        self.monitor = SimpleNamespace(trim_session=self.old_session, project_path=Path('/videos/old.json'),
+        self.monitor = SimpleNamespace(review_copy_condition=Mock(return_value=True), trim_session=self.old_session, project_path=Path('/videos/old.json'),
                                        trim_project_exporter=Mock(is_running=False),
                                        audio_preflight_runner=Mock(is_running=False), pending_export=None,
                                        pending_export_mode=None, trim_project_writer=Mock(),

@@ -1156,6 +1156,12 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
             lambda: self.identify_vidb_action.setEnabled(self.save_project_action.isEnabled()))
         montage_menu.insertAction(self.export_project_action, self.save_project_action)
         montage_menu.insertAction(self.export_project_action, self.identify_vidb_action)
+        self.montage_condition_action = QtGui.QAction("État de la copie à encoder…", self)
+        self.montage_condition_action.triggered.connect(self.review_copy_condition)
+        self.montage_condition_action.setEnabled(self.save_project_action.isEnabled())
+        self.save_project_action.changed.connect(
+            lambda: self.montage_condition_action.setEnabled(self.save_project_action.isEnabled()))
+        montage_menu.insertAction(self.identify_vidb_action, self.montage_condition_action)
         self.reencode_project_action = QtGui.QAction("Réencoder en file d’attente…", self)
         self.reencode_project_action.triggered.connect(self.reencode_project)
         self.reencode_project_action.setEnabled(self.save_project_action.isEnabled())
@@ -2180,11 +2186,20 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
 
         return destination
 
+    def review_copy_condition(self, _checked=False, *, force=True):
+        if self.export_status in {"running", "preflight", "confirming"} or not self.trim_session.segments:
+            return False
+        from .montage_condition_dialog import review_montage_condition
+
+        return review_montage_condition(self, self.trim_session, force=force)
+
     def review_vidb_project(self):
         trace_vidb("identification action; editor status=" + str(self.export_status))
         if self.export_status in {"running", "preflight", "confirming"}:
             return
         if self.source_path is None:
+            return
+        if not self.review_copy_condition(force=False):
             return
         suggested = self.project_path
         if suggested is None or Path(suggested).name == "proposal.json":
@@ -2195,6 +2210,8 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
 
     def select_output_path(self, suggested, identified_review=False):
         self._destination_review_done = False
+        if not self.review_copy_condition(force=False):
+            return None
         if identified_review:
             result = getattr(getattr(self, "trim_project_writer", None), "vidb_result", None) or {}
             metadata = result.get("metadata", {})
@@ -2234,6 +2251,8 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
                 or self.pending_export is not None):
             return
         from .reencode_project import prepare_reencode
+        if not self.review_copy_condition(force=False):
+            return
         prepared = prepare_reencode(self)
         if prepared is None:
             return

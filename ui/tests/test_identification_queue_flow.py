@@ -17,6 +17,7 @@ if QtWidgets is not None:
 class IdentificationQueueFlowTest(unittest.TestCase):
     def test_confirmed_identification_starts_queue_preparation(self):
         monitor = SimpleNamespace(
+            review_copy_condition=Mock(return_value=True),
             export_status="idle", source_path=Path("/commun/source.m2t"),
             project_path=None, trim_session=object(), trim_project_writer=object(),
             export_project=Mock())
@@ -26,6 +27,7 @@ class IdentificationQueueFlowTest(unittest.TestCase):
 
     def test_closing_identification_does_not_start_queue_preparation(self):
         monitor = SimpleNamespace(
+            review_copy_condition=Mock(return_value=True),
             export_status="idle", source_path=Path("/commun/source.m2t"),
             project_path=None, trim_session=object(), trim_project_writer=object(),
             export_project=Mock())
@@ -36,6 +38,7 @@ class IdentificationQueueFlowTest(unittest.TestCase):
     def test_cancel_destination_returns_to_episode_choices(self):
         metadata = {"record_kind": "episode"}
         monitor = SimpleNamespace(
+            review_copy_condition=Mock(return_value=True),
             trim_project_writer=SimpleNamespace(vidb_result={"metadata": metadata}),
             project_path=None)
         with patch("video_encoder_ui.episode_destination.suggested_episode_output", return_value=Path("/videos/a.mkv")), \

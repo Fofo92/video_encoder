@@ -34,13 +34,16 @@ RSpec.describe VideoEncoder::ExportReceipt do
       writer = described_class.new
       allow(writer).to receive(:probe).and_return('streams' => [])
       json = JSON.generate(format: 'video_encoder.dvd_project', version: 2, project_id: 'project',
-                           vidb: { record_id: 42, binding_token: 'binding', metadata: { private: 'ignored' } })
+                           vidb: { record_id: 42, binding_token: 'binding', metadata: { private: 'ignored' } },
+                           copy_condition: { integrality: 'incomplete', damage: 'light', note: 'Début absent' })
       result = writer.call(project_path: 'dvd.json', project_json: json, trim_project: nil,
                            output_path: output, audio_roles: %w[french original])
       receipt = JSON.parse(File.read(result))
       expect(receipt['roles']).to eq(%w[french original])
       expect(receipt['vidb']).to eq('record_id' => 42, 'binding_token' => 'binding')
       expect(receipt['project_id']).to eq('project')
+      expect(receipt['copy_condition']).to eq('integrality' => 'incomplete', 'damage' => 'light',
+                                              'note' => 'Début absent')
     end
   end
 

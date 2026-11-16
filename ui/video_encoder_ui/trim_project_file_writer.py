@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .vidb_project_link import VidbProjectLink
 from .original_language_review import selection_scope
+from .montage_condition import checked_condition
 
 
 class TrimProjectFileWriter:
@@ -21,6 +22,9 @@ class TrimProjectFileWriter:
         if exclusive and (destination.exists() or destination.is_symlink()):
             raise FileExistsError(f"Un projet existe déjà à cette destination : {destination}")
         document = dict(self.bridge.convert(session))
+        condition = getattr(session, "copy_condition", None)
+        if condition is not None:
+            document["copy_condition"] = checked_condition(condition)
         document.pop("vidb", None)
         session.project_id = VidbProjectLink.project_id(session)
         document["project_id"] = session.project_id

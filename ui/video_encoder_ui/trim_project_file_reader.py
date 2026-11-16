@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from .montage_condition import checked_condition
 
 from .trim_session import (
     SegmentSelection,
@@ -28,6 +29,8 @@ class TrimProjectFileReader:
         session.project_id = document.get("project_id")
         session.vidb = document.get("vidb", {})
         session.track_selection = document.get("track_selection")
+        if "copy_condition" in document:
+            session.copy_condition = checked_condition(document["copy_condition"])
         return session
 
     def validate(self, document):

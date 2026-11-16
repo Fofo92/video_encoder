@@ -60,7 +60,7 @@ class IdentifyThenQueueTest(unittest.TestCase):
 
     def test_explicit_continuation_reaches_audio_then_enqueues_once(self):
         project, output = self.root / "test.json", self.root / "test.mkv"
-        monitor = SimpleNamespace(trim_session=self.session, trim_project_writer=self.writer,
+        monitor = SimpleNamespace(review_copy_condition=Mock(return_value=True), trim_session=self.session, trim_project_writer=self.writer,
             source_path=self.source, project_path=None, trim_project_exporter=Mock(is_running=False),
             audio_preflight_runner=Mock(is_running=False), pending_export=None, write_project=Mock(return_value=project),
             export_status_changed=Mock(), trim_export_queue_client=Mock(), trim_project_archiver=Mock(),
