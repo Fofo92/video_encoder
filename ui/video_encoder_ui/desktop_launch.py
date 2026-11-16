@@ -1,8 +1,29 @@
 """Open a source locally, retaining the user's record choice until identification."""
 from pathlib import Path
 from urllib.error import URLError
+from urllib.parse import urlsplit
 
-from .vidb_launch_client import checked_context, parse_launch_url, request_launch
+from .vidb_launch_client import (
+    LaunchError, checked_context, checked_desktop_action, parse_desktop_url, parse_launch_url, request_launch,
+)
+
+
+def dispatch_from_vidb(url, *, link, editor_controller, select_source, actions, report, transport=request_launch):
+    try:
+        if urlsplit(url).netloc == "prepare":
+            return open_from_vidb(url, link=link, editor_controller=editor_controller,
+                                  select_source=select_source, report=report, transport=transport)
+        config = link.configuration()
+        ticket = parse_desktop_url(url, config["url"])
+        action = checked_desktop_action(transport(config, ticket, desktop=True))
+        callback = actions.get(action)
+        if not callable(callback):
+            raise LaunchError("Cette commande video_encoder n’est pas disponible.")
+        callback()
+        return True
+    except (OSError, URLError, ValueError, KeyError, TypeError, RuntimeError) as error:
+        report(str(error))
+        return False
 
 
 def open_from_vidb(url, *, link, editor_controller, select_source, report, transport=request_launch):

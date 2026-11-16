@@ -3568,7 +3568,7 @@ def main():
         ),
     )
 
-    from .desktop_launch import open_from_vidb
+    from .desktop_launch import dispatch_from_vidb
 
     def select_launch_source(title):
         selected, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -3577,8 +3577,11 @@ def main():
         return selected or None
 
     def receive_launch(url):
-        open_from_vidb(
+        dispatch_from_vidb(
             url, link=VidbProjectLink(), editor_controller=editor_controller, select_source=select_launch_source,
+            actions={"new_montage": application_controller.new_project,
+                     "open_project": application_controller.open_project,
+                     "encode_dvd": prepare_dvd, "show_queue": application_controller.show_queue},
             report=lambda message: QtWidgets.QMessageBox.warning(start_window, "Montage vidb non préparé", message))
 
     desktop_inbox.set_handler(receive_launch)

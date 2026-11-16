@@ -17,11 +17,19 @@ def checked_ticket(ticket):
 
 
 def parse_launch_url(url, origin):
+    return parse_entry_url(url, origin, "prepare")
+
+
+def parse_desktop_url(url, origin):
+    return parse_entry_url(url, origin, "desktop")
+
+
+def parse_entry_url(url, origin, endpoint):
     if not isinstance(url, str) or len(url) > 8192 or any(ord(char) < 32 for char in url):
         raise LaunchError("Lien de préparation invalide.")
     parts = urlsplit(url)
     query = parse_qs(parts.query, keep_blank_values=True, strict_parsing=True)
-    if (parts.scheme != "vidb-encoder" or parts.netloc != "prepare" or parts.path not in ("", "/")
+    if (parts.scheme != "vidb-encoder" or parts.netloc != endpoint or parts.path not in ("", "/")
             or parts.fragment or set(query) != {"ticket", "origin"}
             or any(len(values) != 1 for values in query.values())
             or query["origin"][0].rstrip("/") != origin.rstrip("/")):
@@ -29,10 +37,12 @@ def parse_launch_url(url, origin):
     return checked_ticket(query["ticket"][0])
 
 
-def request_launch(config, ticket, project=None):
+def request_launch(config, ticket, project=None, *, desktop=False):
     from .vidb_project_link import NoRedirect
 
-    payload = {"launch_token": ticket}
+    if desktop and project is not None:
+        raise LaunchError("Une commande de montage ne peut pas associer une fiche.")
+    payload = {"desktop_token" if desktop else "launch_token": checked_ticket(ticket)}
     if project is not None:
         payload["project"] = project
     request = Request(config["url"] + "/encoder_projects/launch_binding",
@@ -49,6 +59,13 @@ def request_launch(config, ticket, project=None):
     if not isinstance(result, dict) or result.get("error"):
         raise LaunchError("La demande vidb a été refusée ; recharge la fiche et réessaie.")
     return result
+
+
+def checked_desktop_action(data):
+    action = data.get("desktop_action") if isinstance(data, dict) else None
+    if action not in ("new_montage", "open_project", "encode_dvd", "show_queue"):
+        raise LaunchError("Commande video_encoder inconnue.")
+    return action
 
 
 def refused_launch(error):
