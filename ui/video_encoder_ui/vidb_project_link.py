@@ -8,6 +8,7 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 from .planned_language import identification_language
 from .media_inspection_client import MediaInspectionError
+from .vidb_launch_client import LaunchError, checked_ticket, request_launch
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -43,8 +44,14 @@ class VidbProjectLink:
             hint = identification_language(document, self.inspector)
             if hint:
                 project["language_hint"] = hint
-            response = self.transport(config, {"project": project})
+            ticket = document.get("vidb_launch")
+            if "vidb_launch" in document and (not isinstance(current, dict) or current.get("status") != "identified"):
+                response = request_launch(config, checked_ticket(ticket), project)
+            else:
+                response = self.transport(config, {"project": project})
             return self.checked_response(config, response, document["project_id"])
+        except LaunchError as error:
+            return {"status": "pending", "reason": str(error)}
         except MediaInspectionError as error:
             return {"status": "pending", "reason": f"Inspection des pistes impossible : {error}"}
         except (OSError, URLError, ValueError, KeyError, TypeError, json.JSONDecodeError):

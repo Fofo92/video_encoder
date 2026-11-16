@@ -12,4 +12,6 @@ def project_identification_context(session, source, suggested):
     document = {"version": 2, "project_id": session.project_id, "vidb": getattr(session, "vidb", {}),
                 "sources": [{"path": str(item.path), "inspection": getattr(item, "inspection", None)}
                             for item in sources] or [{"path": str(source)}]}
+    if getattr(session, "vidb_launch", None):
+        document["vidb_launch"] = session.vidb_launch
     return document, provisional

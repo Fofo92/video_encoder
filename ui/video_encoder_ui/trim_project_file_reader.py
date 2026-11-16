@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+from .vidb_launch_client import checked_ticket
 from .montage_condition import checked_condition
 
 from .trim_session import (
@@ -28,6 +29,7 @@ class TrimProjectFileReader:
             session = self.load_version_2(document)
         session.project_id = document.get("project_id")
         session.vidb = document.get("vidb", {})
+        session.vidb_launch = checked_ticket(document["vidb_launch"]) if "vidb_launch" in document else None
         session.track_selection = document.get("track_selection")
         if "copy_condition" in document:
             session.copy_condition = checked_condition(document["copy_condition"])

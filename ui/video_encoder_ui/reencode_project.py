@@ -37,6 +37,7 @@ def clone_session(session, capabilities, mode):
         clone.add_segment(segment)
     clone.project_id = VidbProjectLink.project_id(session)
     clone.vidb = deepcopy(getattr(session, "vidb", {}))
+    clone.vidb_launch = getattr(session, "vidb_launch", None)
     if getattr(session, "copy_condition", None) is not None:
         clone.copy_condition = deepcopy(session.copy_condition)
     clone.track_selection = {"mode": mode, "scope": selection_scope(project_document(clone)),

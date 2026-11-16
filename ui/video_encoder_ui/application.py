@@ -3414,7 +3414,7 @@ def main():
         print(
             (
                 f"Usage: {Path(sys.argv[0]).name} "
-                "[media-or-project]"
+                "[media-or-project | vidb-encoder://prepare?…]"
             ),
             file=sys.stderr,
         )
@@ -3422,6 +3422,16 @@ def main():
 
     QtCore.QCoreApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
     app = QtWidgets.QApplication(sys.argv)
+    from .desktop_inbox import start_inbox
+
+    launch_url = sys.argv[1] if len(sys.argv) == 2 and sys.argv[1].startswith("vidb-encoder:") else None
+    try:
+        desktop_inbox = start_inbox(app, launch_url)
+        if desktop_inbox is None:
+            return 0
+    except (OSError, ValueError) as error:
+        QtWidgets.QMessageBox.warning(None, "video_encoder", str(error))
+        return 2
     start_window = StartWindow()
 
     queue_client = TrimExportQueueClient()
@@ -3502,7 +3512,8 @@ def main():
 
     source_completion = SourceCompletionController(start_window, queue_client, SourceQuarantineClient())
     source_completion.install_menu_bar(start_window.menu_bar)
-    QtCore.QTimer.singleShot(0, source_completion.start)
+    if not launch_url:
+        QtCore.QTimer.singleShot(0, source_completion.start)
 
     mlt_factory = mlt.Factory()
     mlt_initialized = False
@@ -3557,8 +3568,26 @@ def main():
         ),
     )
 
+    from .desktop_launch import open_from_vidb
+
+    def select_launch_source(title):
+        selected, _ = QtWidgets.QFileDialog.getOpenFileName(
+            start_window, f"Source pour {title}", str(DEFAULT_SOURCE_DIRECTORY),
+            "Vidéos (*.m2t *.ts *.mkv *.mp4 *.m4v *.avi *.mpeg *.mpg);;Tous les fichiers (*)")
+        return selected or None
+
+    def receive_launch(url):
+        open_from_vidb(
+            url, link=VidbProjectLink(), editor_controller=editor_controller, select_source=select_launch_source,
+            report=lambda message: QtWidgets.QMessageBox.warning(start_window, "Montage vidb non préparé", message))
+
+    desktop_inbox.set_handler(receive_launch)
+
     try:
-        if len(sys.argv) == 2:
+        if launch_url:
+            application_controller.show()
+            desktop_inbox.submit(launch_url)
+        elif len(sys.argv) == 2:
             selected_path = select_source_path(
                 sys.argv[1:]
             )
@@ -3577,6 +3606,7 @@ def main():
 
         return app.exec()
     finally:
+        desktop_inbox.close()
         editor_window = (
             editor_controller.editor_window
         )

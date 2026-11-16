@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""Register vidb-encoder links for the current desktop user."""
+from pathlib import Path
+import os
+import shutil
+import subprocess
+import sys
+
+
+def desktop_entry(launcher):
+    path = str(launcher)
+    if any(ord(char) < 32 for char in path):
+        raise ValueError("Chemin du lanceur invalide")
+    quoted = path.replace("%", "%%").replace("\\", "\\\\").replace('"', '\\"').replace("`", "\\`").replace("$", "\\$")
+    return ("[Desktop Entry]\nType=Application\nName=video_encoder — montage vidb\n"
+            f'Exec=/bin/sh "{quoted}" %u\n'
+            "Terminal=false\nNoDisplay=true\nMimeType=x-scheme-handler/vidb-encoder;\n")
+
+
+def main():
+    if sys.argv[1:] not in ([], ["--dry-run"]):
+        raise SystemExit("Usage: python3 bin/install-vidb-launcher [--dry-run]")
+    launcher = Path(__file__).resolve().with_name("video_encoder_ui")
+    content = desktop_entry(launcher)
+    if sys.argv[1:]:
+        print(content, end="")
+        return
+    if not shutil.which("xdg-mime"):
+        raise SystemExit("xdg-mime est requis pour enregistrer le lanceur.")
+    directory = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")) / "applications"
+    directory.mkdir(parents=True, exist_ok=True)
+    destination = directory / "video-encoder-vidb.desktop"
+    if destination.is_symlink():
+        raise SystemExit("Le fichier de lanceur existant est un lien symbolique.")
+    destination.write_text(content, encoding="utf-8")
+    subprocess.run(["xdg-mime", "default", destination.name, "x-scheme-handler/vidb-encoder"], check=True)
+    print("Lanceur vidb installé pour ce compte. Aucune configuration système modifiée.")
+
+
+if __name__ == "__main__":
+    main()

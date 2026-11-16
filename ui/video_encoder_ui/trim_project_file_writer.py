@@ -26,6 +26,8 @@ class TrimProjectFileWriter:
         if condition is not None:
             document["copy_condition"] = checked_condition(condition)
         document.pop("vidb", None)
+        if getattr(session, "vidb_launch", None):
+            document["vidb_launch"] = session.vidb_launch
         session.project_id = VidbProjectLink.project_id(session)
         document["project_id"] = session.project_id
         previous = getattr(session, "vidb", {})
@@ -42,6 +44,9 @@ class TrimProjectFileWriter:
         if self.vidb_result.get("status") != "disabled":
             document["vidb"] = {key: value for key, value in self.vidb_result.items() if key != "metadata"}
             session.vidb = document["vidb"]
+            if self.vidb_result.get("status") == "identified":
+                document.pop("vidb_launch", None)
+                session.vidb_launch = None
             if document.get("track_selection", {}).get("scope") != selection_scope(document):
                 document.pop("track_selection", None)
                 session.track_selection = None
