@@ -4,6 +4,7 @@ require 'json'
 require 'pathname'
 require_relative 'project_relocation_files'
 require_relative 'removed_project_reference'
+require_relative 'copy_version_replacement'
 
 module VideoEncoder
   # Moves the project and its outputs while an immediate SQLite transaction
@@ -14,6 +15,15 @@ module VideoEncoder
     end
 
     def call(project_path, directory, name: nil, preview: false)
+      replacement = CopyVersionReplacement.new(@database)
+      if replacement.applies?(project_path, directory, name)
+        return replacement.call(project_path, directory, name, preview: preview)
+      end
+
+      relocate(project_path, directory, name: name, preview: preview)
+    end
+
+    def relocate(project_path, directory, name: nil, preview: false)
       files = nil
       @database.transaction(mode: :immediate) do
         raise ProjectRelocationError, 'Les liens symboliques ne sont pas déplaçables.' if File.symlink?(project_path)
