@@ -1162,12 +1162,14 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
         self.save_project_action.changed.connect(
             lambda: self.montage_condition_action.setEnabled(self.save_project_action.isEnabled()))
         montage_menu.insertAction(self.identify_vidb_action, self.montage_condition_action)
-        self.reencode_project_action = QtGui.QAction("Réencoder en file d’attente…", self)
+        self.reencode_project_action = QtGui.QAction("Depuis les sources du montage — VF / VM / VMST…", self)
         self.reencode_project_action.triggered.connect(self.reencode_project)
         self.reencode_project_action.setEnabled(self.save_project_action.isEnabled())
         self.save_project_action.changed.connect(
             lambda: self.reencode_project_action.setEnabled(self.save_project_action.isEnabled()))
-        montage_menu.insertAction(self.export_project_action, self.reencode_project_action)
+        self.version_menu = QtWidgets.QMenu("Changer de version…", self)
+        self.version_menu.addAction(self.reencode_project_action)
+        montage_menu.insertMenu(self.export_project_action, self.version_menu)
         montage_menu.insertAction(self.export_project_action, self.queue_export_action)
         montage_menu.insertAction(self.export_project_action, self.show_export_queue_action)
         montage_menu.insertAction(next(action for action in montage_menu.actions() if action.isSeparator()),
@@ -3496,6 +3498,40 @@ def main():
         dialog.deleteLater()
         queue_controller.refresh(start_window)
 
+    def change_copy_version(source=None, context=None, ticket=None, parent=None):
+        from .copy_version_dialog import prepare_copy_version
+        result = prepare_copy_version(parent or start_window, queue_client, source=source,
+                                      context=context, ticket=ticket)
+        queue_controller.refresh(start_window)
+        return result
+
+    def change_version(source=None, context=None, ticket=None):
+        if source is None:
+            selected, _ = QtWidgets.QFileDialog.getOpenFileName(
+                start_window, "Changer de version — projet ou copie", "/videos", "Projet ou copie (*.json *.mkv)")
+            if not selected:
+                return False
+            source = selected
+        if Path(source).suffix.lower() == ".json":
+            try:
+                document = json.loads(Path(source).read_text(encoding="utf-8"))
+                if document.get("format") == "video_encoder.copy_version":
+                    source = document["sources"][0]["path"]
+                elif document.get("format") == "video_encoder.dvd_project":
+                    raise ValueError("Pour ce projet DVD, reprends la sélection des pistes dans Préparer un DVD.")
+                else:
+                    previous = editor_controller.editor_window
+                    editor_controller.open(Path(source))
+                    editor = editor_controller.editor_window
+                    if editor is not None and editor is not previous:
+                        editor.reencode_project()
+                    return True
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                QtWidgets.QMessageBox.warning(start_window, "Changement de version non préparé", str(error))
+                return False
+        return change_copy_version(source=source, context=context, ticket=ticket)
+
+    start_window.version_requested.connect(change_version)
     start_window.dvd_requested.connect(prepare_dvd)
     start_window.relocate_requested.connect(queue_controller.relocate_project)
     from .project_removal_dialog import remove_project
@@ -3526,6 +3562,9 @@ def main():
                 document = json.loads(Path(selected_path).read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 document = {}
+            if document.get("format") == "video_encoder.copy_version":
+                change_version(source=selected_path)
+                return None
             if document.get("format") == "video_encoder.dvd_project":
                 reopen_dvd_project(start_window, selected_path, queue_client)
                 queue_controller.refresh(start_window)
@@ -3546,6 +3585,8 @@ def main():
             window.new_montage_action.triggered.connect(application_controller.new_project)
             source_completion.install_menu_bar(window.editor_menu_bar)
             window.sources_menu.addAction(start_window.dvd_action)
+            copy_version_action = window.version_menu.addAction("Depuis une copie encodée — VOST…")
+            copy_version_action.triggered.connect(lambda checked=False, owner=window: change_copy_version(parent=owner))
             window.projects_menu.addAction(start_window.delete_project_action)
             window.projects_menu.addAction(start_window.project_trash_action)
             window.trim_project_exporter.succeeded.connect(
@@ -3581,7 +3622,8 @@ def main():
             url, link=VidbProjectLink(), editor_controller=editor_controller, select_source=select_launch_source,
             actions={"new_montage": application_controller.new_project,
                      "open_project": application_controller.open_project,
-                     "encode_dvd": prepare_dvd, "show_queue": application_controller.show_queue},
+                     "encode_dvd": prepare_dvd, "show_queue": application_controller.show_queue,
+                     "change_version": change_version},
             report=lambda message: QtWidgets.QMessageBox.warning(start_window, "Montage vidb non préparé", message))
 
     desktop_inbox.set_handler(receive_launch)

@@ -63,7 +63,7 @@ def request_launch(config, ticket, project=None, *, desktop=False):
 
 def checked_desktop_action(data):
     action = data.get("desktop_action") if isinstance(data, dict) else None
-    if action not in ("new_montage", "open_project", "encode_dvd", "show_queue"):
+    if action not in ("new_montage", "open_project", "encode_dvd", "show_queue", "change_version"):
         raise LaunchError("Commande video_encoder inconnue.")
     return action
 

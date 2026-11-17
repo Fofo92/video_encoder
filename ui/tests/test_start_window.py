@@ -31,6 +31,15 @@ class StartWindowTest(unittest.TestCase):
         self.window.close()
         self.window.deleteLater()
 
+    def test_change_version_is_a_montage_action_and_does_not_start_the_queue(self):
+        requested = Mock()
+        self.window.version_requested.connect(requested)
+        self.assertEqual(self.window.change_version_action.text(), "Changer de version…")
+        self.assertIn(self.window.change_version_action, self.window.home_menus[2].actions())
+        self.window.change_version_action.trigger()
+        requested.assert_called_once_with()
+        self.assertFalse(self.window.running)
+
     def test_main_toolbar_is_available_without_a_selected_job(self):
         self.window.resize(1130, 665)
         self.window.show()

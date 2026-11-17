@@ -12,7 +12,8 @@ def dispatch_from_vidb(url, *, link, editor_controller, select_source, actions, 
     try:
         if urlsplit(url).netloc == "prepare":
             return open_from_vidb(url, link=link, editor_controller=editor_controller,
-                                  select_source=select_source, report=report, transport=transport)
+                                  select_source=select_source, report=report, transport=transport,
+                                  change_version=actions.get("change_version"))
         config = link.configuration()
         ticket = parse_desktop_url(url, config["url"])
         action = checked_desktop_action(transport(config, ticket, desktop=True))
@@ -26,11 +27,18 @@ def dispatch_from_vidb(url, *, link, editor_controller, select_source, actions, 
         return False
 
 
-def open_from_vidb(url, *, link, editor_controller, select_source, report, transport=request_launch):
+def open_from_vidb(url, *, link, editor_controller, select_source, report, transport=request_launch, change_version=None):
     try:
         config = link.configuration()
         ticket = parse_launch_url(url, config["url"])
         context = checked_context(transport(config, ticket))
+        if context.get("source_copy"):
+            if not callable(change_version):
+                raise LaunchError("Changer de version n’est pas disponible : mets à jour video_encoder.")
+            source = context["source_copy"]["path"]
+            if not isinstance(source, str) or not Path(source).is_absolute() or Path(source).suffix.lower() != ".mkv":
+                raise LaunchError("Chemin de copie vidb invalide.")
+            return bool(change_version(source=source, context=context, ticket=ticket))
         current = editor_controller.editor_window
         if current is not None and getattr(current.trim_session, "project_id", None) == context["project_id"]:
             current.show()

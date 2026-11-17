@@ -36,7 +36,7 @@ module VideoEncoder
 
     def project_binding(project_json)
       project = JSON.parse(project_json)
-      metadata = project.slice('project_id', 'vidb', 'copy_condition')
+      metadata = project.slice('project_id', 'vidb', 'copy_condition', 'version_change')
       metadata['vidb'] = metadata['vidb'].slice('record_id', 'binding_token') if metadata['vidb'].is_a?(Hash)
       metadata
     end

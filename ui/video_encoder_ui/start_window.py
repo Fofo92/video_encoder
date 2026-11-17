@@ -6,6 +6,7 @@ from .window_placement import place_initial_window
 
 class StartWindow(TrimExportQueueDialog):
     """The queue is the application's home, including source/project actions."""
+    version_requested = QtCore.Signal()
     dvd_requested = QtCore.Signal()
     new_project_requested = QtCore.Signal()
     open_project_requested = QtCore.Signal()
@@ -53,6 +54,8 @@ class StartWindow(TrimExportQueueDialog):
             projects, "Corbeille des projets…", "user-trash", self.project_trash_requested)
         self.new_montage_action = self.add_home_action(
             montages, "Nouveau montage…", "document-new", self.new_project_requested, "Ctrl+N")
+        self.change_version_action = self.add_home_action(
+            montages, "Changer de version…", "document-save-as", self.version_requested)
         for button in (self.start_button, self.stop_button, self.finish_current_button):
             action = montages.addAction(button.text())
             action.triggered.connect(button.click)

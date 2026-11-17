@@ -78,8 +78,9 @@ module VideoEncoder
       raise ProjectRemovalError, 'Projet trop volumineux.' if File.size(path) > 2 * 1024 * 1024
 
       document = JSON.parse(File.read(path))
+      formats = %w[video_encoder.trim_project video_encoder.dvd_project video_encoder.copy_version]
       raise ProjectRemovalError, 'Projet video_encoder non reconnu.' unless
-        document.is_a?(Hash) && %w[video_encoder.trim_project video_encoder.dvd_project].include?(document['format']) &&
+        document.is_a?(Hash) && formats.include?(document['format']) &&
         [1, 2].include?(document['version'])
 
       document

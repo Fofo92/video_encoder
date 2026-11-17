@@ -10,7 +10,7 @@ from video_encoder_ui.vidb_launch_client import LaunchError, parse_desktop_url, 
 
 CONFIG = {"url": "https://vidb.test", "token": "a" * 64}
 URL = "vidb-encoder://desktop?" + urlencode({"ticket": "signed", "origin": CONFIG["url"]})
-ACTIONS = ("new_montage", "open_project", "encode_dvd", "show_queue")
+ACTIONS = ("new_montage", "open_project", "encode_dvd", "show_queue", "change_version")
 
 
 class VidbDesktopCommandsTest(unittest.TestCase):

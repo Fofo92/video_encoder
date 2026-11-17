@@ -20,6 +20,32 @@ URL = "vidb-encoder://prepare?" + urlencode({"ticket": "signed-ticket", "origin"
 
 
 class VidbDesktopLaunchTest(unittest.TestCase):
+    def test_a_copy_launch_dispatches_to_version_preparation_without_opening_a_montage(self):
+        context = {**CONTEXT, "source_copy": {"id": 9, "path": "/videos/Monstres gentils.mkv"}}
+        controller = SimpleNamespace(editor_window=None, open=Mock())
+        callback = Mock(return_value=True)
+        select = Mock()
+        report = Mock()
+        self.assertTrue(open_from_vidb(URL, link=Mock(configuration=Mock(return_value=CONFIG)),
+                                       editor_controller=controller, select_source=select, report=report,
+                                       transport=Mock(return_value=context), change_version=callback))
+        callback.assert_called_once_with(source=context["source_copy"]["path"], context=context, ticket="signed-ticket")
+        select.assert_not_called()
+        controller.open.assert_not_called()
+        report.assert_not_called()
+
+    def test_an_old_or_cancelled_desktop_never_falls_back_to_a_new_montage_for_a_copy(self):
+        context = {**CONTEXT, "source_copy": {"id": 9, "path": "/videos/Film.mkv"}}
+        for callback in (None, Mock(return_value=False)):
+            controller = SimpleNamespace(editor_window=None, open=Mock())
+            select = Mock()
+            result = open_from_vidb(URL, link=Mock(configuration=Mock(return_value=CONFIG)),
+                                    editor_controller=controller, select_source=select, report=Mock(),
+                                    transport=Mock(return_value=context), change_version=callback)
+            self.assertFalse(result)
+            controller.open.assert_not_called()
+            select.assert_not_called()
+
     def test_a_second_click_returns_to_the_same_montage_without_replacing_its_source(self):
         editor = SimpleNamespace(trim_session=SimpleNamespace(project_id=PROJECT),
                                  show=Mock(), raise_=Mock(), activateWindow=Mock())

@@ -38,8 +38,8 @@ module VideoEncoder
         receipt: ExportReceipt.new,
         timings: timings
       )
-      DvdProjectFileExport.new(fallback: fallback, runner: runner, reader: reader,
-                               workspace_directory: workspace_directory)
+      CopyVersionFileExport.new(fallback: fallback, runner: runner, reader: reader,
+                                workspace_directory: workspace_directory)
     end
 
     private

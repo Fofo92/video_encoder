@@ -4,6 +4,8 @@ from .track_options import has_french, has_original, has_subtitles, track_capabi
 
 
 def planned_language(document):
+    if document.get("format") == "video_encoder.copy_version":
+        return "VOST"
     selection = document.get("track_selection")
     if isinstance(selection, dict):
         try:
