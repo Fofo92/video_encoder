@@ -75,14 +75,16 @@ def preparation(project, directory, name):
     micros = int(modified.timestamp()) * 1_000_000 + modified.microsecond
     if receipt.get("byte_size") != current["size"] or micros != video.stat().st_mtime_ns // 1000:
         raise ValueError("La copie VOST a changé depuis son export.")
-    if not target_project.is_file():
-        raise ValueError("Restaure l’ancien projet JSON depuis la corbeille Plasma avant ce remplacement.")
-    old_document = read_json(target_project)
-    if old_document.get("format") not in {
-            "video_encoder.trim_project", "video_encoder.dvd_project", "video_encoder.copy_version"}:
-        raise ValueError("L’ancien projet n’est pas un projet video_encoder reconnu.")
     old_receipt = Path(str(target_video) + SUFFIX)
-    old_files = [target_project]
+    old_files = []
+    project_bytes = None
+    if target_project.exists() or target_project.is_symlink():
+        old_document = read_json(target_project)
+        if old_document.get("format") not in {
+                "video_encoder.trim_project", "video_encoder.dvd_project", "video_encoder.copy_version"}:
+            raise ValueError("L’ancien projet n’est pas un projet video_encoder reconnu.")
+        project_bytes = target_project.read_bytes()
+        old_files.append(target_project)
     if target_video.exists() or target_video.is_symlink():
         if signature(target_video) != change.get("identity"):
             raise ValueError("L’ancienne vidéo diffère de la source utilisée pour produire la VOST.")
@@ -92,6 +94,9 @@ def preparation(project, directory, name):
         if old.get("project_path") != str(target_project) or old.get("output_path") != str(target_video):
             raise ValueError("Le reçu de l’ancienne copie ne correspond pas à ces chemins.")
         old_files.append(old_receipt)
+    if project_bytes is None:
+        validate_missing_project(old_receipt, target_video, old_files, document)
+    project_sha = digest(project_bytes) if project_bytes is not None else read_json(old_receipt)["project_sha256"]
     for path in (project, target_project):
         workspace = path.with_name("video_encoder_" + path.stem + "_workspace")
         if workspace.exists() or workspace.is_symlink():
@@ -99,14 +104,32 @@ def preparation(project, directory, name):
     trash = directory / ".video_encoder_trash"
     if trash.is_symlink():
         raise ValueError("La corbeille des projets ne peut pas être un lien symbolique.")
-    key = digest(project.read_bytes() + receipt_path.read_bytes() + target_project.read_bytes())[:24]
+    key = digest(project.read_bytes() + receipt_path.read_bytes() + project_sha.encode("ascii"))[:24]
     archive = trash / ("version-" + key)
     if archive.exists() or archive.is_symlink():
         raise ValueError(f"Une archive de remplacement existe déjà : {archive}")
     return dict(project=project, video=video, receipt_path=receipt_path, document=document,
                 receipt=receipt, change=change, target_project=target_project, target_video=target_video,
                 archive=archive, old_files=old_files,
+                project_missing=project_bytes is None, source_project_sha=project_sha,
                 source_missing=target_video not in old_files)
+
+
+def validate_missing_project(receipt_path, video, old_files, document):
+    if video not in old_files or receipt_path not in old_files:
+        raise ValueError("Ancien JSON absent : la vidéo initiale et son reçu sont nécessaires au remplacement.")
+    receipt = read_json(receipt_path)
+    sha = receipt.get("project_sha256", "")
+    modified = datetime.fromisoformat(receipt.get("modified_at", "").replace("Z", "+00:00"))
+    micros = int(modified.timestamp()) * 1_000_000 + modified.microsecond
+    record_id = document.get("vidb", {}).get("record_id")
+    valid = (receipt.get("format") == "video_encoder.completed_export" and receipt.get("version") == 1
+             and isinstance(sha, str) and len(sha) == 64 and all(c in "0123456789abcdef" for c in sha)
+             and receipt.get("byte_size") == video.stat().st_size
+             and micros == video.stat().st_mtime_ns // 1000
+             and record_id is not None and receipt.get("vidb", {}).get("record_id") == record_id)
+    if not valid:
+        raise ValueError("Ancien JSON absent : le reçu ne prouve pas l’identité de la vidéo initiale et de sa fiche.")
 
 
 def check_jobs(db, state):
@@ -170,8 +193,10 @@ def final_documents(state):
         "archive_directory": str(state["archive"]), "source_identity": state["change"]["identity"],
         "source_missing_before_replacement": state["source_missing"],
         "archived_project_path": str(archived(state, state["target_project"])),
-        "source_project_sha256": digest(state["target_project"].read_bytes()),
+        "source_project_sha256": state["source_project_sha"],
         "replaced_at": datetime.now(timezone.utc).isoformat()}
+    if state["project_missing"]:
+        receipt["copy_version_replacement"]["source_project_missing_before_replacement"] = True
     return project_bytes, encoded(receipt)
 
 

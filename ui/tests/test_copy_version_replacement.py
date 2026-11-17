@@ -134,11 +134,80 @@ class CopyVersionReplacementTest(unittest.TestCase):
             self.replace()
         self.assertTrue(self.project.exists())
 
-    def test_missing_old_json_requires_restoration_instead_of_ignoring_a_historical_job(self):
+    def old_export_receipt(self):
+        stamp = self.source.stat().st_mtime_ns
+        modified = datetime.fromtimestamp(stamp // 1_000_000_000, timezone.utc).replace(
+            microsecond=stamp % 1_000_000_000 // 1000)
+        receipt = {"format": "video_encoder.completed_export", "version": 1,
+                   "project_path": str(self.old), "output_path": str(self.source),
+                   "project_sha256": MODULE.digest(self.old.read_bytes()),
+                   "byte_size": self.source.stat().st_size,
+                   "modified_at": modified.isoformat(timespec="microseconds"),
+                   "vidb": {"record_id": 42}}
+        path = Path(str(self.source) + MODULE.SUFFIX)
+        path.write_bytes(MODULE.encoded(receipt))
+        return path
+
+    def test_missing_old_json_can_be_replaced_using_the_verified_old_video_and_receipt(self):
+        old_receipt = self.old_export_receipt()
+        original_receipt = old_receipt.read_bytes()
+        original_video = self.source.read_bytes()
         self.old.unlink()
-        with self.assertRaisesRegex(ValueError, "Restaure"):
+        plan = self.replace(preview=True)
+        self.assertFalse(self.old.exists())
+        self.assertFalse((self.root / ".video_encoder_trash").exists())
+        self.assertNotIn(str(self.old), [f["source"] for f in plan["files"]])
+        self.replace()
+        document = json.loads(self.old.read_text())
+        archived = Path(document["sources"][0]["path"])
+        self.assertNotEqual(archived, self.source)
+        self.assertEqual(archived.read_bytes(), original_video)
+        self.assertEqual(Path(str(archived) + MODULE.SUFFIX).read_bytes(), original_receipt)
+        self.assertFalse(Path(self.jobs()[0][1]).exists())
+        receipt = json.loads(old_receipt.read_text())
+        self.assertTrue(receipt["copy_version_replacement"]["source_project_missing_before_replacement"])
+        self.assertEqual(receipt["copy_version_replacement"]["source_project_sha256"],
+                         json.loads(original_receipt)["project_sha256"])
+
+    def test_missing_old_json_without_a_receipt_does_not_release_the_reserved_name(self):
+        self.old.unlink()
+        with self.assertRaisesRegex(ValueError, "vidéo initiale et son reçu"):
             self.replace()
         self.assertFalse((self.root / ".video_encoder_trash").exists())
+
+    def test_missing_old_json_requires_a_receipt_for_the_same_record_and_video(self):
+        path = self.old_export_receipt()
+        original = json.loads(path.read_text())
+        self.old.unlink()
+        for field, value in [("vidb", {"record_id": 99}), ("byte_size", 123),
+                             ("modified_at", "2000-01-01T00:00:00+00:00"), ("project_sha256", "invalid")]:
+            path.write_bytes(MODULE.encoded(dict(original, **{field: value})))
+            with self.assertRaises(ValueError):
+                self.replace()
+            self.assertTrue(self.video.exists())
+            self.assertFalse(self.old.exists())
+
+    def test_missing_old_json_and_video_cannot_be_replaced_from_only_a_receipt(self):
+        self.old_export_receipt()
+        self.old.unlink()
+        self.source.unlink()
+        with self.assertRaisesRegex(ValueError, "vidéo initiale et son reçu"):
+            self.replace()
+
+    def test_a_database_failure_with_missing_old_json_restores_files_without_inventing_a_project(self):
+        old_receipt = self.old_export_receipt()
+        self.old.unlink()
+        paths = [self.source, self.project, self.video, self.receipt, old_receipt]
+        before = {p: p.read_bytes() for p in paths}
+        jobs = self.jobs()
+        with self.db() as db:
+            db.execute("CREATE TRIGGER refuse_update BEFORE UPDATE ON jobs "
+                       "BEGIN SELECT RAISE(ABORT, 'queue failure'); END")
+        with self.assertRaises(sqlite3.DatabaseError):
+            self.replace()
+        self.assertFalse(self.old.exists())
+        self.assertEqual(before, {p: p.read_bytes() for p in paths})
+        self.assertEqual(jobs, self.jobs())
 
     def test_different_source_or_changed_project_or_video_never_overwrites_any_file(self):
         original = self.source.read_bytes()
