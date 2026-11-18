@@ -90,6 +90,66 @@ class OriginalLanguageReviewTest(unittest.TestCase):
         self.assertFalse(prepare_track_selection(self.monitor, self.path, choose))
         choose.assert_called_once()
 
+    def catalogue_vf_with_unknown_original_language(self):
+        result = self.result()
+        result["metadata"] = {"language_version": "VF", "original_language_evidence": {"status": "unknown"}}
+        self.writer.vidb_result = result
+        return result
+
+    def inspect_vmst_source(self):
+        self.monitor.media_inspection_client = Mock()
+        self.monitor.media_inspection_client.inspect.return_value = {"inspection": {
+            "audio_tracks": [{"language": "fra"}, {"language": "fra", "visual_impaired": True},
+                             {"language": "qaa"}],
+            "subtitle_tracks": [{"language": "fra", "hearing_impaired": True}, {"language": "fra"}]}}
+
+    def test_catalogue_vf_with_unknown_original_language_does_not_discard_the_pearl_harbor_tracks(self):
+        self.catalogue_vf_with_unknown_original_language()
+        self.inspect_vmst_source()
+        choose = Mock(side_effect=AssertionError("available VMST tracks must determine the default"))
+        self.assertTrue(prepare_track_selection(self.monitor, self.path, choose))
+        saved = json.loads(self.path.read_text())["track_selection"]
+        self.assertEqual("original_with_subtitles", saved["mode"])
+        self.assertEqual("source_default", saved["confirmed_by"])
+        self.assertEqual("prefer_vmst_when_uncertain", saved["evidence"]["policy"])
+        self.monitor.media_inspection_client.inspect.assert_called_once_with("/commun/film.m2t")
+
+    def test_catalogue_vf_without_original_language_evidence_is_also_only_a_hint(self):
+        result = self.catalogue_vf_with_unknown_original_language()
+        result["metadata"].pop("original_language_evidence")
+        self.assertIsNone(proposed_mode(result))
+
+    def test_catalogue_vf_with_unknown_language_does_not_invent_missing_full_subtitles(self):
+        self.catalogue_vf_with_unknown_original_language()
+        self.inspect_vmst_source()
+        self.monitor.media_inspection_client.inspect.return_value["inspection"]["subtitle_tracks"] = [
+            {"language": "fra", "forced": True}]
+        before = self.path.read_bytes()
+        choose = Mock(return_value=None)
+        self.assertFalse(prepare_track_selection(self.monitor, self.path, choose))
+        choose.assert_called_once_with(self.monitor)
+        self.assertEqual(before, self.path.read_bytes())
+
+    def test_a_french_original_is_not_mistaken_for_vmst_because_it_has_a_qaa_track(self):
+        self.writer.vidb_result = self.result()
+        self.writer.vidb_result["metadata"]["language_version"] = "VF"
+        self.inspect_vmst_source()
+        self.assertTrue(prepare_track_selection(self.monitor, self.path, Mock()))
+        self.assertEqual("french_only", self.session.track_selection["mode"])
+        self.monitor.media_inspection_client.inspect.assert_not_called()
+
+    def test_an_explicit_saved_vf_is_preserved_despite_the_available_vmst_tracks(self):
+        self.catalogue_vf_with_unknown_original_language()
+        self.inspect_vmst_source()
+        self.document["track_selection"] = {"scope": selection_scope(self.document),
+                                            "mode": "french_only", "confirmed_by": "user"}
+        self.save_document()
+        before = self.path.read_bytes()
+        self.assertTrue(prepare_track_selection(self.monitor, self.path, Mock()))
+        self.assertEqual(before, self.path.read_bytes())
+        self.assertEqual("french_only", self.session.track_selection["mode"])
+        self.monitor.media_inspection_client.inspect.assert_not_called()
+
     def test_unknown_requires_and_saves_user_decision(self):
         choose = Mock(return_value="french_only")
         self.assertTrue(prepare_track_selection(self.monitor, self.path, choose))

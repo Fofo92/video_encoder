@@ -18,10 +18,12 @@ def proposed_mode(result):
         return None
     metadata = result.get("metadata") or {}
     version = metadata.get("language_version")
-    modes = {"VF": "french_only", "VM": "original_without_subtitles", "VMST": "original_with_subtitles"}
-    if version in modes:
-        return modes[version]
     evidence = metadata.get("original_language_evidence") or {}
+    modes = {"VF": "french_only", "VM": "original_without_subtitles", "VMST": "original_with_subtitles"}
+    # A catalogue VF with unknown original language is not a confirmed project track choice.
+    uncertain_vf = version == "VF" and evidence.get("status") in (None, "unknown")
+    if version in modes and not uncertain_vf:
+        return modes[version]
     if evidence.get("provider") != "tmdb":
         return None
     language = evidence.get("language")
