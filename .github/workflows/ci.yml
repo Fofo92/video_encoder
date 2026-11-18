@@ -36,7 +36,8 @@ jobs:
 
   manual_workflow_ui:
     name: Manual editing and encoding queue
-    runs-on: ubuntu-latest
+    # Keep system Python 3.12 compatible with both Ubuntu's MLT binding and PySide6 6.8.3.
+    runs-on: ubuntu-24.04
     env:
       QT_QPA_PLATFORM: offscreen
       PYTHONPATH: ui
@@ -51,6 +52,7 @@ jobs:
 
       - name: Install isolated Qt test dependencies
         run: |
+          /usr/bin/python3 --version
           /usr/bin/python3 -m venv --system-site-packages "$RUNNER_TEMP/manual-editor-tests"
           "$RUNNER_TEMP/manual-editor-tests/bin/python" -m pip install PySide6-Essentials==6.8.3
 
