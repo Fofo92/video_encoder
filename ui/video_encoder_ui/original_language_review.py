@@ -60,6 +60,12 @@ def ask_mode(parent):
     return None
 
 
+def bound_mode(result, scope):
+    if result.get("project_id") != scope["project_id"] or result.get("record_id") != scope["record_id"]:
+        return None
+    return proposed_mode(result)
+
+
 def prepare_track_selection(monitor, project_path, choose=None):
     from .trim_project_file_writer import TrimProjectFileWriter
     from .track_options import track_capabilities
@@ -71,20 +77,25 @@ def prepare_track_selection(monitor, project_path, choose=None):
         document = json.loads(path.read_text(encoding="utf-8"))
         scope = selection_scope(document)
         previous = document.get("track_selection")
+        link = getattr(writer, "vidb_link", None)
+        result = getattr(writer, "vidb_result", {})
+        mode = None
         if (isinstance(previous, dict) and previous.get("scope") == scope
                 and previous.get("mode") in {"french_only", "original_with_subtitles", "original_without_subtitles"}):
-            monitor.trim_session.track_selection = previous
-            return True
-
-        result = getattr(writer, "vidb_result", {})
-        same_binding = result.get("project_id") == scope["project_id"] and result.get("record_id") == scope["record_id"]
-        mode = proposed_mode(result) if same_binding else None
-        if mode is None and getattr(writer, "vidb_link", None) is not None:
-            # Restored projects deliberately omit vidb metadata; request it again.
-            result = writer.vidb_link.identify(document, path, refresh=True)
-            writer.vidb_result = result
-            if result.get("record_id") == scope["record_id"] and result.get("project_id") == scope["project_id"]:
-                mode = proposed_mode(result)
+            if link is not None and previous.get("confirmed_by") in {"external", "source_default"}:
+                result = link.identify(document, path, refresh=True)
+                writer.vidb_result = result
+                mode = bound_mode(result, scope)
+            if mode is None or mode == previous["mode"]:
+                monitor.trim_session.track_selection = previous
+                return True
+        else:
+            mode = bound_mode(result, scope)
+            if mode is None and link is not None:
+                # Restored projects deliberately omit vidb metadata; request it again.
+                result = link.identify(document, path, refresh=True)
+                writer.vidb_result = result
+                mode = bound_mode(result, scope)
         origin = "external" if mode is not None else None
         if mode is None:
             capabilities = track_capabilities(document, getattr(monitor, "media_inspection_client", None))
