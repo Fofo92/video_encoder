@@ -21,8 +21,9 @@ def proposed_mode(result):
     evidence = metadata.get("original_language_evidence") or {}
     modes = {"VF": "french_only", "VM": "original_without_subtitles",
              "VMST": "original_with_subtitles", "VOST": "french_with_burned_subtitles"}
-    # A catalogue VF with unknown original language is not a confirmed project track choice.
-    uncertain_vf = (version == "VF" and metadata.get("language_version_explicit") is not True
+    # An identified episode can provide its version without external language evidence.
+    uncertain_vf = (version == "VF" and metadata.get("record_kind") != "episode"
+                    and metadata.get("language_version_explicit") is not True
                     and evidence.get("status") in (None, "unknown"))
     if version in modes and not uncertain_vf:
         return modes[version]
@@ -68,6 +69,30 @@ def bound_mode(result, scope):
     return proposed_mode(result)
 
 
+def copies_to_review(result, scope):
+    if (result.get("status") != "identified" or result.get("project_id") != scope["project_id"]
+            or result.get("record_id") != scope["record_id"]):
+        return []
+    metadata = result.get("metadata") or {}
+    if metadata.get("record_kind") != "episode" or metadata.get("language_version_explicit") is True:
+        return []
+    return metadata.get("present_copy_versions") or []
+
+
+def confirm_copy_version(parent, versions, proposed):
+    from PySide6 import QtWidgets
+
+    choices = {"VF": "french_only", "VM": "original_without_subtitles",
+               "VMST": "original_with_subtitles", "VOST": "french_with_burned_subtitles"}
+    labels = list(choices)
+    index = list(choices.values()).index(proposed) if proposed in choices.values() else 0
+    version, accepted = QtWidgets.QInputDialog.getItem(
+        parent, "Version du nouvel export",
+        "Versions des copies présentes : " + ", ".join(versions)
+        + "\nConfirme la version de ce montage :", labels, index, False)
+    return choices[version] if accepted else None
+
+
 def prepare_track_selection(monitor, project_path, choose=None):
     from .trim_project_file_writer import TrimProjectFileWriter
     from .track_options import track_capabilities
@@ -89,7 +114,8 @@ def prepare_track_selection(monitor, project_path, choose=None):
                 result = link.identify(document, path, refresh=True)
                 writer.vidb_result = result
                 mode = bound_mode(result, scope)
-            if mode is None or mode == previous["mode"]:
+            if (mode is None or mode == previous["mode"]) and (
+                    previous.get("confirmed_by") == "user" or not copies_to_review(result, scope)):
                 monitor.trim_session.track_selection = previous
                 return True
         else:
@@ -105,7 +131,11 @@ def prepare_track_selection(monitor, project_path, choose=None):
             if capabilities and capabilities["original_with_subtitles"]:
                 mode = "original_with_subtitles"
                 origin = "source_default"
-        if mode is None:
+        copies = copies_to_review(result, scope)
+        if copies:
+            mode = confirm_copy_version(monitor, copies, mode)
+            origin = None
+        elif mode is None:
             mode = (choose or ask_mode)(monitor)
         if mode is None:
             return False
