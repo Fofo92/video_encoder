@@ -11,7 +11,8 @@ def planned_language(document):
         try:
             if selection.get("scope") == selection_scope(document):
                 return {"french_only": "VF", "original_without_subtitles": "VM",
-                        "original_with_subtitles": "VMST"}.get(selection.get("mode"))
+                        "original_with_subtitles": "VMST",
+                        "french_with_burned_subtitles": "VOST"}.get(selection.get("mode"))
         except (KeyError, TypeError):
             pass
         return None

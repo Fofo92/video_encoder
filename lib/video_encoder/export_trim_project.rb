@@ -11,13 +11,7 @@ module VideoEncoder
     def call(trim_project:, output_path:)
       sources = trim_project.segments.map(&:source).uniq
       selection = trim_project.track_selection if trim_project.respond_to?(:track_selection)
-      selector = if selection&.fetch('mode', nil) == 'french_only'
-                   TrackSelector.new(french_only: true)
-                 elsif selection&.fetch('mode', nil) == 'original_without_subtitles'
-                   TrackSelector.new(forced_only: true)
-                 else
-                   @selector
-                 end
+      selector = TrackSelector.for_mode(selection&.fetch('mode', nil), fallback: @selector)
 
       exporter.call(
         trim_project: trim_project,

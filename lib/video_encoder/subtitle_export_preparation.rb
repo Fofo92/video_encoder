@@ -7,7 +7,7 @@ module VideoEncoder
 
     def self.skip?(trim_project, subtitle_tracks_by_source)
       selection = trim_project.track_selection if trim_project.respond_to?(:track_selection)
-      modes = %w[french_only original_without_subtitles]
+      modes = %w[french_only original_without_subtitles french_with_burned_subtitles]
       selection.is_a?(Hash) && modes.include?(selection['mode']) && subtitle_tracks_by_source.empty?
     end
 

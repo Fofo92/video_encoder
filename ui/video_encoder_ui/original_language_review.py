@@ -19,7 +19,8 @@ def proposed_mode(result):
     metadata = result.get("metadata") or {}
     version = metadata.get("language_version")
     evidence = metadata.get("original_language_evidence") or {}
-    modes = {"VF": "french_only", "VM": "original_without_subtitles", "VMST": "original_with_subtitles"}
+    modes = {"VF": "french_only", "VM": "original_without_subtitles",
+             "VMST": "original_with_subtitles", "VOST": "french_with_burned_subtitles"}
     # A catalogue VF with unknown original language is not a confirmed project track choice.
     uncertain_vf = (version == "VF" and metadata.get("language_version_explicit") is not True
                     and evidence.get("status") in (None, "unknown"))
@@ -82,7 +83,8 @@ def prepare_track_selection(monitor, project_path, choose=None):
         result = getattr(writer, "vidb_result", {})
         mode = None
         if (isinstance(previous, dict) and previous.get("scope") == scope
-                and previous.get("mode") in {"french_only", "original_with_subtitles", "original_without_subtitles"}):
+                and previous.get("mode") in {"french_only", "original_with_subtitles",
+                                             "original_without_subtitles", "french_with_burned_subtitles"}):
             if link is not None and previous.get("confirmed_by") in {"external", "source_default"}:
                 result = link.identify(document, path, refresh=True)
                 writer.vidb_result = result
@@ -117,8 +119,12 @@ def prepare_track_selection(monitor, project_path, choose=None):
         document["track_selection"] = selection
         TrimProjectFileWriter.write_atomic(path, json.dumps(document, ensure_ascii=False, indent=2) + "\n")
         monitor.trim_session.track_selection = selection
-        label = "Audio français seul, sous-titres forcés uniquement" if mode == "french_only" else ("Audio français et VO, sans sous-titres complets"
-                if mode == "original_without_subtitles" else "VO et sous-titres français")
+        label = {
+            "french_only": "Audio français seul, sous-titres forcés uniquement",
+            "french_with_burned_subtitles": "VOST : audio unique, sous-titres incrustés",
+            "original_without_subtitles": "Audio français et VO, sans sous-titres complets",
+            "original_with_subtitles": "VO et sous-titres français",
+        }[mode]
         monitor.statusBar().showMessage(label, 8_000)
         return True
     except (OSError, ValueError, TypeError, KeyError, MediaInspectionError) as error:

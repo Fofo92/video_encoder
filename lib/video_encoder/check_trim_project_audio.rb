@@ -3,22 +3,17 @@
 module VideoEncoder
   # Plans and analyzes unconfirmed audio tracks for a trim project.
   class CheckTrimProjectAudio
-    def initialize(selector:, planner:, checker:)
+    def initialize(selector:, planner:, checker:, include_selection: false)
       @selector = selector
       @planner = planner
       @checker = checker
+      @include_selection = include_selection
     end
 
     def call(trim_project:, confirmed_audio_tracks_by_source: {})
       sources = trim_project.segments.map(&:source).uniq
       selection = trim_project.track_selection if trim_project.respond_to?(:track_selection)
-      selector = if selection&.fetch('mode', nil) == 'french_only'
-                   TrackSelector.new(french_only: true)
-                 elsif selection&.fetch('mode', nil) == 'original_without_subtitles'
-                   TrackSelector.new(forced_only: true)
-                 else
-                   @selector
-                 end
+      selector = TrackSelector.for_mode(selection&.fetch('mode', nil), fallback: @selector)
 
       samples = planner.call(
         trim_project: trim_project,
@@ -28,11 +23,23 @@ module VideoEncoder
         confirmed_audio_tracks_by_source: confirmed_audio_tracks_by_source
       )
 
-      checker.call(samples)
+      results = checker.call(samples)
+      return results unless @include_selection
+
+      { audio_checks: results, mode: selection&.fetch('mode', nil),
+        subtitle_selection: subtitle_selection(selector, sources) }
     end
 
     private
 
     attr_reader :selector, :planner, :checker
+
+    def subtitle_selection(selector, sources)
+      tracks = selector.select_subtitle_tracks(sources)
+      sources.map do |source|
+        track = tracks[source]
+        { source: source.path.to_s, track_index: track&.index, language: track&.language }
+      end
+    end
   end
 end

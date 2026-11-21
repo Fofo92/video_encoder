@@ -6,9 +6,19 @@ module VideoEncoder
     FRENCH_CODES = %w[fra fre].freeze
     ORIGINAL_VERSION_CODES = %w[qaa].freeze
 
-    def initialize(french_only: false, forced_only: false)
+    def self.for_mode(mode, fallback:)
+      case mode
+      when 'french_only' then new(french_only: true)
+      when 'french_with_burned_subtitles' then new(french_only: true, skip_subtitles: true)
+      when 'original_without_subtitles' then new(forced_only: true)
+      else fallback
+      end
+    end
+
+    def initialize(french_only: false, forced_only: false, skip_subtitles: false)
       @french_only = french_only
       @forced_only = forced_only
+      @skip_subtitles = skip_subtitles
     end
 
     def select(media)
@@ -79,6 +89,8 @@ module VideoEncoder
     end
 
     def select_subtitles(media)
+      return [] if @skip_subtitles
+
       return forced_subtitles(media) if @french_only || @forced_only
 
       original_audio = select_audio(media.audio_tracks).find { |track| !french?(track) }
