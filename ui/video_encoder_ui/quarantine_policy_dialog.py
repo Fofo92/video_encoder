@@ -3,7 +3,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-from PySide6 import QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from .quarantine_forecast import quarantine_forecast
 from .trim_export_queue_client import TrimExportQueueClient, TrimExportQueueError
@@ -42,6 +42,11 @@ class QuarantinePolicyClient:
 
 
 class QuarantinePolicyDialog(QtWidgets.QDialog):
+    STATE_NAMES = {
+        "untracked": "Sans date", "scheduled": "Programmée", "due": "Échue",
+        "blocked": "Conservée", "absent": "Absente",
+    }
+
     def __init__(self, parent=None, client=None):
         super().__init__(parent)
         self.client = client or QuarantinePolicyClient()
@@ -61,7 +66,23 @@ class QuarantinePolicyDialog(QtWidgets.QDialog):
         self.hide_absent = QtWidgets.QCheckBox("Masquer les captures absentes")
         self.hide_absent.setChecked(True)
         self.hide_absent.toggled.connect(self.apply_absent_filter)
-        layout.addWidget(self.hide_absent)
+        filters = QtWidgets.QHBoxLayout()
+        self.source_search = QtWidgets.QLineEdit()
+        self.source_search.setPlaceholderText("Rechercher un titre de source")
+        self.source_search.setAccessibleName("Titre de source")
+        self.source_search.setClearButtonEnabled(True)
+        filters.addWidget(self.source_search, 1)
+        self.state_filter = QtWidgets.QComboBox()
+        self.state_filter.setAccessibleName("État de la capture")
+        self.state_filter.addItem("Tous les états")
+        for state, label in self.STATE_NAMES.items():
+            self.state_filter.addItem(label, state)
+        filters.addWidget(self.state_filter)
+        filters.addWidget(self.hide_absent)
+        self.copy_button = QtWidgets.QPushButton("Copier le nom")
+        self.copy_button.setAutoDefault(False)
+        filters.addWidget(self.copy_button)
+        layout.addLayout(filters)
         self.table = QtWidgets.QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(["Source", "Entrée / suivi", "Suppression à partir du", "État", "Motif"])
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
@@ -92,6 +113,12 @@ class QuarantinePolicyDialog(QtWidgets.QDialog):
         self.enroll_button.clicked.connect(self.enroll)
         self.associate_button.clicked.connect(self.associate_project)
         self.table.itemSelectionChanged.connect(self.update_buttons)
+        self.source_search.textChanged.connect(self.apply_absent_filter)
+        self.state_filter.currentIndexChanged.connect(self.apply_absent_filter)
+        self.copy_button.clicked.connect(self.copy_source_name)
+        self.copy_shortcut = QtGui.QShortcut(QtGui.QKeySequence.StandardKey.Copy, self.table)
+        self.copy_shortcut.setContext(QtCore.Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        self.copy_shortcut.activated.connect(self.copy_source_name)
         self.refresh()
 
     @staticmethod
@@ -121,9 +148,9 @@ class QuarantinePolicyDialog(QtWidgets.QDialog):
             self.absent_rows = set()
             self.message.setText(str(error))
         self.table.setRowCount(len(self.entries))
-        names = {"untracked": "Sans date", "scheduled": "Programmée", "due": "Échue", "blocked": "Conservée"}
         for row, entry in enumerate(self.entries):
-            state = "Absente" if row in self.absent_rows else names.get(entry["state"], entry["state"])
+            state_key = self.state_for(row)
+            state = self.STATE_NAMES.get(state_key, state_key)
             values = (Path(entry["path"]).name, self.date_label(entry.get("entered_at")),
                       self.date_label(entry.get("delete_after")), state,
                       entry.get("reason", ""))
@@ -136,18 +163,41 @@ class QuarantinePolicyDialog(QtWidgets.QDialog):
 
     def apply_absent_filter(self):
         self.hide_absent.setText(f"Masquer les captures absentes ({len(self.absent_rows)})")
-        hide = self.hide_absent.isChecked()
-        for row in range(self.table.rowCount()):
-            self.table.setRowHidden(row, hide and row in self.absent_rows)
+        state_filter = self.state_filter.currentData()
+        hide_absent = self.hide_absent.isChecked() and state_filter != "absent"
+        query = self.source_search.text().strip().casefold()
+        for row, entry in enumerate(self.entries):
+            state = self.state_for(row)
+            name = Path(entry["path"]).name.casefold()
+            hidden = ((hide_absent and state == "absent")
+                      or (state_filter is not None and state != state_filter)
+                      or query not in name)
+            self.table.setRowHidden(row, hidden)
+        self.update_buttons()
+
+    def state_for(self, row):
+        return "absent" if row in self.absent_rows else self.entries[row]["state"]
+
+    def selected_source_row(self):
+        rows = self.table.selectionModel().selectedRows()
+        if not rows or self.table.isRowHidden(rows[0].row()):
+            return None
+        return rows[0].row()
+
+    def copy_source_name(self):
+        row = self.selected_source_row()
+        if row is not None:
+            QtWidgets.QApplication.clipboard().setText(Path(self.entries[row]["path"]).name)
 
     def update_buttons(self):
-        row = self.table.currentRow()
-        self.enroll_button.setEnabled(0 <= row < len(self.entries) and self.entries[row]["state"] == "untracked")
+        row = self.selected_source_row()
+        self.copy_button.setEnabled(row is not None)
+        self.enroll_button.setEnabled(row is not None and self.entries[row]["state"] == "untracked")
         self.associate_button.setEnabled(self.enroll_button.isEnabled())
 
     def associate_project(self):
-        row = self.table.currentRow()
-        if not 0 <= row < len(self.entries) or self.entries[row]["state"] != "untracked":
+        row = self.selected_source_row()
+        if row is None or self.entries[row]["state"] != "untracked":
             return
         project, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Projet de cette capture", "/videos", "Projets (*.json)")
         if not project:
@@ -159,8 +209,8 @@ class QuarantinePolicyDialog(QtWidgets.QDialog):
         self.refresh()
 
     def enroll(self):
-        row = self.table.currentRow()
-        if not 0 <= row < len(self.entries) or self.entries[row]["state"] != "untracked":
+        row = self.selected_source_row()
+        if row is None or self.entries[row]["state"] != "untracked":
             return
         try:
             self.client.request("enroll", self.entries[row]["path"])

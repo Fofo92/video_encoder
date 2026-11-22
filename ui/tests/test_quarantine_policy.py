@@ -147,6 +147,22 @@ class QuarantinePolicyTest(unittest.TestCase):
                 self.assertIn('(0)', dialog.hide_absent.text())
         self.assertTrue(all(call.args == () for call in client.request.call_args_list))
 
+    def test_title_and_state_filters_combine_and_copy_only_visible_source(self):
+        dialog, client = self.dialog([
+            dict(entry('scheduled'), path='/commun/Quarantaine/Film A.m2t'),
+            dict(entry('due'), path='/commun/Quarantaine/Film B.m2t'),
+            dict(entry('due'), path='/commun/Quarantaine/Autre.m2t'),
+        ])
+        dialog.source_search.setText('fILm')
+        dialog.state_filter.setCurrentIndex(dialog.state_filter.findData('due'))
+        self.assertEqual([True, False, True], [dialog.table.isRowHidden(row) for row in range(3)])
+        dialog.table.selectRow(1)
+        dialog.copy_button.click()
+        self.assertEqual('Film B.m2t', self.app.clipboard().text())
+        dialog.source_search.setText('Autre')
+        self.assertFalse(dialog.copy_button.isEnabled())
+        client.request.assert_called_once_with()
+
     def test_explicit_project_association_does_not_request_a_deletion(self):
         dialog, client = self.dialog([entry()])
         dialog.table.selectRow(0)
