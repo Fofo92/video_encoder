@@ -101,12 +101,22 @@ module VideoEncoder
     end
 
     def verify_completion(item, digest)
+      return verify_manual_completion(item) if item.key?('manual_completion')
+
       project, output = item.values_at('project', 'output')
       return completed!(project, output, digest) unless item.key?('copy_origin')
 
       receipt = "#{output}.video_encoder-export.json"
       raise QuarantinePolicyError, 'Reçu du changement de version invalide.' unless
         valid_receipt?(receipt, project, output, digest)
+    end
+
+    def verify_manual_completion(item)
+      confirmation = item.fetch('manual_completion')
+      return if !item.key?('copy_origin') && confirmation.is_a?(Hash) && confirmation['reason'].to_s.strip != '' &&
+                item['sha256'].is_a?(String) && item['output_signature'].is_a?(Array)
+
+      raise QuarantinePolicyError, 'Validation manuelle incomplète.'
     end
 
     def sources_for(item)
