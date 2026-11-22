@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'quarantine_files'
+require_relative 'quarantine_copy_origin'
 
 module VideoEncoder
   # A completed queue job or an exact export receipt is required in addition to files.
@@ -88,15 +89,30 @@ module VideoEncoder
       output = item.fetch('output')
       validate_paths(project, output, path)
       raise QuarantinePolicyError, 'Le projet ne référence plus la source.' unless
-        QuarantineFiles.sources(project).any? { |source| same?(source, original, path) }
+        sources_for(item).any? { |source| same?(source, original, path) }
 
       digest = Digest::SHA256.hexdigest(QuarantineFiles.bytes(project))
       if item['sha256'] && (item['sha256'] != digest || item['output_signature'] != QuarantineFiles.signature(output))
         raise QuarantinePolicyError, 'Projet ou résultat modifié depuis sa vérification : examen nécessaire.'
       end
 
-      completed!(project, output, digest)
+      verify_completion(item, digest)
       item.merge('sha256' => digest, 'output_signature' => QuarantineFiles.signature(output))
+    end
+
+    def verify_completion(item, digest)
+      project, output = item.values_at('project', 'output')
+      return completed!(project, output, digest) unless item.key?('copy_origin')
+
+      receipt = "#{output}.video_encoder-export.json"
+      raise QuarantinePolicyError, 'Reçu du changement de version invalide.' unless
+        valid_receipt?(receipt, project, output, digest)
+    end
+
+    def sources_for(item)
+      return QuarantineFiles.sources(item.fetch('project')) unless item.key?('copy_origin')
+
+      QuarantineCopyOrigin.new(item).sources
     end
 
     def validate_paths(project, output, path)
