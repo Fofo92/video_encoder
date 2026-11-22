@@ -18,6 +18,7 @@ from .trim_session import (
     TrimSession,
 )
 from .segment_list import SegmentListWidget
+from .active_source_tracks import ActiveSourceTracks
 from .trim_project_bridge import (
     TrimProjectBridge,
     TrimProjectBridgeError,
@@ -663,9 +664,7 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
         controls_layout.addSpacing(4)
         controls_layout.addWidget(markers_widget)
         controls_layout.addStretch(1)
-        position_row = QtWidgets.QHBoxLayout()
-        position_row.addStretch(1)
-        position_row.addWidget(self.position_label)
+        controls_layout.addWidget(self.position_label)
 
         self.segment_list = SegmentListWidget()
         self.segment_list.segment_selected.connect(
@@ -703,8 +702,11 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
         layout.addWidget(self.video_label, stretch=1)
         layout.addWidget(self.position_slider)
         layout.addLayout(controls_layout)
-        layout.addLayout(position_row)
-        layout.addWidget(self.segment_list)
+        self.active_source_tracks = ActiveSourceTracks(self.media_inspection_client)
+        segments_row = QtWidgets.QHBoxLayout()
+        segments_row.addWidget(self.segment_list, stretch=3)
+        segments_row.addWidget(self.active_source_tracks, stretch=2)
+        layout.addLayout(segments_row)
 
         layout.addWidget(
             self.export_progress_bar
@@ -1563,6 +1565,7 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
             button.setIcon(icon)
             button.setToolTip(tooltip)
             button.setAccessibleName(tooltip)
+            button.setVisible(selected)
             button.setEnabled(not busy)
         self.update_marker_edit_controls()
 
@@ -1774,6 +1777,9 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
         self.refresh_segment_list()
 
     def refresh_segment_list(self):
+        if hasattr(self, "active_source_tracks"):
+            self.active_source_tracks.show_source(self.source_path)
+
         segments = self.trim_session.segments
 
         rows = [
@@ -2978,6 +2984,8 @@ class MltFrameMonitor(MultiSourceEditor, QtWidgets.QMainWindow):
         event.accept()
 
     def shutdown(self):
+        if hasattr(self, "active_source_tracks"):
+            self.active_source_tracks.stop_inspection()
         self.scrub_timer.stop()
         self.wheel_timer.stop()
         self.transport_timer.stop()
@@ -3408,7 +3416,7 @@ def create_editor_window(
         ),
     )
 
-    place_initial_window(window)
+    place_initial_window(window, full_height=True)
     return window
 
 def main():
