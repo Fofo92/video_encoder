@@ -33,13 +33,23 @@ module VideoEncoder
           raise QuarantinePolicyError, 'Source utilisée par une tâche active, en attente ou reportée.'
         end
       end
-      projects = (saved + associations(original, path)).uniq { |item| item.values_at('project', 'output') }
+      projects = current_projects(saved, associations(original, path))
       raise QuarantinePolicyError, 'Aucun projet associé vérifiable : examen nécessaire.' if projects.empty?
 
       projects.map { |item| validate_pair(item, original, path) }
     end
 
     private
+
+    def current_projects(saved, associated)
+      pairs = (saved + associated).uniq { |item| item.values_at('project', 'output') }
+      replacements = saved.flat_map { |item| Array(item['supersedes']) }
+      pairs.reject do |item|
+        output = item.fetch('output')
+        !item.key?('supersedes') && replacements.include?(item.slice('project', 'output')) &&
+          !File.exist?(output) && !File.symlink?(output)
+      end
+    end
 
     def relevant_rows
       project_rows.group_by { |row, _sources| row[:project_path] }.values.map do |attempts|
