@@ -130,11 +130,21 @@ module VideoEncoder
     def summary(entry)
       item = entry.slice(:id, :path, :original, :entered_at, :delete_after)
       verify_source(entry)
-      projects = @evidence.check(entry[:original], entry[:path], JSON.parse(entry[:projects]))
+      projects, reason = retention_evidence(entry)
       due = Time.iso8601(entry[:delete_after]) <= @clock.call
-      item.merge(state: due ? 'due' : 'scheduled', reason: '', projects: projects)
+      item.merge(state: due ? 'due' : 'scheduled', reason: reason, projects: projects)
     rescue StandardError => e
       item.merge(state: 'blocked', reason: e.message, projects: [])
+    end
+
+    def retention_evidence(entry)
+      saved = JSON.parse(entry[:projects])
+      original, path = entry.values_at(:original, :path)
+      decision = saved.first&.fetch('discard_incomplete_capture', nil)
+      return [@evidence.check(original, path, saved), ''] unless saved.one? && decision
+
+      @evidence.verify_inactive!(original, path)
+      [saved, decision.fetch('reason')]
     end
 
     def verify_source(entry)

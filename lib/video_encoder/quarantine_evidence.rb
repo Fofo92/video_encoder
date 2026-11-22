@@ -28,16 +28,19 @@ module VideoEncoder
     end
 
     def check(original, path, saved)
-      rows = project_rows
-      rows.each do |row, sources|
-        if ACTIVE.include?(row[:status]) && sources.any? { |source| same?(source, original, path) }
-          raise QuarantinePolicyError, 'Source utilisée par une tâche active, en attente ou reportée.'
-        end
-      end
+      verify_inactive!(original, path)
       projects = current_projects(saved, associations(original, path))
       raise QuarantinePolicyError, 'Aucun projet associé vérifiable : examen nécessaire.' if projects.empty?
 
       projects.map { |item| validate_pair(item, original, path) }
+    end
+
+    def verify_inactive!(original, path)
+      project_rows.each do |row, sources|
+        if ACTIVE.include?(row[:status]) && sources.any? { |source| same?(source, original, path) }
+          raise QuarantinePolicyError, 'Source utilisée par une tâche active, en attente ou reportée.'
+        end
+      end
     end
 
     private
