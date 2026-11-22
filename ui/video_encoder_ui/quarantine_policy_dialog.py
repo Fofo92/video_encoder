@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from .quarantine_forecast import quarantine_forecast
+from .quarantine_forecast import project_trash_forecast, quarantine_forecast
 from .trim_export_queue_client import TrimExportQueueClient, TrimExportQueueError
 
 
@@ -226,38 +226,65 @@ class QuarantinePolicyDialog(QtWidgets.QDialog):
             "\n".join(due) if due else "Aucune suppression éligible à cet instant.")
 
     def show_forecast(self):
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Échéancier estimatif de la quarantaine")
+        layout = QtWidgets.QVBoxLayout(dialog)
+        note = QtWidgets.QLabel(
+            self.timer_status() + "\n"
+            "Projection après le passage quotidien de 03 h 30. Les entrées bloquées ou sans date "
+            "restent en place. Le gain dépend des blocs réellement libérés."
+        )
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        tabs = QtWidgets.QTabWidget()
+        layout.addWidget(tabs)
+        now = datetime.now()
+        tabs.addTab(self.forecast_tab(self.client.request, quarantine_forecast, now), "Captures — /commun")
+        tabs.addTab(self.forecast_tab(self.project_trash_report, project_trash_forecast, now), "Corbeille — /videos")
+        close = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Close)
+        close.rejected.connect(dialog.reject)
+        layout.addWidget(close)
+        dialog.resize(950, 460)
+        dialog.exec()
+        dialog.deleteLater()
+
+
+    def project_trash_report(self):
+        result = json.loads(self.client.queue.manage("project-trash", "sweep"))
+        if (not isinstance(result, dict) or result.get("format") != "video_encoder.project_trash_retention"
+                or result.get("version") != 1 or not isinstance(result.get("entries"), list)
+                or not isinstance(result.get("errors"), list)):
+            raise ValueError("Réponse de la corbeille invalide.")
+        return result
+
+    @staticmethod
+    def forecast_tab(read_report, calculate, now):
+        page = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(page)
         try:
-            report = self.client.request()
-            if report["errors"]:
-                raise ValueError("\n".join(report["errors"]))
-            if not report.get("root"):
-                raise ValueError("Le dossier de quarantaine est absent de la réponse. Mets à jour video_encoder.")
-            total, disk, rows = quarantine_forecast(report, datetime.now())
-        except (TrimExportQueueError, OSError, ValueError) as error:
-            QtWidgets.QMessageBox.warning(self, "Échéancier indisponible", str(error))
-            return
+            report = read_report()
+            total, disk, rows = calculate(report, now)
+        except (TrimExportQueueError, OSError, ValueError, KeyError, TypeError) as error:
+            message = QtWidgets.QLabel(f"Échéancier indisponible : {error}")
+            message.setWordWrap(True)
+            layout.addWidget(message)
+            return page
+
+        if report["errors"]:
+            message = QtWidgets.QLabel("Inventaire partiel : " + "\n".join(report["errors"]))
+            message.setWordWrap(True)
+            layout.addWidget(message)
 
         def go(size):
             return f"{size / 1e9:.1f}".replace(".", ",") + " Go"
 
-        dialog = QtWidgets.QDialog(self)
-        dialog.setWindowTitle("Échéancier estimatif de la quarantaine")
-        layout = QtWidgets.QVBoxLayout(dialog)
         layout.addWidget(QtWidgets.QLabel(
-            f"Disque de la quarantaine : {go(disk.total)} · Libre : {go(disk.free)} · Quarantaine : {go(total)}"
+            f"Capacité : {go(disk.total)} · Libre : {go(disk.free)} · Volume suivi : {go(total)}"
         ))
-        note = QtWidgets.QLabel(
-            self.timer_status() + "\n"
-            "Projection après le passage quotidien de 03 h 30, si les contrôles restent valides et sans nouvel ajout. "
-            "Les captures sans échéance ou bloquées restent dans le volume projeté. "
-            "Le gain sur le disque dépend des blocs réellement libérés."
-        )
-        note.setWordWrap(True)
-        layout.addWidget(note)
         if rows:
             table = QtWidgets.QTableWidget(len(rows), 5)
             table.setHorizontalHeaderLabels(
-                ["Date", "Captures", "Volume supprimable", "Quarantaine restante", "Libre estimé sur le disque"]
+                ["Date", "Entrées", "Volume supprimable", "Volume restant", "Libre estimé sur le disque"]
             )
             table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
             table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Stretch)
@@ -268,12 +295,7 @@ class QuarantinePolicyDialog(QtWidgets.QDialog):
             layout.addWidget(table)
         else:
             layout.addWidget(QtWidgets.QLabel("Aucune suppression prévisible avec les échéances actuelles."))
-        close = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Close)
-        close.rejected.connect(dialog.reject)
-        layout.addWidget(close)
-        dialog.resize(950, 460)
-        dialog.exec()
-        dialog.deleteLater()
+        return page
 
 
 def show_quarantine_policy(parent):
