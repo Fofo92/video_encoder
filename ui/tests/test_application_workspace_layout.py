@@ -60,7 +60,8 @@ class ApplicationWorkspaceLayoutTest(unittest.TestCase):
     def test_editor_reserves_timeline_and_removes_redundant_controls(self):
         source = SimpleNamespace(frames_per_second=25, length=10000, close=Mock())
         with patch("video_encoder_ui.application.MltFrameSource", return_value=source), \
-                patch("video_encoder_ui.application.MltAudioPlayer"):
+                patch("video_encoder_ui.application.MltAudioPlayer"), \
+                patch("video_encoder_ui.application.ActiveSourceTracks.show_source"):
             window = MltFrameMonitor("/source.m2t")
             window.show()
             self.app.processEvents()
@@ -75,14 +76,15 @@ class ApplicationWorkspaceLayoutTest(unittest.TestCase):
             self.assertIn(window.show_export_queue_action, toolbar.actions())
             self.assertIn(window.queue_export_action, toolbar.actions())
             self.assertEqual(QtCore.Qt.ToolButtonStyle.ToolButtonIconOnly, toolbar.toolButtonStyle())
-            buttons = [window.backward_button, window.pause_button,
-                       window.forward_button, window.boundary_start_button,
-                       window.boundary_end_button, window.in_button,
-                       window.out_button, window.add_segment_button]
-            positions = [button.mapTo(window, button.rect().center()).y()
-                         for button in buttons]
-            self.assertLessEqual(max(positions) - min(positions), 1)
-            self.assertTrue(all(button.isVisible() for button in buttons))
+            self.assertFalse(window.boundary_start_button.isVisible())
+            self.assertFalse(window.boundary_end_button.isVisible())
+            self.assertTrue(window.active_source_tracks.isVisible())
+            controls = [window.backward_button, window.pause_button, window.forward_button,
+                        window.in_button, window.out_button, window.add_segment_button, window.position_label]
+            positions = [control.mapTo(window, control.rect().center()) for control in controls]
+            self.assertLessEqual(max(point.y() for point in positions) - min(point.y() for point in positions), 1)
+            self.assertGreater(positions[-1].x(), max(point.x() for point in positions[:-1]))
+            self.assertTrue(all(control.isVisible() for control in controls))
             window.shutdown()
             window.close()
 

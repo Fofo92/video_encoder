@@ -1,7 +1,7 @@
 from PySide6 import QtGui, QtWidgets
 
 
-def place_initial_window(window):
+def place_initial_window(window, *, full_height=False):
     """Use the upper left third of the screen containing the pointer."""
     if not isinstance(window, QtWidgets.QWidget):
         return
@@ -10,5 +10,6 @@ def place_initial_window(window):
     if screen is None:
         return
     area = screen.availableGeometry()
-    window.resize(max(1, area.width() // 3), max(1, area.height() // 2))
+    height = area.height() if full_height else area.height() // 2
+    window.resize(max(1, area.width() // 3), max(1, height))
     window.move(area.topLeft())
