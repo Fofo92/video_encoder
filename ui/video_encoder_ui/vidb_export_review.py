@@ -49,7 +49,7 @@ class VidbExportReview(QtWidgets.QDialog):
         self.back_button.setDefault(True)
         self.back_button.clicked.connect(self.reject)
         layout.addWidget(buttons)
-        size_vidb_dialog(self)
+        size_vidb_dialog(self, max_height=1200)
         self.timer = QtCore.QTimer(self)
         self.timer.setInterval(100)
         self.timer.timeout.connect(self.poll)

@@ -70,11 +70,11 @@ def build_vidb_browser(parent, url):
     return view
 
 
-def size_vidb_dialog(dialog):
+def size_vidb_dialog(dialog, *, max_height=820):
     screen = dialog.screen()
     geometry = screen.availableGeometry() if screen is not None else None
     dialog.resize(min(1100, int(geometry.width() * .9)) if geometry else 1000,
-                  min(820, int(geometry.height() * .9)) if geometry else 750)
+                  min(max_height, int(geometry.height() * .9)) if geometry else 750)
 
 
 def open_vidb_modal(parent, url, require_confirmation=False):
