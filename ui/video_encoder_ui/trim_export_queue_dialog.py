@@ -25,7 +25,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
     STATUS_LABELS = {
         "queued": "En attente",
         "running": "En cours",
-        "done": "Terminé",
+        "done": "Export réussi",
         "failed": "Échec",
         "interrupted": "Interrompu",
         "deferred": "Reporté",
@@ -916,10 +916,11 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
     @classmethod
     def history_line(cls, job):
         state = cls.job_status_label(job)
-        if cls.output_already_exists(job):
-            state = f"Encodage non lancé · {state.lower()}"
         activity = cls.job_activity_text(job)
-        error = "" if cls.output_already_exists(job) else job.get("error")
+        if cls.output_already_exists(job):
+            refusal = f"Relance refusée {activity}".rstrip()
+            return f"{refusal} — le fichier de sortie existe déjà"
+        error = job.get("error")
         return f"{state} {activity}".rstrip() + (f" — {error}" if error else "")
 
     def update_task_actions_visibility(self):

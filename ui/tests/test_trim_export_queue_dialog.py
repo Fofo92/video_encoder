@@ -226,7 +226,7 @@ class TrimExportQueueDialogTest(unittest.TestCase):
 
         self.assertEqual(
             dialog.jobs_table.item(0, 3).text(),
-            "Terminé le 04/10/2026 à 10:09 — 09:17",
+            "Export réussi le 04/10/2026 à 10:09 — 09:17",
         )
 
     def test_displays_french_audio_language(self):
@@ -446,7 +446,7 @@ class TrimExportQueueDialogTest(unittest.TestCase):
         self.assertIsNone(dialog.progress_event)
         self.assertEqual(
             dialog.jobs_table.item(0, 3).text(),
-            "Terminé",
+            "Export réussi",
         )
 
     def test_displays_the_project_source_names(self):
