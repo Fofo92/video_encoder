@@ -79,17 +79,25 @@ def copies_to_review(result, scope):
     return metadata.get("present_copy_versions") or []
 
 
-def confirm_copy_version(parent, versions, proposed):
+def catalogue_vf_to_review(result, scope):
+    if (result.get("status") != "identified" or result.get("project_id") != scope["project_id"]
+            or result.get("record_id") != scope["record_id"]):
+        return False
+    return (result.get("metadata") or {}).get("language_version") == "VF" and proposed_mode(result) is None
+
+
+def confirm_copy_version(parent, versions, proposed, *, catalogue_hint=False):
     from PySide6 import QtWidgets
 
     choices = {"VF": "french_only", "VM": "original_without_subtitles",
                "VMST": "original_with_subtitles", "VOST": "french_with_burned_subtitles"}
     labels = list(choices)
     index = list(choices.values()).index(proposed) if proposed in choices.values() else 0
+    context = ("Version indiquée sur la fiche vidb : VF" if catalogue_hint
+               else "Versions des copies présentes : " + ", ".join(versions))
     version, accepted = QtWidgets.QInputDialog.getItem(
         parent, "Version du nouvel export",
-        "Versions des copies présentes : " + ", ".join(versions)
-        + "\nConfirme la version de ce montage :", labels, index, False)
+        context + "\nConfirme la version de ce montage :", labels, index, False)
     return choices[version] if accepted else None
 
 
@@ -115,7 +123,8 @@ def prepare_track_selection(monitor, project_path, choose=None):
                 writer.vidb_result = result
                 mode = bound_mode(result, scope)
             if (mode is None or mode == previous["mode"]) and (
-                    previous.get("confirmed_by") == "user" or not copies_to_review(result, scope)):
+                    previous.get("confirmed_by") == "user" or not (
+                        copies_to_review(result, scope) or catalogue_vf_to_review(result, scope))):
                 monitor.trim_session.track_selection = previous
                 return True
         else:
@@ -126,7 +135,8 @@ def prepare_track_selection(monitor, project_path, choose=None):
                 writer.vidb_result = result
                 mode = bound_mode(result, scope)
         origin = "external" if mode is not None else None
-        if mode is None:
+        review_catalogue_vf = catalogue_vf_to_review(result, scope)
+        if mode is None and not review_catalogue_vf:
             capabilities = track_capabilities(document, getattr(monitor, "media_inspection_client", None))
             if capabilities and capabilities["original_with_subtitles"]:
                 mode = "original_with_subtitles"
@@ -134,6 +144,9 @@ def prepare_track_selection(monitor, project_path, choose=None):
         copies = copies_to_review(result, scope)
         if copies:
             mode = confirm_copy_version(monitor, copies, mode)
+            origin = None
+        elif review_catalogue_vf:
+            mode = confirm_copy_version(monitor, [], "french_only", catalogue_hint=True)
             origin = None
         elif mode is None:
             mode = (choose or ask_mode)(monitor)
