@@ -102,7 +102,11 @@ RSpec.describe VideoEncoder::TrimExportFactory do
         VideoEncoder::VideoTimelineCorrelator
       ).to have_received(:new).with(
         frame_rate: 25,
-        maximum_shift_seconds: 3.0
+        maximum_shift_seconds: 3.0,
+        boundary_retry: {
+          maximum_shift_seconds: 8.0,
+          minimum_confidence: 0.95
+        }
       )
 
       expect(

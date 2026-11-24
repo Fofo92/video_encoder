@@ -5,17 +5,22 @@ module VideoEncoder
   class VideoTimelineCorrelator
     def initialize(
       frame_rate:,
-      maximum_shift_seconds:
+      maximum_shift_seconds:,
+      boundary_retry: nil
     )
       @frame_rate = frame_rate
       @maximum_shift_seconds = maximum_shift_seconds
+      @boundary_retry = boundary_retry
     end
 
     def call(source:, rendered:)
-      best_shift, best_confidence = correlations(
-        source,
-        rendered
-      ).max_by { |_shift, confidence| confidence }
+      maximum_shift = shift_in_frames(maximum_shift_seconds)
+      best = best_correlation(source, rendered, maximum_shift)
+      if retry_at_boundary?(best, maximum_shift)
+        retry_shift = shift_in_frames(boundary_retry.fetch(:maximum_shift_seconds))
+        best = best_correlation(source, rendered, retry_shift)
+      end
+      best_shift, best_confidence = best
 
       {
         offset_seconds: best_shift.fdiv(frame_rate),
@@ -26,13 +31,25 @@ module VideoEncoder
     private
 
     attr_reader :frame_rate,
-                :maximum_shift_seconds
+                :maximum_shift_seconds,
+                :boundary_retry
 
-    def correlations(source, rendered)
-      maximum_shift = (
-        maximum_shift_seconds * frame_rate
-      ).round
+    def shift_in_frames(seconds)
+      (seconds * frame_rate).round
+    end
 
+    def retry_at_boundary?(best, maximum_shift)
+      return false unless boundary_retry && best
+
+      shift, confidence = best
+      shift.abs == maximum_shift && confidence < boundary_retry.fetch(:minimum_confidence)
+    end
+
+    def best_correlation(source, rendered, maximum_shift)
+      correlations(source, rendered, maximum_shift).max_by(&:last)
+    end
+
+    def correlations(source, rendered, maximum_shift)
       (-maximum_shift..maximum_shift).filter_map do |shift|
         left, right = overlapping_frames(
           source,

@@ -3,6 +3,8 @@
 module VideoEncoder
   # Builds the complete trim export application service.
   class TrimExportFactory
+    SUBTITLE_ALIGNMENT_MINIMUM_CONFIDENCE = 0.95
+
     def initialize(
       runner:,
       ccextractor_executable:,
@@ -91,12 +93,16 @@ module VideoEncoder
           extractor: build_video_frame_sequence_extractor,
           correlator: VideoTimelineCorrelator.new(
             frame_rate: 25,
-            maximum_shift_seconds: 3.0
+            maximum_shift_seconds: 3.0,
+            boundary_retry: {
+              maximum_shift_seconds: 8.0,
+              minimum_confidence: SUBTITLE_ALIGNMENT_MINIMUM_CONFIDENCE
+            }
           ),
           sample_duration_seconds: 12.0
         ),
         correction: SubtitleSynchronizationCorrection.new(
-          minimum_confidence: 0.95
+          minimum_confidence: SUBTITLE_ALIGNMENT_MINIMUM_CONFIDENCE
         ),
         sample_offsets_seconds: [
           0,
