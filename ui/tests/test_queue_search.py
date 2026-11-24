@@ -35,7 +35,7 @@ class QueueSearchTest(unittest.TestCase):
         self.assertTrue(dialog.search_field.isClearButtonEnabled())
         dialog.search_field.setText('JOSEPHINE')
         self.assertEqual(['1'], [job['id'] for job in dialog.displayed_jobs])
-        self.assertEqual('1 tâche affichée sur 2', dialog.search_count.text())
+        self.assertEqual('1 export affiché sur 2', dialog.search_count.text())
         dialog.search_field.clear()
         self.assertEqual(2, dialog.jobs_table.rowCount())
 

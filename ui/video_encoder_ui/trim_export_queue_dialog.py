@@ -77,6 +77,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         self.search_index = {}
         self.source_labels = {}
         self.displayed_jobs = []
+        self.jobs_by_export = {}
         self.running = False
         self.finishing_current = False
         self.single_job_running = False
@@ -350,6 +351,7 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
         self.jobs = list(jobs)
         self.build_search_index()
+        self.jobs_by_export = self.group_exports(self.jobs)
         self.update_start_button()
 
         running_job = next(
@@ -419,8 +421,8 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
     ):
         self.displayed_jobs = self.jobs_for_current_tab()
         count = len(self.displayed_jobs)
-        label = "tâche affichée" if count == 1 else "tâches affichées"
-        self.search_count.setText(f"{count} {label} sur {len(self.jobs)}")
+        label = "export affiché" if count == 1 else "exports affichés"
+        self.search_count.setText(f"{count} {label} sur {len(self.jobs_by_export)}")
 
         table_blocker = QtCore.QSignalBlocker(
             self.jobs_table
@@ -461,12 +463,52 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
     def jobs_for_current_tab(self):
         status = self.current_tab_status()
         query = self.normalize_search(self.search_field.text()).strip()
-        jobs = self.sorted_jobs(self.jobs)
+        jobs = self.sorted_jobs(
+            self.export_summary(history) for history in self.jobs_by_export.values()
+        )
         if status not in (None, "all"):
             jobs = [job for job in jobs if job.get("status") == status]
         elif status is None and not query:
             jobs = jobs[:self.RECENT_JOB_LIMIT]
         return [job for job in jobs if self.job_matches_search(job, query)] if query else jobs
+
+    @staticmethod
+    def export_key(job):
+        project, output = job.get("input_path"), job.get("output_path")
+        if project and output:
+            return job.get("kind"), project, output
+        return (id(job),)
+
+    @classmethod
+    def group_exports(cls, jobs):
+        groups = {}
+        for job in cls.sorted_jobs(jobs):
+            groups.setdefault(cls.export_key(job), []).append(job)
+        return groups
+
+    @staticmethod
+    def output_already_exists(job):
+        return job.get("status") == "failed" and (
+            job.get("error") or ""
+        ).startswith("output already exists:")
+
+    @classmethod
+    def export_summary(cls, history):
+        for status in ("running", "queued", "deferred"):
+            active = next((job for job in history if job.get("status") == status), None)
+            if active is not None:
+                return active
+        latest = history[0]
+        if cls.output_already_exists(latest):
+            return next((job for job in history if job.get("status") == "done"), latest)
+        return latest
+
+    @classmethod
+    def job_status_label(cls, job):
+        if cls.output_already_exists(job):
+            return "Fichier déjà présent"
+        status = job.get("status") or ""
+        return cls.STATUS_LABELS.get(status, status)
 
     @classmethod
     def sorted_jobs(cls, jobs):
@@ -859,10 +901,26 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
 
     def update_error_details(self):
         job = self.selected_job()
-        error = (job.get("error") or "") if job is not None and job.get("status") in ("failed", "interrupted") else ""
-        self.error_group.setVisible(bool(error.strip()))
-        if error != self.error_details.toPlainText():
-            self.error_details.setPlainText(error)
+        history = self.jobs_by_export.get(self.export_key(job), ()) if job is not None else ()
+        if len(history) > 1:
+            title = "Historique des tentatives (la plus récente en premier)"
+            details = "\n".join(self.history_line(item) for item in history)
+        else:
+            title = "Détail de l’erreur"
+            details = (job.get("error") or "") if job is not None and job.get("status") in ("failed", "interrupted") else ""
+        self.error_group.setTitle(title)
+        self.error_group.setVisible(bool(details.strip()))
+        if details != self.error_details.toPlainText():
+            self.error_details.setPlainText(details)
+
+    @classmethod
+    def history_line(cls, job):
+        state = cls.job_status_label(job)
+        if cls.output_already_exists(job):
+            state = f"Encodage non lancé · {state.lower()}"
+        activity = cls.job_activity_text(job)
+        error = "" if cls.output_already_exists(job) else job.get("error")
+        return f"{state} {activity}".rstrip() + (f" — {error}" if error else "")
 
     def update_task_actions_visibility(self):
         self.task_actions_group.setVisible(self.selected_job() is not None)
@@ -874,12 +932,10 @@ class TrimExportQueueDialog(QtWidgets.QDialog):
         project_path = job.get("input_path") or ""
         output_path = job.get("output_path") or ""
         status = job.get("status") or ""
-        attempts = job.get("attempts", 0)
+        history = self.jobs_by_export.get(self.export_key(job), (job,))
+        attempts = sum(item.get("attempts", 0) for item in history)
 
-        status_text = self.STATUS_LABELS.get(
-            status,
-            status,
-        )
+        status_text = self.job_status_label(job)
 
         if (
             status == "running"
